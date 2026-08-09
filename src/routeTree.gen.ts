@@ -14,6 +14,7 @@ import { Route as DamagedReturnsRouteImport } from './routes/damaged-returns'
 import { Route as InventoryRouteImport } from './routes/inventory'
 import { Route as ReturnsRouteImport } from './routes/returns'
 import { Route as SalesRouteImport } from './routes/sales'
+import { Route as ScannerRouteImport } from './routes/scanner'
 import { Route as WarehousesRouteImport } from './routes/warehouses'
 
 const IndexRoute = IndexRouteImport.update({
@@ -41,6 +42,11 @@ const SalesRoute = SalesRouteImport.update({
   path: '/sales',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ScannerRoute = ScannerRouteImport.update({
+  id: '/scanner',
+  path: '/scanner',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const WarehousesRoute = WarehousesRouteImport.update({
   id: '/warehouses',
   path: '/warehouses',
@@ -53,6 +59,7 @@ export interface FileRoutesByFullPath {
   '/inventory': typeof InventoryRoute
   '/returns': typeof ReturnsRoute
   '/sales': typeof SalesRoute
+  '/scanner': typeof ScannerRoute
   '/warehouses': typeof WarehousesRoute
 }
 export interface FileRoutesByTo {
@@ -61,6 +68,7 @@ export interface FileRoutesByTo {
   '/inventory': typeof InventoryRoute
   '/returns': typeof ReturnsRoute
   '/sales': typeof SalesRoute
+  '/scanner': typeof ScannerRoute
   '/warehouses': typeof WarehousesRoute
 }
 export interface FileRoutesById {
@@ -70,6 +78,7 @@ export interface FileRoutesById {
   '/inventory': typeof InventoryRoute
   '/returns': typeof ReturnsRoute
   '/sales': typeof SalesRoute
+  '/scanner': typeof ScannerRoute
   '/warehouses': typeof WarehousesRoute
 }
 export interface FileRouteTypes {
@@ -80,6 +89,7 @@ export interface FileRouteTypes {
     | '/inventory'
     | '/returns'
     | '/sales'
+    | '/scanner'
     | '/warehouses'
   fileRoutesByTo: FileRoutesByTo
   to:
@@ -88,6 +98,7 @@ export interface FileRouteTypes {
     | '/inventory'
     | '/returns'
     | '/sales'
+    | '/scanner'
     | '/warehouses'
   id:
     | '__root__'
@@ -96,6 +107,7 @@ export interface FileRouteTypes {
     | '/inventory'
     | '/returns'
     | '/sales'
+    | '/scanner'
     | '/warehouses'
   fileRoutesById: FileRoutesById
 }
@@ -105,6 +117,7 @@ export interface RootRouteChildren {
   InventoryRoute: typeof InventoryRoute
   ReturnsRoute: typeof ReturnsRoute
   SalesRoute: typeof SalesRoute
+  ScannerRoute: typeof ScannerRoute
   WarehousesRoute: typeof WarehousesRoute
 }
 
@@ -145,6 +158,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof SalesRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/scanner': {
+      id: '/scanner'
+      path: '/scanner'
+      fullPath: '/scanner'
+      preLoaderRoute: typeof ScannerRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/warehouses': {
       id: '/warehouses'
       path: '/warehouses'
@@ -161,6 +181,7 @@ const rootRouteChildren: RootRouteChildren = {
   InventoryRoute: InventoryRoute,
   ReturnsRoute: ReturnsRoute,
   SalesRoute: SalesRoute,
+  ScannerRoute: ScannerRoute,
   WarehousesRoute: WarehousesRoute,
 }
 export const routeTree = rootRouteImport
