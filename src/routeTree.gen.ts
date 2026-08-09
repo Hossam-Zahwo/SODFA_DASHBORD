@@ -10,6 +10,7 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as DamagedReturnsRouteImport } from './routes/damaged-returns'
 import { Route as InventoryRouteImport } from './routes/inventory'
 import { Route as ReturnsRouteImport } from './routes/returns'
 import { Route as SalesRouteImport } from './routes/sales'
@@ -18,6 +19,11 @@ import { Route as WarehousesRouteImport } from './routes/warehouses'
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const DamagedReturnsRoute = DamagedReturnsRouteImport.update({
+  id: '/damaged-returns',
+  path: '/damaged-returns',
   getParentRoute: () => rootRouteImport,
 } as any)
 const InventoryRoute = InventoryRouteImport.update({
@@ -43,6 +49,7 @@ const WarehousesRoute = WarehousesRouteImport.update({
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/damaged-returns': typeof DamagedReturnsRoute
   '/inventory': typeof InventoryRoute
   '/returns': typeof ReturnsRoute
   '/sales': typeof SalesRoute
@@ -50,6 +57,7 @@ export interface FileRoutesByFullPath {
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/damaged-returns': typeof DamagedReturnsRoute
   '/inventory': typeof InventoryRoute
   '/returns': typeof ReturnsRoute
   '/sales': typeof SalesRoute
@@ -58,6 +66,7 @@ export interface FileRoutesByTo {
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/damaged-returns': typeof DamagedReturnsRoute
   '/inventory': typeof InventoryRoute
   '/returns': typeof ReturnsRoute
   '/sales': typeof SalesRoute
@@ -65,14 +74,34 @@ export interface FileRoutesById {
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/inventory' | '/returns' | '/sales' | '/warehouses'
+  fullPaths:
+    | '/'
+    | '/damaged-returns'
+    | '/inventory'
+    | '/returns'
+    | '/sales'
+    | '/warehouses'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/inventory' | '/returns' | '/sales' | '/warehouses'
-  id: '__root__' | '/' | '/inventory' | '/returns' | '/sales' | '/warehouses'
+  to:
+    | '/'
+    | '/damaged-returns'
+    | '/inventory'
+    | '/returns'
+    | '/sales'
+    | '/warehouses'
+  id:
+    | '__root__'
+    | '/'
+    | '/damaged-returns'
+    | '/inventory'
+    | '/returns'
+    | '/sales'
+    | '/warehouses'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  DamagedReturnsRoute: typeof DamagedReturnsRoute
   InventoryRoute: typeof InventoryRoute
   ReturnsRoute: typeof ReturnsRoute
   SalesRoute: typeof SalesRoute
@@ -86,6 +115,13 @@ declare module '@tanstack/react-router' {
       path: '/'
       fullPath: '/'
       preLoaderRoute: typeof IndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/damaged-returns': {
+      id: '/damaged-returns'
+      path: '/damaged-returns'
+      fullPath: '/damaged-returns'
+      preLoaderRoute: typeof DamagedReturnsRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/inventory': {
@@ -121,6 +157,7 @@ declare module '@tanstack/react-router' {
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  DamagedReturnsRoute: DamagedReturnsRoute,
   InventoryRoute: InventoryRoute,
   ReturnsRoute: ReturnsRoute,
   SalesRoute: SalesRoute,
