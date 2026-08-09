@@ -10,33 +10,128 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as DamagedReturnsRouteImport } from './routes/damaged-returns'
+import { Route as InventoryRouteImport } from './routes/inventory'
+import { Route as ReturnsRouteImport } from './routes/returns'
+import { Route as SalesRouteImport } from './routes/sales'
+import { Route as ScannerRouteImport } from './routes/scanner'
+import { Route as SettingsRouteImport } from './routes/settings'
+import { Route as WarehousesRouteImport } from './routes/warehouses'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const DamagedReturnsRoute = DamagedReturnsRouteImport.update({
+  id: '/damaged-returns',
+  path: '/damaged-returns',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const InventoryRoute = InventoryRouteImport.update({
+  id: '/inventory',
+  path: '/inventory',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ReturnsRoute = ReturnsRouteImport.update({
+  id: '/returns',
+  path: '/returns',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const SalesRoute = SalesRouteImport.update({
+  id: '/sales',
+  path: '/sales',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ScannerRoute = ScannerRouteImport.update({
+  id: '/scanner',
+  path: '/scanner',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const SettingsRoute = SettingsRouteImport.update({
+  id: '/settings',
+  path: '/settings',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const WarehousesRoute = WarehousesRouteImport.update({
+  id: '/warehouses',
+  path: '/warehouses',
+  getParentRoute: () => rootRouteImport,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/damaged-returns': typeof DamagedReturnsRoute
+  '/inventory': typeof InventoryRoute
+  '/returns': typeof ReturnsRoute
+  '/sales': typeof SalesRoute
+  '/scanner': typeof ScannerRoute
+  '/settings': typeof SettingsRoute
+  '/warehouses': typeof WarehousesRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/damaged-returns': typeof DamagedReturnsRoute
+  '/inventory': typeof InventoryRoute
+  '/returns': typeof ReturnsRoute
+  '/sales': typeof SalesRoute
+  '/scanner': typeof ScannerRoute
+  '/settings': typeof SettingsRoute
+  '/warehouses': typeof WarehousesRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/damaged-returns': typeof DamagedReturnsRoute
+  '/inventory': typeof InventoryRoute
+  '/returns': typeof ReturnsRoute
+  '/sales': typeof SalesRoute
+  '/scanner': typeof ScannerRoute
+  '/settings': typeof SettingsRoute
+  '/warehouses': typeof WarehousesRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/'
+  fullPaths:
+    | '/'
+    | '/damaged-returns'
+    | '/inventory'
+    | '/returns'
+    | '/sales'
+    | '/scanner'
+    | '/settings'
+    | '/warehouses'
   fileRoutesByTo: FileRoutesByTo
-  to: '/'
-  id: '__root__' | '/'
+  to:
+    | '/'
+    | '/damaged-returns'
+    | '/inventory'
+    | '/returns'
+    | '/sales'
+    | '/scanner'
+    | '/settings'
+    | '/warehouses'
+  id:
+    | '__root__'
+    | '/'
+    | '/damaged-returns'
+    | '/inventory'
+    | '/returns'
+    | '/sales'
+    | '/scanner'
+    | '/settings'
+    | '/warehouses'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  DamagedReturnsRoute: typeof DamagedReturnsRoute
+  InventoryRoute: typeof InventoryRoute
+  ReturnsRoute: typeof ReturnsRoute
+  SalesRoute: typeof SalesRoute
+  ScannerRoute: typeof ScannerRoute
+  SettingsRoute: typeof SettingsRoute
+  WarehousesRoute: typeof WarehousesRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -48,22 +143,68 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/damaged-returns': {
+      id: '/damaged-returns'
+      path: '/damaged-returns'
+      fullPath: '/damaged-returns'
+      preLoaderRoute: typeof DamagedReturnsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/inventory': {
+      id: '/inventory'
+      path: '/inventory'
+      fullPath: '/inventory'
+      preLoaderRoute: typeof InventoryRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/returns': {
+      id: '/returns'
+      path: '/returns'
+      fullPath: '/returns'
+      preLoaderRoute: typeof ReturnsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/sales': {
+      id: '/sales'
+      path: '/sales'
+      fullPath: '/sales'
+      preLoaderRoute: typeof SalesRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/scanner': {
+      id: '/scanner'
+      path: '/scanner'
+      fullPath: '/scanner'
+      preLoaderRoute: typeof ScannerRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/settings': {
+      id: '/settings'
+      path: '/settings'
+      fullPath: '/settings'
+      preLoaderRoute: typeof SettingsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/warehouses': {
+      id: '/warehouses'
+      path: '/warehouses'
+      fullPath: '/warehouses'
+      preLoaderRoute: typeof WarehousesRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  DamagedReturnsRoute: DamagedReturnsRoute,
+  InventoryRoute: InventoryRoute,
+  ReturnsRoute: ReturnsRoute,
+  SalesRoute: SalesRoute,
+  ScannerRoute: ScannerRoute,
+  SettingsRoute: SettingsRoute,
+  WarehousesRoute: WarehousesRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
-
-import type { getRouter } from './router.tsx'
-import type { startInstance } from './start.ts'
-declare module '@tanstack/react-start' {
-  interface Register {
-    ssr: true
-    router: Awaited<ReturnType<typeof getRouter>>
-    config: Awaited<ReturnType<typeof startInstance.getOptions>>
-  }
-}
