@@ -100,8 +100,14 @@ function ReturnsPage() {
   };
 
   const submit = () => {
-    if (!product) return toast.error(t("err_no_product"));
-    if (Number(qty) <= 0) return toast.error(t("invalid_qty"));
+    if (!product) {
+      toast.error(t("err_no_product"));
+      return;
+    }
+    if (Number(qty) <= 0) {
+      toast.error(t("invalid_qty"));
+      return;
+    }
     save.mutate(undefined as never, {
       onSuccess: () => {
         toast.success(t("return_recorded"));
