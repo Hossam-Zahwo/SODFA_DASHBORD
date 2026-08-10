@@ -290,6 +290,7 @@ export const api = {
     product_name: string;
     price: number;
     stock_qty: number;
+    sold_qty?: number;
     warehouse: string;
     image_url?: string;
   }) => apiPost<{ product_id: string; barcode: string }>("save_product", p),
@@ -298,6 +299,7 @@ export const api = {
     product_name?: string;
     price?: number;
     stock_qty?: number;
+    sold_qty?: number;
     warehouse?: string;
     image_url?: string;
   }) => apiPost<unknown>("update_product", p),
@@ -307,17 +309,19 @@ export const api = {
     const d = await apiGet<{ warehouses?: Record<string, unknown>[] }>("get_warehouses");
     return (d.warehouses ?? [])
       .filter((w) => s(w["warehouse_id"]))
+      .filter((w) => w["active"] !== false && String(w["active"] ?? "true") !== "false")
       .map((w) => ({
         warehouse_id: s(w["warehouse_id"]),
         warehouse_name: s(w["warehouse_name"]) || s(w["warehouse_id"]),
+        active: true,
         created_at: s(w["created_at"]),
         updated_at: s(w["updated_at"]),
       }));
   },
   saveWarehouse: (warehouse_name: string) =>
-    apiPost<{ warehouse_id: string }>("save_warehouse", { warehouse_name }),
+    apiPost<{ warehouse_id: string }>("add_warehouse", { warehouse_name }),
   updateWarehouse: (warehouse_id: string, warehouse_name: string) =>
-    apiPost<unknown>("update_warehouse", { warehouse_id, warehouse_name }),
+    apiPost<unknown>("rename_warehouse", { warehouse_id, warehouse_name }),
   deleteWarehouse: (warehouse_id: string) =>
     apiPost<unknown>("delete_warehouse", { warehouse_id }),
 
@@ -362,9 +366,25 @@ export const api = {
     policy_image?: string;
     product_image?: string;
     policy_product_image?: string;
-  }) => apiPost<{ damaged_return_id: string }>("record_damaged_return", p),
+  }) =>
+    apiPost<{ damaged_return_id: string }>("record_damaged_return", {
+      product_id: p.product_id,
+      shipment_code: p.shipment_code,
+      qty: p.qty,
+      quantity: p.qty,
+      warehouse: p.warehouse ?? "",
+      reason: p.damage_reason ?? "",
+      details: p.damage_details ?? "",
+      status: (p.status ?? "Pending").toLowerCase(),
+      police_image: p.policy_image ?? "",
+      product_image: p.product_image ?? "",
+      combined_return_image: p.policy_product_image ?? "",
+    }),
   updateDamagedStatus: (damaged_return_id: string, status: DamagedStatus) =>
-    apiPost<unknown>("update_damaged_return", { damaged_return_id, status }),
+    apiPost<unknown>("update_damaged_return_status", {
+      damaged_return_id,
+      status: status.toLowerCase(),
+    }),
 
   uploadImage: (file_base64: string, file_name: string, mime_type: string) =>
     apiPost<{ image_url: string; file_id: string }>("upload_image", {
