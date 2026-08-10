@@ -162,6 +162,28 @@ const dict = {
   refresh: { ar: "تحديث", en: "Refresh" },
   add_stock: { ar: "إضافة كمية", en: "Add Stock" },
   stock_qty: { ar: "كمية المخزون", en: "Stock Quantity" },
+  sold_qty: { ar: "الكمية المباعة", en: "Already Sold Quantity" },
+  api_settings: { ar: "إعدادات الاتصال / API", en: "API / Connection Settings" },
+  save_api_url: { ar: "حفظ الرابط", en: "Save URL" },
+  reset_default: { ar: "استعادة الافتراضي", en: "Reset to default" },
+  api_url_saved: { ar: "تم حفظ رابط الـ API", en: "API URL saved" },
+  invalid_url: { ar: "رابط غير صالح", en: "Invalid URL" },
+  label_size: { ar: "مقاس الملصق", en: "Label Size" },
+  barcode_settings: { ar: "إعدادات الباركود", en: "Barcode Settings" },
+  warehouse_management: { ar: "إدارة المخازن", en: "Warehouse Management" },
+  manage_warehouses: { ar: "فتح صفحة المخازن", en: "Open Warehouses page" },
+  product_details: { ar: "تفاصيل المنتج", en: "Product Details" },
+  view_details: { ar: "عرض التفاصيل", en: "View Details" },
+  not_connected: { ar: "غير متصل", en: "Not Connected" },
+  total_remaining: { ar: "إجمالي المتبقي", en: "Total Remaining" },
+  total_sold: { ar: "إجمالي المباع", en: "Total Sold" },
+  total_stock_all: { ar: "إجمالي المخزون", en: "Total Stock" },
+  return_value: { ar: "قيمة المرتجعات", en: "Return Value" },
+  sold_qty_label: { ar: "الكمية المباعة", en: "Sold Quantity" },
+  barcode_only_note: {
+    ar: "الملصق يحتوي على الباركود فقط.",
+    en: "The label contains the barcode only.",
+  },
 } as const;
 
 export type TKey = keyof typeof dict;
