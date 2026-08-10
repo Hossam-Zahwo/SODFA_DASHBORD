@@ -34,6 +34,7 @@ export function ProductFormDialog({
   const [name, setName] = useState("");
   const [price, setPrice] = useState("");
   const [stock, setStock] = useState("");
+  const [soldQty, setSoldQty] = useState("");
   const [warehouse, setWarehouse] = useState("");
   const [image, setImage] = useState("");
 
@@ -42,9 +43,14 @@ export function ProductFormDialog({
     setName(product?.product_name ?? "");
     setPrice(product ? String(product.price) : "");
     setStock(product ? String(product.stock_qty) : "");
+    setSoldQty(product ? String(product.sold_qty) : "0");
     setWarehouse(product?.warehouse || defaultWarehouse || warehouses[0]?.warehouse_id || "");
     setImage(product?.image_url ?? "");
   }, [open, product, defaultWarehouse, warehouses]);
+
+  const stockNum = Number(stock || 0);
+  const soldNum = Number(soldQty || 0);
+  const remaining = stockNum - soldNum;
 
   const save = useApiMutation(async () => {
     if (product) {
@@ -52,7 +58,8 @@ export function ProductFormDialog({
         product_id: product.product_id,
         product_name: name.trim(),
         price: Number(price),
-        stock_qty: Number(stock),
+        stock_qty: stockNum,
+        sold_qty: soldNum,
         warehouse,
         image_url: image,
       });
@@ -60,7 +67,8 @@ export function ProductFormDialog({
     return api.saveProduct({
       product_name: name.trim(),
       price: Number(price),
-      stock_qty: Number(stock),
+      stock_qty: stockNum,
+      sold_qty: soldNum,
       warehouse,
       image_url: image,
     });
@@ -71,7 +79,7 @@ export function ProductFormDialog({
       toast.error(t("err_required"));
       return;
     }
-    if (Number(price) < 0 || Number(stock) < 0) {
+    if (Number(price) < 0 || stockNum < 0 || soldNum < 0 || soldNum > stockNum) {
       toast.error(t("invalid_qty"));
       return;
     }
@@ -128,6 +136,22 @@ export function ProductFormDialog({
                 onChange={(e) => setStock(e.target.value)}
               />
             </div>
+            <div>
+              <Label htmlFor="p-sold">{t("sold_qty")}</Label>
+              <Input
+                id="p-sold"
+                type="number"
+                min="0"
+                value={soldQty}
+                onChange={(e) => setSoldQty(e.target.value)}
+              />
+            </div>
+            <div>
+              <Label>{t("remaining")}</Label>
+              <div className="flex h-9 items-center rounded-md bg-surface px-3 text-sm font-bold">
+                {Number.isFinite(remaining) ? remaining : 0}
+              </div>
+            </div>
           </div>
           <div>
             <Label className="mb-1 block">{t("warehouse")}</Label>
@@ -135,22 +159,6 @@ export function ProductFormDialog({
           </div>
           <ImageDropzone label={t("product_image")} value={image} onChange={setImage} />
 
-          {product && (
-            <div className="grid grid-cols-3 gap-2 rounded-lg bg-surface p-3 text-center text-sm">
-              <div>
-                <p className="text-xs text-muted-foreground">{t("total_stock")}</p>
-                <p className="font-bold">{product.stock_qty}</p>
-              </div>
-              <div>
-                <p className="text-xs text-muted-foreground">{t("sold")}</p>
-                <p className="font-bold">{product.sold_qty}</p>
-              </div>
-              <div>
-                <p className="text-xs text-muted-foreground">{t("remaining")}</p>
-                <p className="font-bold">{product.remaining_qty}</p>
-              </div>
-            </div>
-          )}
         </div>
 
         <DialogFooter>
