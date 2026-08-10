@@ -248,6 +248,9 @@ export function normalizeDamaged(raw: Record<string, unknown>): DamagedReturn {
   const r = raw as Record<string, unknown>;
   const g = (...keys: string[]) => s(pick(r, keys));
   const status = g("status", "Status") as DamagedStatus;
+  const norm = status
+    ? ((status.charAt(0).toUpperCase() + status.slice(1).toLowerCase()) as DamagedStatus)
+    : ("Pending" as DamagedStatus);
   return {
     damaged_return_id: g("damaged_return_id", "Damaged_Return_ID"),
     shipment_code: g("shipment_code", "Shipment_Code"),
@@ -255,21 +258,22 @@ export function normalizeDamaged(raw: Record<string, unknown>): DamagedReturn {
     product_name: g("product_name", "Product_Name"),
     barcode: g("barcode", "Product_Barcode"),
     warehouse: g("warehouse", "warehouse_id", "Warehouse_ID"),
-    qty: n(pick(r, ["qty", "Quantity", "quantity"])),
-    damage_reason: g("damage_reason", "Damage_Reason"),
-    damage_details: g("damage_details", "Damage_Details", "notes", "Notes"),
-    status: (["Pending", "Accepted", "Rejected"] as string[]).includes(status)
-      ? status
+    qty: n(pick(r, ["quantity", "qty", "Quantity"])),
+    damage_reason: g("reason", "damage_reason", "Damage_Reason"),
+    damage_details: g("details", "damage_details", "Damage_Details", "notes", "Notes"),
+    status: (["Pending", "Accepted", "Rejected"] as string[]).includes(norm)
+      ? norm
       : "Pending",
-    policy_image: g("policy_image", "Policy_Image_URL", "policy_image_url"),
+    policy_image: g("police_image", "policy_image", "Policy_Image_URL", "policy_image_url"),
     product_image: g("product_image", "Product_Image_URL", "product_image_url"),
     policy_product_image: g(
+      "combined_return_image",
       "policy_product_image",
       "Policy_Product_Image_URL",
       "policy_product_image_url",
     ),
-    return_date: g("return_date", "Return_Date", "created_at", "Created_At"),
-    return_time: g("return_time", "Return_Time"),
+    return_date: g("date", "return_date", "Return_Date", "created_at", "Created_At"),
+    return_time: g("time", "return_time", "Return_Time"),
   };
 }
 
