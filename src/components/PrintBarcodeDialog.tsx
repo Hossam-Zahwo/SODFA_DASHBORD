@@ -11,6 +11,7 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
+import { Input } from "@/components/ui/input";
 import { BarcodeView } from "@/components/BarcodeView";
 import { useI18n } from "@/lib/i18n";
 import {
