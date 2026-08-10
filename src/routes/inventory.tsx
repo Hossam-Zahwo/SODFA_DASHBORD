@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
-import { Plus, Printer, Pencil, Trash2, RefreshCw } from "lucide-react";
+import { Eye, Plus, Printer, Pencil, Trash2, RefreshCw } from "lucide-react";
 import { toast } from "sonner";
 import { AppShell } from "@/components/AppShell";
 import { Blocks } from "@/components/blocks-export";
@@ -11,6 +11,7 @@ import { Badge } from "@/components/ui/badge";
 import { ProductImage } from "@/components/ProductImage";
 import { ProductFormDialog } from "@/components/ProductFormDialog";
 import { PrintBarcodeDialog } from "@/components/PrintBarcodeDialog";
+import { ProductDetailsDialog } from "@/components/ProductDetailsDialog";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { ALL_WAREHOUSES, WarehouseSelect } from "@/components/WarehouseSelect";
 import { useApiMutation, useInventory, useWarehouses } from "@/hooks/useSodfa";
@@ -43,6 +44,7 @@ function InventoryPage() {
   const [editing, setEditing] = useState<Product | null>(null);
   const [formOpen, setFormOpen] = useState(false);
   const [printing, setPrinting] = useState<Product | null>(null);
+  const [viewing, setViewing] = useState<Product | null>(null);
   const [toDelete, setToDelete] = useState<Product | null>(null);
 
   const del = useApiMutation((id: string) => api.deleteProduct(id));
@@ -133,6 +135,10 @@ function InventoryPage() {
                     </div>
                   </div>
                   <div className="flex flex-wrap gap-2">
+                    <Button size="sm" variant="outline" onClick={() => setViewing(p)}>
+                      <Eye className="me-1 h-4 w-4" />
+                      {t("view_details")}
+                    </Button>
                     <Button size="sm" variant="outline" onClick={() => setPrinting(p)}>
                       <Printer className="me-1 h-4 w-4" />
                       {t("print_barcode")}
@@ -171,6 +177,12 @@ function InventoryPage() {
         product={printing}
         open={printing !== null}
         onOpenChange={(v) => !v && setPrinting(null)}
+      />
+      <ProductDetailsDialog
+        product={viewing}
+        warehouses={warehouses.data ?? []}
+        open={viewing !== null}
+        onOpenChange={(v) => !v && setViewing(null)}
       />
       <ConfirmDialog
         open={toDelete !== null}

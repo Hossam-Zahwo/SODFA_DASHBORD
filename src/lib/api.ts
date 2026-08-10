@@ -4,8 +4,30 @@
  * No other database is used anywhere in the app.
  */
 
-export const API_URL =
+export const DEFAULT_API_URL =
   "https://script.google.com/macros/s/AKfycbwhzVo3w5ud1VMbqZMc04KhNyFdek94186v7fNy6WjImU6VxUkkeHyWNemFyEr4ctggQQ/exec";
+
+const API_URL_KEY = "sodfa_api_url";
+
+/** The Web App URL currently in use (configurable from Settings). */
+export function getApiUrl(): string {
+  if (typeof window === "undefined") return DEFAULT_API_URL;
+  try {
+    return window.localStorage.getItem(API_URL_KEY) || DEFAULT_API_URL;
+  } catch {
+    return DEFAULT_API_URL;
+  }
+}
+
+export function setApiUrl(url: string): void {
+  try {
+    const clean = url.trim();
+    if (clean && clean !== DEFAULT_API_URL) window.localStorage.setItem(API_URL_KEY, clean);
+    else window.localStorage.removeItem(API_URL_KEY);
+  } catch {
+    /* ignore */
+  }
+}
 
 export class ApiError extends Error {
   constructor(message: string) {
@@ -41,7 +63,10 @@ async function parse<T>(res: Response): Promise<T> {
 export async function apiGet<T>(action: string | null, params: Params = {}): Promise<T> {
   const qs = new URLSearchParams(clean(action ? { action, ...params } : params));
   try {
-    const res = await fetch(`${API_URL}?${qs.toString()}`, { method: "GET", redirect: "follow" });
+    const res = await fetch(`${getApiUrl()}?${qs.toString()}`, {
+      method: "GET",
+      redirect: "follow",
+    });
     return await parse<T>(res);
   } catch (e) {
     if (e instanceof ApiError) throw e;
@@ -53,7 +78,7 @@ export async function apiPost<T>(action: string, params: Params = {}): Promise<T
   const body = new URLSearchParams(clean({ action, ...params }));
   try {
     // URLSearchParams => simple request, no CORS preflight against Apps Script.
-    const res = await fetch(API_URL, { method: "POST", body, redirect: "follow" });
+    const res = await fetch(getApiUrl(), { method: "POST", body, redirect: "follow" });
     return await parse<T>(res);
   } catch (e) {
     if (e instanceof ApiError) throw e;
@@ -223,6 +248,9 @@ export function normalizeDamaged(raw: Record<string, unknown>): DamagedReturn {
   const r = raw as Record<string, unknown>;
   const g = (...keys: string[]) => s(pick(r, keys));
   const status = g("status", "Status") as DamagedStatus;
+  const norm = status
+    ? ((status.charAt(0).toUpperCase() + status.slice(1).toLowerCase()) as DamagedStatus)
+    : ("Pending" as DamagedStatus);
   return {
     damaged_return_id: g("damaged_return_id", "Damaged_Return_ID"),
     shipment_code: g("shipment_code", "Shipment_Code"),
@@ -230,21 +258,22 @@ export function normalizeDamaged(raw: Record<string, unknown>): DamagedReturn {
     product_name: g("product_name", "Product_Name"),
     barcode: g("barcode", "Product_Barcode"),
     warehouse: g("warehouse", "warehouse_id", "Warehouse_ID"),
-    qty: n(pick(r, ["qty", "Quantity", "quantity"])),
-    damage_reason: g("damage_reason", "Damage_Reason"),
-    damage_details: g("damage_details", "Damage_Details", "notes", "Notes"),
-    status: (["Pending", "Accepted", "Rejected"] as string[]).includes(status)
-      ? status
+    qty: n(pick(r, ["quantity", "qty", "Quantity"])),
+    damage_reason: g("reason", "damage_reason", "Damage_Reason"),
+    damage_details: g("details", "damage_details", "Damage_Details", "notes", "Notes"),
+    status: (["Pending", "Accepted", "Rejected"] as string[]).includes(norm)
+      ? norm
       : "Pending",
-    policy_image: g("policy_image", "Policy_Image_URL", "policy_image_url"),
+    policy_image: g("police_image", "policy_image", "Policy_Image_URL", "policy_image_url"),
     product_image: g("product_image", "Product_Image_URL", "product_image_url"),
     policy_product_image: g(
+      "combined_return_image",
       "policy_product_image",
       "Policy_Product_Image_URL",
       "policy_product_image_url",
     ),
-    return_date: g("return_date", "Return_Date", "created_at", "Created_At"),
-    return_time: g("return_time", "Return_Time"),
+    return_date: g("date", "return_date", "Return_Date", "created_at", "Created_At"),
+    return_time: g("time", "return_time", "Return_Time"),
   };
 }
 
@@ -261,6 +290,7 @@ export const api = {
     product_name: string;
     price: number;
     stock_qty: number;
+    sold_qty?: number;
     warehouse: string;
     image_url?: string;
   }) => apiPost<{ product_id: string; barcode: string }>("save_product", p),
@@ -269,6 +299,7 @@ export const api = {
     product_name?: string;
     price?: number;
     stock_qty?: number;
+    sold_qty?: number;
     warehouse?: string;
     image_url?: string;
   }) => apiPost<unknown>("update_product", p),
@@ -278,17 +309,19 @@ export const api = {
     const d = await apiGet<{ warehouses?: Record<string, unknown>[] }>("get_warehouses");
     return (d.warehouses ?? [])
       .filter((w) => s(w["warehouse_id"]))
+      .filter((w) => w["active"] !== false && String(w["active"] ?? "true") !== "false")
       .map((w) => ({
         warehouse_id: s(w["warehouse_id"]),
         warehouse_name: s(w["warehouse_name"]) || s(w["warehouse_id"]),
+        active: true,
         created_at: s(w["created_at"]),
         updated_at: s(w["updated_at"]),
       }));
   },
   saveWarehouse: (warehouse_name: string) =>
-    apiPost<{ warehouse_id: string }>("save_warehouse", { warehouse_name }),
+    apiPost<{ warehouse_id: string }>("add_warehouse", { warehouse_name }),
   updateWarehouse: (warehouse_id: string, warehouse_name: string) =>
-    apiPost<unknown>("update_warehouse", { warehouse_id, warehouse_name }),
+    apiPost<unknown>("rename_warehouse", { warehouse_id, warehouse_name }),
   deleteWarehouse: (warehouse_id: string) =>
     apiPost<unknown>("delete_warehouse", { warehouse_id }),
 
@@ -333,9 +366,25 @@ export const api = {
     policy_image?: string;
     product_image?: string;
     policy_product_image?: string;
-  }) => apiPost<{ damaged_return_id: string }>("record_damaged_return", p),
+  }) =>
+    apiPost<{ damaged_return_id: string }>("record_damaged_return", {
+      product_id: p.product_id,
+      shipment_code: p.shipment_code,
+      qty: p.qty,
+      quantity: p.qty,
+      warehouse: p.warehouse ?? "",
+      reason: p.damage_reason ?? "",
+      details: p.damage_details ?? "",
+      status: (p.status ?? "Pending").toLowerCase(),
+      police_image: p.policy_image ?? "",
+      product_image: p.product_image ?? "",
+      combined_return_image: p.policy_product_image ?? "",
+    }),
   updateDamagedStatus: (damaged_return_id: string, status: DamagedStatus) =>
-    apiPost<unknown>("update_damaged_return", { damaged_return_id, status }),
+    apiPost<unknown>("update_damaged_return_status", {
+      damaged_return_id,
+      status: status.toLowerCase(),
+    }),
 
   uploadImage: (file_base64: string, file_name: string, mime_type: string) =>
     apiPost<{ image_url: string; file_id: string }>("upload_image", {

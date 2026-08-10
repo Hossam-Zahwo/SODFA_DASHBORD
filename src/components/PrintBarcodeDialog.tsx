@@ -1,5 +1,6 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import JsBarcode from "jsbarcode";
+import { Minus, Plus } from "lucide-react";
 import { toast } from "sonner";
 import {
   Dialog,
@@ -10,19 +11,24 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
+import { Input } from "@/components/ui/input";
 import { BarcodeView } from "@/components/BarcodeView";
 import { useI18n } from "@/lib/i18n";
-import { fmtMoney } from "@/lib/dates";
+import {
+  LABEL_SIZES,
+  findLabelSize,
+  getLabelSize,
+  setLabelSize,
+  type LabelSizeKey,
+} from "@/lib/labels";
 import type { Product } from "@/lib/api";
-
-const QTY_OPTIONS = [1, 2, 5, 10, 20, 50];
 
 function barcodeDataUrl(value: string): string {
   const canvas = document.createElement("canvas");
   try {
     JsBarcode(canvas, String(value), {
       format: "CODE128",
-      height: 60,
+      height: 70,
       width: 2,
       fontSize: 14,
       margin: 6,
@@ -43,42 +49,41 @@ export function PrintBarcodeDialog({
   open: boolean;
   onOpenChange: (v: boolean) => void;
 }) {
-  const { t, lang } = useI18n();
+  const { t } = useI18n();
   const [count, setCount] = useState(1);
+  const [size, setSize] = useState<LabelSizeKey>("50x30");
+
+  useEffect(() => {
+    if (open) setSize(getLabelSize());
+  }, [open]);
 
   if (!product) return null;
 
   const handlePrint = () => {
-    const img = barcodeDataUrl(product.barcode || product.product_id);
+    const value = product.barcode || product.product_id;
+    const img = barcodeDataUrl(value);
     const win = window.open("", "_blank", "width=900,height=700");
     if (!win) {
       toast.error(t("err_print"));
       return;
     }
-    const label = `
-      <div class="label">
-        <div class="brand"><span>SODFA</span><span>صدفة</span></div>
-        <div class="name">${escapeHtml(product.product_name)}</div>
-        <div class="price">${escapeHtml(fmtMoney(product.price, lang))}</div>
-        ${img ? `<img src="${img}" alt="barcode" />` : `<div>${escapeHtml(product.barcode)}</div>`}
-        <div class="pid">${escapeHtml(product.product_id)}</div>
-      </div>`;
+    const dim = findLabelSize(size);
+    // The printable label contains ONLY the barcode — no name, price or branding.
+    const label = `<div class="label">${
+      img ? `<img src="${img}" alt="barcode" />` : `<span>${escapeHtml(value)}</span>`
+    }</div>`;
     win.document.write(`<!doctype html><html><head><meta charset="utf-8" />
-      <title>SODFA — ${escapeHtml(product.product_id)}</title>
+      <title>${escapeHtml(value)}</title>
       <style>
-        @page { margin: 8mm; }
-        body { font-family: system-ui, "Segoe UI", Tahoma, sans-serif; margin:0; padding:8px;
-               display:flex; flex-wrap:wrap; gap:6px; }
-        .label { width: 58mm; border:1px solid #d5dae3; border-radius:6px; padding:6px;
-                 text-align:center; break-inside:avoid; }
-        .brand { display:flex; justify-content:space-between; font-weight:700; font-size:11px;
-                 color:#1e2a4a; letter-spacing:.5px; }
-        .name { font-size:12px; margin:3px 0; font-weight:600; color:#111827;
-                overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-        .price { font-size:13px; font-weight:700; color:#1e2a4a; }
-        img { width:100%; height:auto; }
-        .pid { font-size:10px; color:#4b5563; }
-      </style></head><body>${label.repeat(count)}
+        @page { size: ${dim.width}mm ${dim.height}mm; margin: 0; }
+        body { margin:0; padding:0; font-family: system-ui, sans-serif; }
+        .label { width:${dim.width}mm; height:${dim.height}mm; display:flex;
+                 align-items:center; justify-content:center; overflow:hidden;
+                 page-break-after:always; break-after:page; }
+        .label:last-child { page-break-after:auto; break-after:auto; }
+        img { max-width:${dim.width - 4}mm; max-height:${dim.height - 3}mm;
+              width:auto; height:auto; object-fit:contain; }
+      </style></head><body>${label.repeat(Math.max(1, count))}
       <script>window.onload=function(){window.focus();window.print();}<\/script>
       </body></html>`);
     win.document.close();
@@ -91,32 +96,60 @@ export function PrintBarcodeDialog({
           <DialogTitle>{t("print_barcode")}</DialogTitle>
         </DialogHeader>
         <div className="space-y-4">
-          <div className="rounded-lg border border-border bg-card p-4 text-center">
-            <div className="flex justify-between text-xs font-bold text-primary">
-              <span>SODFA</span>
-              <span>صدفة</span>
-            </div>
-            <p className="mt-1 truncate text-sm font-semibold">{product.product_name}</p>
-            <p className="text-sm font-bold text-primary">{fmtMoney(product.price, lang)}</p>
-            <div className="flex justify-center">
-              <BarcodeView value={product.barcode || product.product_id} />
-            </div>
-            <p className="text-xs text-muted-foreground">{product.product_id}</p>
+          <div className="flex justify-center rounded-lg border border-border bg-card p-4">
+            <BarcodeView value={product.barcode || product.product_id} />
           </div>
+          <p className="text-xs text-muted-foreground">{t("barcode_only_note")}</p>
+
           <div>
-            <Label className="mb-2 block">{t("labels_qty")}</Label>
+            <Label className="mb-2 block">{t("label_size")}</Label>
             <div className="flex flex-wrap gap-2">
-              {QTY_OPTIONS.map((q) => (
+              {LABEL_SIZES.map((s) => (
                 <Button
-                  key={q}
+                  key={s.key}
                   type="button"
                   size="sm"
-                  variant={count === q ? "default" : "outline"}
-                  onClick={() => setCount(q)}
+                  variant={size === s.key ? "default" : "outline"}
+                  onClick={() => {
+                    setSize(s.key);
+                    setLabelSize(s.key);
+                  }}
                 >
-                  {q}
+                  {s.label}
                 </Button>
               ))}
+            </div>
+          </div>
+
+          <div>
+            <Label className="mb-2 block">{t("labels_qty")}</Label>
+            <div className="flex items-center gap-2">
+              <Button
+                type="button"
+                size="icon"
+                variant="outline"
+                onClick={() => setCount((c) => Math.max(1, c - 1))}
+                aria-label="-"
+              >
+                <Minus className="h-4 w-4" />
+              </Button>
+              <Input
+                type="number"
+                min="1"
+                max="500"
+                value={count}
+                onChange={(e) => setCount(Math.max(1, Math.min(500, Number(e.target.value) || 1)))}
+                className="w-24 text-center"
+              />
+              <Button
+                type="button"
+                size="icon"
+                variant="outline"
+                onClick={() => setCount((c) => Math.min(500, c + 1))}
+                aria-label="+"
+              >
+                <Plus className="h-4 w-4" />
+              </Button>
             </div>
           </div>
         </div>
