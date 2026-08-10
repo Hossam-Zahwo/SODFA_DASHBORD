@@ -4,8 +4,30 @@
  * No other database is used anywhere in the app.
  */
 
-export const API_URL =
+export const DEFAULT_API_URL =
   "https://script.google.com/macros/s/AKfycbwhzVo3w5ud1VMbqZMc04KhNyFdek94186v7fNy6WjImU6VxUkkeHyWNemFyEr4ctggQQ/exec";
+
+const API_URL_KEY = "sodfa_api_url";
+
+/** The Web App URL currently in use (configurable from Settings). */
+export function getApiUrl(): string {
+  if (typeof window === "undefined") return DEFAULT_API_URL;
+  try {
+    return window.localStorage.getItem(API_URL_KEY) || DEFAULT_API_URL;
+  } catch {
+    return DEFAULT_API_URL;
+  }
+}
+
+export function setApiUrl(url: string): void {
+  try {
+    const clean = url.trim();
+    if (clean && clean !== DEFAULT_API_URL) window.localStorage.setItem(API_URL_KEY, clean);
+    else window.localStorage.removeItem(API_URL_KEY);
+  } catch {
+    /* ignore */
+  }
+}
 
 export class ApiError extends Error {
   constructor(message: string) {
@@ -41,7 +63,10 @@ async function parse<T>(res: Response): Promise<T> {
 export async function apiGet<T>(action: string | null, params: Params = {}): Promise<T> {
   const qs = new URLSearchParams(clean(action ? { action, ...params } : params));
   try {
-    const res = await fetch(`${API_URL}?${qs.toString()}`, { method: "GET", redirect: "follow" });
+    const res = await fetch(`${getApiUrl()}?${qs.toString()}`, {
+      method: "GET",
+      redirect: "follow",
+    });
     return await parse<T>(res);
   } catch (e) {
     if (e instanceof ApiError) throw e;
@@ -53,7 +78,7 @@ export async function apiPost<T>(action: string, params: Params = {}): Promise<T
   const body = new URLSearchParams(clean({ action, ...params }));
   try {
     // URLSearchParams => simple request, no CORS preflight against Apps Script.
-    const res = await fetch(API_URL, { method: "POST", body, redirect: "follow" });
+    const res = await fetch(getApiUrl(), { method: "POST", body, redirect: "follow" });
     return await parse<T>(res);
   } catch (e) {
     if (e instanceof ApiError) throw e;
