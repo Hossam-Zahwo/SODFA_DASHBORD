@@ -266,6 +266,32 @@ function ReturnsPage() {
                 <>
                   <Input
                     className="mt-2"
+                    data-scanner-input="true"
+                    placeholder={t("usb_hint")}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") {
+                        handleCode(e.currentTarget.value);
+                        e.currentTarget.value = "";
+                      }
+                    }}
+                  />
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="mt-2"
+                    onClick={() => setCamera((v) => !v)}
+                  >
+                    {camera ? <X className="me-1 h-4 w-4" /> : <Camera className="me-1 h-4 w-4" />}
+                    {camera ? t("close_camera") : t("open_camera")}
+                  </Button>
+                  {camera && (
+                    <div className="mt-2">
+                      <CameraScanner onDetected={handleCode} />
+                    </div>
+                  )}
+                  <Input
+                    className="mt-2"
                     value={search}
                     onChange={(e) => setSearch(e.target.value)}
                     placeholder={t("search_placeholder")}
@@ -275,7 +301,7 @@ function ReturnsPage() {
                       <button
                         key={p.product_id}
                         type="button"
-                        onClick={() => setProduct(p)}
+                        onClick={() => pickProduct(p)}
                         className="flex w-full items-center gap-2 rounded-md border border-border p-2 text-start text-sm hover:bg-accent"
                       >
                         <span className="flex-1 truncate">{p.product_name}</span>
@@ -285,6 +311,15 @@ function ReturnsPage() {
                   </div>
                 </>
               )}
+            </div>
+            <div>
+              <Label>{t("destination_warehouse")}</Label>
+              <WarehouseSelect
+                value={destination}
+                onChange={setDestination}
+                warehouses={warehouses.data ?? []}
+                className="mt-2 w-full"
+              />
             </div>
             <div>
               <Label htmlFor="r-qty">{t("quantity")}</Label>
@@ -316,6 +351,41 @@ function ReturnsPage() {
               {save.isPending ? t("saving") : t("save")}
             </Button>
           </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={detail !== null} onOpenChange={(v) => !v && setDetail(null)}>
+        <DialogContent className="max-h-[90vh] max-w-lg overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>{t("return_details")}</DialogTitle>
+          </DialogHeader>
+          {detail && (
+            <div className="space-y-3">
+              <p className="font-mono text-xs text-muted-foreground">{detail.return_id}</p>
+              <p className="text-lg font-bold">{detail.product_name}</p>
+              <p className="text-sm">
+                {detail.product_id} • {detail.barcode}
+              </p>
+              <p className="text-sm">
+                {t("warehouse")}: {warehouseName(warehouses.data, detail.warehouse)} •{" "}
+                {t("quantity")}: {detail.qty} • {fmtMoney(detail.return_total, lang)}
+              </p>
+              <p className="text-sm">
+                {t("return_reason")}: {detail.return_reason || "—"}
+              </p>
+              {detail.notes && <p className="text-sm text-muted-foreground">{detail.notes}</p>}
+              <div className="grid gap-3 sm:grid-cols-3">
+                {[detail.product_image, detail.invoice_image, detail.delivery_note_image]
+                  .filter(Boolean)
+                  .map((u, i) => (
+                    <ProductImage key={i} url={u} alt="" className="h-40 w-full" />
+                  ))}
+              </div>
+              <p className="text-xs text-muted-foreground">
+                {fmtDate(detail.return_date, lang)} {detail.return_time}
+              </p>
+            </div>
+          )}
         </DialogContent>
       </Dialog>
     </AppShell>
