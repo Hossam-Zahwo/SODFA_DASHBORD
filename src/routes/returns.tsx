@@ -1,6 +1,6 @@
-import { useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
-import { Plus } from "lucide-react";
+import { Camera, Plus, X } from "lucide-react";
 import { toast } from "sonner";
 import { AppShell } from "@/components/AppShell";
 import { Blocks } from "@/components/blocks-export";
@@ -26,8 +26,11 @@ import {
 } from "@/components/ui/table";
 import { ImageDropzone } from "@/components/ImageDropzone";
 import { ProductImage } from "@/components/ProductImage";
+import { CameraScanner } from "@/components/CameraScanner";
+import { ALL_WAREHOUSES, WarehouseSelect } from "@/components/WarehouseSelect";
+import { useUsbScanner } from "@/hooks/useUsbScanner";
 import { useApiMutation, useInventory, useReturns, useWarehouses } from "@/hooks/useSodfa";
-import { api, type Product } from "@/lib/api";
+import { api, type Product, type ReturnRecord } from "@/lib/api";
 import { errorMessage, useI18n } from "@/lib/i18n";
 import { fmtDate, fmtMoney } from "@/lib/dates";
 import { warehouseName } from "@/lib/warehouse";
@@ -54,7 +57,11 @@ function ReturnsPage() {
   const warehouses = useWarehouses();
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState("");
+  const [listSearch, setListSearch] = useState("");
+  const [camera, setCamera] = useState(false);
+  const [detail, setDetail] = useState<ReturnRecord | null>(null);
   const [product, setProduct] = useState<Product | null>(null);
+  const [destination, setDestination] = useState("");
   const [qty, setQty] = useState("1");
   const [reason, setReason] = useState("");
   const [notes, setNotes] = useState("");
@@ -66,7 +73,7 @@ function ReturnsPage() {
     api.recordReturn({
       product_id: product!.product_id,
       qty: Number(qty),
-      warehouse: product!.warehouse,
+      warehouse: destination || product!.warehouse,
       return_reason: reason,
       notes,
       product_image: img1,
@@ -88,9 +95,46 @@ function ReturnsPage() {
       .slice(0, 6);
   }, [search, inventory.data]);
 
+  const pickProduct = useCallback((p: Product) => {
+    setProduct(p);
+    setDestination((d) => d || p.warehouse);
+  }, []);
+
+  const handleCode = useCallback(
+    (code: string) => {
+      if (!open) return;
+      const c = code.trim().toLowerCase();
+      const found = (inventory.data ?? []).find(
+        (p) => p.barcode.toLowerCase() === c || p.product_id.toLowerCase() === c,
+      );
+      if (!found) {
+        toast.error(t("not_found_barcode"));
+        return;
+      }
+      pickProduct(found);
+      toast.success(found.product_name);
+    },
+    [inventory.data, open, pickProduct, t],
+  );
+
+  useUsbScanner(handleCode, open);
+
+  const history = useMemo(() => {
+    const term = listSearch.trim().toLowerCase();
+    const rows = [...(returns.data ?? [])].reverse();
+    if (!term) return rows;
+    return rows.filter((r) =>
+      [r.return_id, r.product_name, r.product_id, r.barcode].some((v) =>
+        String(v ?? "").toLowerCase().includes(term),
+      ),
+    );
+  }, [returns.data, listSearch]);
+
   const reset = () => {
     setProduct(null);
     setSearch("");
+    setDestination("");
+    setCamera(false);
     setQty("1");
     setReason("");
     setNotes("");
@@ -121,7 +165,13 @@ function ReturnsPage() {
   return (
     <AppShell title={t("normal_returns")}>
       <div className="space-y-5">
-        <div className="flex justify-end">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <Input
+            value={listSearch}
+            onChange={(e) => setListSearch(e.target.value)}
+            placeholder={t("search_placeholder")}
+            className="w-full sm:max-w-xs"
+          />
           <Button onClick={() => setOpen(true)}>
             <Plus className="me-1 h-4 w-4" />
             {t("add_return")}
@@ -132,7 +182,7 @@ function ReturnsPage() {
           <Blocks.Loading label={t("loading_returns")} />
         ) : returns.isError ? (
           <Blocks.Error label={errorMessage(returns.error, lang)} />
-        ) : (returns.data ?? []).length === 0 ? (
+        ) : history.length === 0 ? (
           <Blocks.Empty label={t("no_results")} />
         ) : (
           <Card className="overflow-x-auto p-0">
@@ -147,10 +197,11 @@ function ReturnsPage() {
                   <TableHead>{t("reason")}</TableHead>
                   <TableHead>{t("image")}</TableHead>
                   <TableHead>{t("date")}</TableHead>
+                  <TableHead />
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {[...(returns.data ?? [])].reverse().map((r) => (
+                {history.map((r) => (
                   <TableRow key={r.return_id}>
                     <TableCell className="font-mono text-xs">{r.return_id}</TableCell>
                     <TableCell>{r.product_name}</TableCell>
@@ -169,6 +220,11 @@ function ReturnsPage() {
                     </TableCell>
                     <TableCell className="whitespace-nowrap text-xs">
                       {fmtDate(r.return_date, lang)}
+                    </TableCell>
+                    <TableCell>
+                      <Button size="sm" variant="outline" onClick={() => setDetail(r)}>
+                        {t("view")}
+                      </Button>
                     </TableCell>
                   </TableRow>
                 ))}
