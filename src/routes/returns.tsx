@@ -27,7 +27,7 @@ import {
 import { ImageDropzone } from "@/components/ImageDropzone";
 import { ProductImage } from "@/components/ProductImage";
 import { CameraScanner } from "@/components/CameraScanner";
-import { ALL_WAREHOUSES, WarehouseSelect } from "@/components/WarehouseSelect";
+import { WarehouseSelect } from "@/components/WarehouseSelect";
 import { useUsbScanner } from "@/hooks/useUsbScanner";
 import { useApiMutation, useInventory, useReturns, useWarehouses } from "@/hooks/useSodfa";
 import { api, type Product, type ReturnRecord } from "@/lib/api";
@@ -150,6 +150,10 @@ function ReturnsPage() {
     }
     if (Number(qty) <= 0) {
       toast.error(t("invalid_qty"));
+      return;
+    }
+    if (!destination) {
+      toast.error(t("select_warehouse"));
       return;
     }
     save.mutate(undefined as never, {
