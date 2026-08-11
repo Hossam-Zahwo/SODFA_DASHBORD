@@ -1,6 +1,6 @@
-import { useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
-import { Plus } from "lucide-react";
+import { Camera, Plus, X } from "lucide-react";
 import { toast } from "sonner";
 import { AppShell } from "@/components/AppShell";
 import { Blocks } from "@/components/blocks-export";
@@ -26,8 +26,11 @@ import {
 } from "@/components/ui/table";
 import { ImageDropzone } from "@/components/ImageDropzone";
 import { ProductImage } from "@/components/ProductImage";
+import { CameraScanner } from "@/components/CameraScanner";
+import { WarehouseSelect } from "@/components/WarehouseSelect";
+import { useUsbScanner } from "@/hooks/useUsbScanner";
 import { useApiMutation, useInventory, useReturns, useWarehouses } from "@/hooks/useSodfa";
-import { api, type Product } from "@/lib/api";
+import { api, type Product, type ReturnRecord } from "@/lib/api";
 import { errorMessage, useI18n } from "@/lib/i18n";
 import { fmtDate, fmtMoney } from "@/lib/dates";
 import { warehouseName } from "@/lib/warehouse";
@@ -54,7 +57,11 @@ function ReturnsPage() {
   const warehouses = useWarehouses();
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState("");
+  const [listSearch, setListSearch] = useState("");
+  const [camera, setCamera] = useState(false);
+  const [detail, setDetail] = useState<ReturnRecord | null>(null);
   const [product, setProduct] = useState<Product | null>(null);
+  const [destination, setDestination] = useState("");
   const [qty, setQty] = useState("1");
   const [reason, setReason] = useState("");
   const [notes, setNotes] = useState("");
@@ -66,7 +73,7 @@ function ReturnsPage() {
     api.recordReturn({
       product_id: product!.product_id,
       qty: Number(qty),
-      warehouse: product!.warehouse,
+      warehouse: destination || product!.warehouse,
       return_reason: reason,
       notes,
       product_image: img1,
@@ -88,9 +95,46 @@ function ReturnsPage() {
       .slice(0, 6);
   }, [search, inventory.data]);
 
+  const pickProduct = useCallback((p: Product) => {
+    setProduct(p);
+    setDestination((d) => d || p.warehouse);
+  }, []);
+
+  const handleCode = useCallback(
+    (code: string) => {
+      if (!open) return;
+      const c = code.trim().toLowerCase();
+      const found = (inventory.data ?? []).find(
+        (p) => p.barcode.toLowerCase() === c || p.product_id.toLowerCase() === c,
+      );
+      if (!found) {
+        toast.error(t("not_found_barcode"));
+        return;
+      }
+      pickProduct(found);
+      toast.success(found.product_name);
+    },
+    [inventory.data, open, pickProduct, t],
+  );
+
+  useUsbScanner(handleCode, open);
+
+  const history = useMemo(() => {
+    const term = listSearch.trim().toLowerCase();
+    const rows = [...(returns.data ?? [])].reverse();
+    if (!term) return rows;
+    return rows.filter((r) =>
+      [r.return_id, r.product_name, r.product_id, r.barcode].some((v) =>
+        String(v ?? "").toLowerCase().includes(term),
+      ),
+    );
+  }, [returns.data, listSearch]);
+
   const reset = () => {
     setProduct(null);
     setSearch("");
+    setDestination("");
+    setCamera(false);
     setQty("1");
     setReason("");
     setNotes("");
@@ -108,6 +152,10 @@ function ReturnsPage() {
       toast.error(t("invalid_qty"));
       return;
     }
+    if (!destination) {
+      toast.error(t("select_warehouse"));
+      return;
+    }
     save.mutate(undefined as never, {
       onSuccess: () => {
         toast.success(t("return_recorded"));
@@ -121,7 +169,13 @@ function ReturnsPage() {
   return (
     <AppShell title={t("normal_returns")}>
       <div className="space-y-5">
-        <div className="flex justify-end">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <Input
+            value={listSearch}
+            onChange={(e) => setListSearch(e.target.value)}
+            placeholder={t("search_placeholder")}
+            className="w-full sm:max-w-xs"
+          />
           <Button onClick={() => setOpen(true)}>
             <Plus className="me-1 h-4 w-4" />
             {t("add_return")}
@@ -132,7 +186,7 @@ function ReturnsPage() {
           <Blocks.Loading label={t("loading_returns")} />
         ) : returns.isError ? (
           <Blocks.Error label={errorMessage(returns.error, lang)} />
-        ) : (returns.data ?? []).length === 0 ? (
+        ) : history.length === 0 ? (
           <Blocks.Empty label={t("no_results")} />
         ) : (
           <Card className="overflow-x-auto p-0">
@@ -147,10 +201,11 @@ function ReturnsPage() {
                   <TableHead>{t("reason")}</TableHead>
                   <TableHead>{t("image")}</TableHead>
                   <TableHead>{t("date")}</TableHead>
+                  <TableHead />
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {[...(returns.data ?? [])].reverse().map((r) => (
+                {history.map((r) => (
                   <TableRow key={r.return_id}>
                     <TableCell className="font-mono text-xs">{r.return_id}</TableCell>
                     <TableCell>{r.product_name}</TableCell>
@@ -169,6 +224,11 @@ function ReturnsPage() {
                     </TableCell>
                     <TableCell className="whitespace-nowrap text-xs">
                       {fmtDate(r.return_date, lang)}
+                    </TableCell>
+                    <TableCell>
+                      <Button size="sm" variant="outline" onClick={() => setDetail(r)}>
+                        {t("view")}
+                      </Button>
                     </TableCell>
                   </TableRow>
                 ))}
@@ -210,6 +270,32 @@ function ReturnsPage() {
                 <>
                   <Input
                     className="mt-2"
+                    data-scanner-input="true"
+                    placeholder={t("usb_hint")}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") {
+                        handleCode(e.currentTarget.value);
+                        e.currentTarget.value = "";
+                      }
+                    }}
+                  />
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="mt-2"
+                    onClick={() => setCamera((v) => !v)}
+                  >
+                    {camera ? <X className="me-1 h-4 w-4" /> : <Camera className="me-1 h-4 w-4" />}
+                    {camera ? t("close_camera") : t("open_camera")}
+                  </Button>
+                  {camera && (
+                    <div className="mt-2">
+                      <CameraScanner onDetected={handleCode} />
+                    </div>
+                  )}
+                  <Input
+                    className="mt-2"
                     value={search}
                     onChange={(e) => setSearch(e.target.value)}
                     placeholder={t("search_placeholder")}
@@ -219,7 +305,7 @@ function ReturnsPage() {
                       <button
                         key={p.product_id}
                         type="button"
-                        onClick={() => setProduct(p)}
+                        onClick={() => pickProduct(p)}
                         className="flex w-full items-center gap-2 rounded-md border border-border p-2 text-start text-sm hover:bg-accent"
                       >
                         <span className="flex-1 truncate">{p.product_name}</span>
@@ -229,6 +315,15 @@ function ReturnsPage() {
                   </div>
                 </>
               )}
+            </div>
+            <div>
+              <Label>{t("destination_warehouse")}</Label>
+              <WarehouseSelect
+                value={destination}
+                onChange={setDestination}
+                warehouses={warehouses.data ?? []}
+                className="mt-2 w-full"
+              />
             </div>
             <div>
               <Label htmlFor="r-qty">{t("quantity")}</Label>
@@ -260,6 +355,41 @@ function ReturnsPage() {
               {save.isPending ? t("saving") : t("save")}
             </Button>
           </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={detail !== null} onOpenChange={(v) => !v && setDetail(null)}>
+        <DialogContent className="max-h-[90vh] max-w-lg overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>{t("return_details")}</DialogTitle>
+          </DialogHeader>
+          {detail && (
+            <div className="space-y-3">
+              <p className="font-mono text-xs text-muted-foreground">{detail.return_id}</p>
+              <p className="text-lg font-bold">{detail.product_name}</p>
+              <p className="text-sm">
+                {detail.product_id} • {detail.barcode}
+              </p>
+              <p className="text-sm">
+                {t("warehouse")}: {warehouseName(warehouses.data, detail.warehouse)} •{" "}
+                {t("quantity")}: {detail.qty} • {fmtMoney(detail.return_total, lang)}
+              </p>
+              <p className="text-sm">
+                {t("return_reason")}: {detail.return_reason || "—"}
+              </p>
+              {detail.notes && <p className="text-sm text-muted-foreground">{detail.notes}</p>}
+              <div className="grid gap-3 sm:grid-cols-3">
+                {[detail.product_image, detail.invoice_image, detail.delivery_note_image]
+                  .filter(Boolean)
+                  .map((u, i) => (
+                    <ProductImage key={i} url={u} alt="" className="h-40 w-full" />
+                  ))}
+              </div>
+              <p className="text-xs text-muted-foreground">
+                {fmtDate(detail.return_date, lang)} {detail.return_time}
+              </p>
+            </div>
+          )}
         </DialogContent>
       </Dialog>
     </AppShell>

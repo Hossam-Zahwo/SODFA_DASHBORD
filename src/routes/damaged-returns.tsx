@@ -57,6 +57,8 @@ function DamagedPage() {
   const [open, setOpen] = useState(false);
   const [filter, setFilter] = useState<string>("all");
   const [search, setSearch] = useState("");
+  const [listSearch, setListSearch] = useState("");
+  const [detail, setDetail] = useState<string | null>(null);
   const [product, setProduct] = useState<Product | null>(null);
   const [shipment, setShipment] = useState("");
   const [qty, setQty] = useState("1");
@@ -97,7 +99,17 @@ function DamagedPage() {
       .slice(0, 6);
   }, [search, inventory.data]);
 
-  const list = (damaged.data ?? []).filter((d) => filter === "all" || d.status === filter);
+  const term = listSearch.trim().toLowerCase();
+  const list = (damaged.data ?? [])
+    .filter((d) => filter === "all" || d.status === filter)
+    .filter(
+      (d) =>
+        !term ||
+        [d.damaged_return_id, d.product_name, d.product_id, d.shipment_code, d.barcode].some((v) =>
+          String(v ?? "").toLowerCase().includes(term),
+        ),
+    );
+  const detailRow = (damaged.data ?? []).find((d) => d.damaged_return_id === detail) ?? null;
 
   const reset = () => {
     setProduct(null);
@@ -119,6 +131,12 @@ function DamagedPage() {
       <div className="space-y-5">
         <Card className="flex flex-wrap items-center gap-3 p-4">
           <p className="text-sm text-muted-foreground">{t("damaged_no_stock_note")}</p>
+          <Input
+            value={listSearch}
+            onChange={(e) => setListSearch(e.target.value)}
+            placeholder={t("search_placeholder")}
+            className="w-full sm:max-w-xs"
+          />
           <Select value={filter} onValueChange={setFilter}>
             <SelectTrigger className="w-48">
               <SelectValue />
@@ -168,12 +186,12 @@ function DamagedPage() {
                   </Badge>
                 </div>
                 <div className="grid grid-cols-3 gap-2">
-                  <ProductImage url={d.policy_image} alt={t("policy_image")} className="h-24" />
-                  <ProductImage url={d.product_image} alt={t("product_image")} className="h-24" />
+                  <ProductImage url={d.policy_image} alt={t("policy_image")} className="h-28 w-full" />
+                  <ProductImage url={d.product_image} alt={t("product_image")} className="h-28 w-full" />
                   <ProductImage
                     url={d.policy_product_image}
                     alt={t("policy_product_image")}
-                    className="h-24"
+                    className="h-28 w-full"
                   />
                 </div>
                 <p className="text-sm">
@@ -185,6 +203,9 @@ function DamagedPage() {
                   <p className="text-xs text-muted-foreground">{d.damage_details}</p>
                 )}
                 <div className="flex flex-wrap gap-2">
+                  <Button size="sm" variant="secondary" onClick={() => setDetail(d.damaged_return_id)}>
+                    {t("view")}
+                  </Button>
                   {STATUSES.map((s) => (
                     <Button
                       key={s}
@@ -318,6 +339,54 @@ function DamagedPage() {
               {save.isPending ? t("saving") : t("save")}
             </Button>
           </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={detailRow !== null} onOpenChange={(v) => !v && setDetail(null)}>
+        <DialogContent className="max-h-[90vh] max-w-2xl overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>{t("details")}</DialogTitle>
+          </DialogHeader>
+          {detailRow && (
+            <div className="space-y-3">
+              <p className="font-mono text-xs text-muted-foreground">
+                {detailRow.damaged_return_id}
+              </p>
+              <p className="text-lg font-bold">{detailRow.product_name}</p>
+              <p className="text-sm">
+                {detailRow.product_id} • {t("shipment_code")}: {detailRow.shipment_code || "—"}
+              </p>
+              <p className="text-sm">
+                {t("warehouse")}: {warehouseName(warehouses.data, detailRow.warehouse)} •{" "}
+                {t("quantity")}: {detailRow.qty} • {statusLabel(detailRow.status)}
+              </p>
+              {detailRow.damage_reason && <p className="text-sm">{detailRow.damage_reason}</p>}
+              {detailRow.damage_details && (
+                <p className="text-sm text-muted-foreground">{detailRow.damage_details}</p>
+              )}
+              <div className="grid gap-3 sm:grid-cols-3">
+                <div>
+                  <p className="mb-1 text-xs text-muted-foreground">{t("policy_image")}</p>
+                  <ProductImage url={detailRow.policy_image} alt="" className="h-48 w-full" />
+                </div>
+                <div>
+                  <p className="mb-1 text-xs text-muted-foreground">{t("product_image")}</p>
+                  <ProductImage url={detailRow.product_image} alt="" className="h-48 w-full" />
+                </div>
+                <div>
+                  <p className="mb-1 text-xs text-muted-foreground">{t("policy_product_image")}</p>
+                  <ProductImage
+                    url={detailRow.policy_product_image}
+                    alt=""
+                    className="h-48 w-full"
+                  />
+                </div>
+              </div>
+              <p className="text-xs text-muted-foreground">
+                {fmtDate(detailRow.return_date, lang)} {detailRow.return_time}
+              </p>
+            </div>
+          )}
         </DialogContent>
       </Dialog>
     </AppShell>

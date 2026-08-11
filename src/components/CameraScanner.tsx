@@ -9,6 +9,9 @@ export function CameraScanner({ onDetected }: { onDetected: (code: string) => vo
   const videoRef = useRef<HTMLVideoElement>(null);
   const [error, setError] = useState("");
   const [ready, setReady] = useState(false);
+  // Continuous scanning: same code is ignored for a short cooldown so the
+  // camera stays open and multiple different products can be scanned in a row.
+  const lastCode = useRef({ code: "", at: 0 });
 
   useEffect(() => {
     let stopped = false;
@@ -17,7 +20,12 @@ export function CameraScanner({ onDetected }: { onDetected: (code: string) => vo
 
     void reader
       .decodeFromVideoDevice(undefined, videoRef.current ?? undefined, (result) => {
-        if (result && !stopped) onDetected(result.getText());
+        if (!result || stopped) return;
+        const code = result.getText();
+        const now = Date.now();
+        if (lastCode.current.code === code && now - lastCode.current.at < 1500) return;
+        lastCode.current = { code, at: now };
+        onDetected(code);
       })
       .then((c) => {
         controls = c;

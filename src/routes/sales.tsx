@@ -155,7 +155,6 @@ function SalesPage() {
             <p className="text-xs text-muted-foreground">{t("usb_hint")}</p>
             <Input
               data-scanner-input="true"
-              autoFocus
               placeholder={t("usb_hint")}
               onKeyDown={(e) => {
                 if (e.key === "Enter") {
