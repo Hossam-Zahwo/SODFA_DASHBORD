@@ -85,6 +85,8 @@ const dict = {
   close_camera: { ar: "إغلاق الكاميرا", en: "Close Camera" },
   camera_denied: { ar: "يرجى السماح باستخدام الكاميرا", en: "Please allow camera access" },
   manual_search: { ar: "بحث يدوي", en: "Manual Search" },
+  destination_warehouse: { ar: "المخزن المستلم", en: "Destination Warehouse" },
+  return_details: { ar: "تفاصيل المرتجع", en: "Return Details" },
   cart: { ar: "سلة البيع", en: "Sales Cart" },
   cart_empty: { ar: "السلة فارغة", en: "Cart is empty" },
   complete_sale: { ar: "إتمام البيع", en: "Complete Sale" },
