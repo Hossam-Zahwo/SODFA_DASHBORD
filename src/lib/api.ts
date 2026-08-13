@@ -81,6 +81,17 @@ export async function apiPost<T>(action: string, params: Params = {}): Promise<T
     const res = await fetch(getApiUrl(), { method: "POST", body, redirect: "follow" });
     return await parse<T>(res);
   } catch (e) {
+    // Some Apps Script deployments only answer GET (doPost missing / older version).
+    // Retry the same action over GET when POST returns a non-JSON page.
+    const retryable =
+      !(e instanceof ApiError) || e.message === "BAD_RESPONSE" || e.message === "NETWORK";
+    if (retryable && body.toString().length < 6000) {
+      try {
+        return await apiGet<T>(action, params);
+      } catch (e2) {
+        throw e2;
+      }
+    }
     if (e instanceof ApiError) throw e;
     throw new ApiError("NETWORK");
   }
