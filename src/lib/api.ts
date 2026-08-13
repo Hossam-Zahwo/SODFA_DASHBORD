@@ -307,16 +307,20 @@ export const api = {
 
   warehouses: async (): Promise<Warehouse[]> => {
     const d = await apiGet<{ warehouses?: Record<string, unknown>[] }>("get_warehouses");
-    return (d.warehouses ?? [])
+    const all = (d.warehouses ?? [])
       .filter((w) => s(w["warehouse_id"]))
-      .filter((w) => w["active"] !== false && String(w["active"] ?? "true") !== "false")
       .map((w) => ({
         warehouse_id: s(w["warehouse_id"]),
         warehouse_name: s(w["warehouse_name"]) || s(w["warehouse_id"]),
-        active: true,
+        active:
+          w["active"] !== false && String(w["active"] ?? "true").toLowerCase() !== "false",
         created_at: s(w["created_at"]),
         updated_at: s(w["updated_at"]),
       }));
+    const active = all.filter((w) => w.active);
+    // Some sheets leave the "active" column blank/FALSE for every row; in that case
+    // the flag carries no meaning and every warehouse in the sheet is usable.
+    return active.length > 0 ? active : all.map((w) => ({ ...w, active: true }));
   },
   saveWarehouse: (warehouse_name: string) =>
     apiPost<{ warehouse_id: string }>("add_warehouse", { warehouse_name }),

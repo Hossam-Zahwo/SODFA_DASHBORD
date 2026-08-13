@@ -13,6 +13,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { ImageDropzone } from "@/components/ImageDropzone";
 import { WarehouseSelect } from "@/components/WarehouseSelect";
+import { Plus } from "lucide-react";
 import { api, type Product, type Warehouse } from "@/lib/api";
 import { errorMessage, useI18n } from "@/lib/i18n";
 import { useApiMutation } from "@/hooks/useSodfa";
@@ -37,6 +38,8 @@ export function ProductFormDialog({
   const [soldQty, setSoldQty] = useState("");
   const [warehouse, setWarehouse] = useState("");
   const [image, setImage] = useState("");
+  const [newWh, setNewWh] = useState("");
+  const [showNewWh, setShowNewWh] = useState(false);
 
   useEffect(() => {
     if (!open) return;
@@ -49,6 +52,8 @@ export function ProductFormDialog({
   }, [open, product, defaultWarehouse, warehouses]);
 
   const stockNum = Number(stock || 0);
+
+  const addWarehouse = useApiMutation((n: string) => api.saveWarehouse(n));
   const soldNum = Number(soldQty || 0);
   const remaining = stockNum - soldNum;
 
@@ -156,6 +161,52 @@ export function ProductFormDialog({
           <div>
             <Label className="mb-1 block">{t("warehouse")}</Label>
             <WarehouseSelect value={warehouse} onChange={setWarehouse} warehouses={warehouses} />
+            {showNewWh ? (
+              <div className="mt-2 flex gap-2">
+                <Input
+                  value={newWh}
+                  onChange={(e) => setNewWh(e.target.value)}
+                  placeholder={t("warehouse_name")}
+                />
+                <Button
+                  type="button"
+                  disabled={addWarehouse.isPending}
+                  onClick={() => {
+                    const n = newWh.trim();
+                    if (!n) {
+                      toast.error(t("err_required"));
+                      return;
+                    }
+                    addWarehouse.mutate(n, {
+                      onSuccess: (res) => {
+                        const id = (res as { warehouse_id?: string } | undefined)?.warehouse_id;
+                        if (id) setWarehouse(id);
+                        setNewWh("");
+                        setShowNewWh(false);
+                        toast.success(t("saved"));
+                      },
+                      onError: (e) => toast.error(errorMessage(e, lang)),
+                    });
+                  }}
+                >
+                  {addWarehouse.isPending ? t("saving") : t("save")}
+                </Button>
+                <Button type="button" variant="outline" onClick={() => setShowNewWh(false)}>
+                  {t("cancel")}
+                </Button>
+              </div>
+            ) : (
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                className="mt-2"
+                onClick={() => setShowNewWh(true)}
+              >
+                <Plus className="me-1 h-4 w-4" />
+                {t("add_warehouse")}
+              </Button>
+            )}
           </div>
           <ImageDropzone label={t("product_image")} value={image} onChange={setImage} />
 
