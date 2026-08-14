@@ -1,4 +1,4 @@
-import { defineMcp } from "@lovable.dev/mcp-js";
+import { defineMcp, type AnyToolDefinition } from "@lovable.dev/mcp-js";
 import listInventory from "./tools/list-inventory";
 import listWarehouses from "./tools/list-warehouses";
 import listSales from "./tools/list-sales";
@@ -12,5 +12,12 @@ export default defineMcp({
   version: "0.1.0",
   instructions:
     "Tools for the SODFA (صدفة) inventory system, backed by Google Sheets. Read inventory, warehouses, sales and returns, and record new sales or customer returns. Products are addressed by product id or barcode.",
-  tools: [listInventory, listWarehouses, listSales, listReturns, recordSale, recordReturn],
+  tools: [
+    listInventory,
+    listWarehouses,
+    listSales,
+    listReturns,
+    recordSale,
+    recordReturn,
+  ] as unknown as AnyToolDefinition[],
 });
