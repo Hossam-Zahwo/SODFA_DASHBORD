@@ -1,0 +1,196 @@
+{
+  "version": 1,
+  "sdk_version": "0.26.2",
+  "path": "/mcp",
+  "auth": {
+    "type": "none"
+  },
+  "mcp": {
+    "server": {
+      "name": "sodfa-inventory-master",
+      "version": "0.1.0",
+      "title": "SODFA Inventory Master"
+    },
+    "tools": [
+      {
+        "name": "list_inventory",
+        "title": "List inventory",
+        "description": "List SODFA products from the Google Sheets inventory, optionally filtered by search text (name, product id or barcode) or warehouse.",
+        "annotations": {
+          "readOnlyHint": true,
+          "idempotentHint": true,
+          "openWorldHint": true
+        },
+        "inputSchema": {
+          "$schema": "http://json-schema.org/draft-07/schema#",
+          "type": "object",
+          "properties": {
+            "search": {
+              "description": "Filter by product name, product id or barcode.",
+              "type": "string"
+            },
+            "warehouse": {
+              "description": "Filter by warehouse id or name.",
+              "type": "string"
+            },
+            "limit": {
+              "description": "Max rows to return (default 50).",
+              "type": "integer",
+              "minimum": -9007199254740991,
+              "maximum": 9007199254740991
+            }
+          }
+        },
+        "outputSchema": null
+      },
+      {
+        "name": "list_warehouses",
+        "title": "List warehouses",
+        "description": "List all SODFA warehouses stored in the Google Sheet.",
+        "annotations": {
+          "readOnlyHint": true,
+          "idempotentHint": true,
+          "openWorldHint": true
+        },
+        "inputSchema": {
+          "$schema": "http://json-schema.org/draft-07/schema#",
+          "type": "object",
+          "properties": {}
+        },
+        "outputSchema": null
+      },
+      {
+        "name": "list_sales",
+        "title": "List sales",
+        "description": "List recorded SODFA sales, newest last, with an optional row limit.",
+        "annotations": {
+          "readOnlyHint": true,
+          "idempotentHint": true,
+          "openWorldHint": true
+        },
+        "inputSchema": {
+          "$schema": "http://json-schema.org/draft-07/schema#",
+          "type": "object",
+          "properties": {
+            "limit": {
+              "description": "Max rows to return (default 50).",
+              "type": "integer",
+              "minimum": -9007199254740991,
+              "maximum": 9007199254740991
+            }
+          }
+        },
+        "outputSchema": null
+      },
+      {
+        "name": "list_returns",
+        "title": "List returns",
+        "description": "List SODFA returns. Use kind 'normal' for customer returns that restock inventory, or 'damaged' for damaged returns with their status.",
+        "annotations": {
+          "readOnlyHint": true,
+          "idempotentHint": true,
+          "openWorldHint": true
+        },
+        "inputSchema": {
+          "$schema": "http://json-schema.org/draft-07/schema#",
+          "type": "object",
+          "properties": {
+            "kind": {
+              "description": "Which return log to read (default normal).",
+              "type": "string",
+              "enum": [
+                "normal",
+                "damaged"
+              ]
+            },
+            "limit": {
+              "description": "Max rows to return (default 50).",
+              "type": "integer",
+              "minimum": -9007199254740991,
+              "maximum": 9007199254740991
+            }
+          }
+        },
+        "outputSchema": null
+      },
+      {
+        "name": "record_sale",
+        "title": "Record a sale",
+        "description": "Record a sale of a product in the SODFA Google Sheet. Accepts a product id or barcode; stock is decremented in the Inventory sheet.",
+        "annotations": {
+          "readOnlyHint": false,
+          "destructiveHint": false,
+          "openWorldHint": true
+        },
+        "inputSchema": {
+          "$schema": "http://json-schema.org/draft-07/schema#",
+          "type": "object",
+          "properties": {
+            "product": {
+              "type": "string",
+              "description": "Product id or barcode of the item being sold."
+            },
+            "qty": {
+              "type": "integer",
+              "minimum": -9007199254740991,
+              "maximum": 9007199254740991,
+              "description": "Quantity sold (must be at least 1)."
+            },
+            "warehouse": {
+              "description": "Warehouse the sale is taken from.",
+              "type": "string"
+            }
+          },
+          "required": [
+            "product",
+            "qty"
+          ]
+        },
+        "outputSchema": null
+      },
+      {
+        "name": "record_return",
+        "title": "Record a customer return",
+        "description": "Record a normal customer return in the SODFA Google Sheet. The quantity is added back to the destination warehouse stock.",
+        "annotations": {
+          "readOnlyHint": false,
+          "destructiveHint": false,
+          "openWorldHint": true
+        },
+        "inputSchema": {
+          "$schema": "http://json-schema.org/draft-07/schema#",
+          "type": "object",
+          "properties": {
+            "product": {
+              "type": "string",
+              "description": "Product id or barcode being returned."
+            },
+            "qty": {
+              "type": "integer",
+              "minimum": -9007199254740991,
+              "maximum": 9007199254740991,
+              "description": "Quantity returned (must be at least 1)."
+            },
+            "warehouse": {
+              "description": "Destination warehouse the stock returns to.",
+              "type": "string"
+            },
+            "return_reason": {
+              "description": "Reason for the return.",
+              "type": "string"
+            },
+            "notes": {
+              "description": "Free-text notes.",
+              "type": "string"
+            }
+          },
+          "required": [
+            "product",
+            "qty"
+          ]
+        },
+        "outputSchema": null
+      }
+    ]
+  }
+}
