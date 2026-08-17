@@ -14,15 +14,26 @@ import { reportLovableError } from "../lib/lovable-error-reporting";
 import { LanguageProvider } from "@/lib/i18n";
 import { Toaster } from "@/components/ui/sonner";
 
+/* ============================================================
+   404 PAGE
+   ============================================================ */
+
 function NotFoundComponent() {
   return (
     <div className="flex min-h-screen items-center justify-center bg-background px-4">
       <div className="max-w-md text-center">
-        <h1 className="text-7xl font-bold text-foreground">404</h1>
-        <h2 className="mt-4 text-xl font-semibold text-foreground">Page not found</h2>
+        <h1 className="text-7xl font-bold text-foreground">
+          404
+        </h1>
+
+        <h2 className="mt-4 text-xl font-semibold text-foreground">
+          Page not found
+        </h2>
+
         <p className="mt-2 text-sm text-muted-foreground">
           The page you're looking for doesn't exist or has been moved.
         </p>
+
         <div className="mt-6">
           <Link
             to="/"
@@ -36,11 +47,25 @@ function NotFoundComponent() {
   );
 }
 
-function ErrorComponent({ error, reset }: { error: Error; reset: () => void }) {
+/* ============================================================
+   ERROR PAGE
+   ============================================================ */
+
+function ErrorComponent({
+  error,
+  reset,
+}: {
+  error: Error;
+  reset: () => void;
+}) {
   console.error(error);
+
   const router = useRouter();
+
   useEffect(() => {
-    reportLovableError(error, { boundary: "tanstack_root_error_component" });
+    reportLovableError(error, {
+      boundary: "tanstack_root_error_component",
+    });
   }, [error]);
 
   return (
@@ -49,9 +74,11 @@ function ErrorComponent({ error, reset }: { error: Error; reset: () => void }) {
         <h1 className="text-xl font-semibold tracking-tight text-foreground">
           This page didn't load
         </h1>
+
         <p className="mt-2 text-sm text-muted-foreground">
           Something went wrong on our end. You can try refreshing or head back home.
         </p>
+
         <div className="mt-6 flex flex-wrap justify-center gap-2">
           <button
             onClick={() => {
@@ -62,6 +89,7 @@ function ErrorComponent({ error, reset }: { error: Error; reset: () => void }) {
           >
             Try again
           </button>
+
           <a
             href="/"
             className="inline-flex items-center justify-center rounded-md border border-input bg-background px-4 py-2 text-sm font-medium text-foreground transition-colors hover:bg-accent"
@@ -74,53 +102,201 @@ function ErrorComponent({ error, reset }: { error: Error; reset: () => void }) {
   );
 }
 
-export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()({
-  head: () => ({
-    meta: [
-      { charSet: "utf-8" },
-      { name: "viewport", content: "width=device-width, initial-scale=1" },
-      { title: "SODFA صدفة — Inventory, Sales & Returns" },
-      {
-        name: "description",
-        content:
-          "SODFA store management: inventory, sales, returns and damaged returns powered by Google Sheets.",
-      },
-      { name: "author", content: "SODFA" },
-      { property: "og:title", content: "SODFA صدفة — Store Management" },
-      {
-        property: "og:description",
-        content: "Inventory, sales, returns and damaged returns for the SODFA brand.",
-      },
-      { property: "og:type", content: "website" },
-      { name: "twitter:card", content: "summary_large_image" },
-    ],
-    links: [
-      {
-        rel: "stylesheet",
-        href: appCss,
-      },
-      { rel: "icon", href: "/favicon.ico", type: "image/x-icon" },
-    ],
-  }),
-  shellComponent: RootShell,
-  component: RootComponent,
-  notFoundComponent: NotFoundComponent,
-  errorComponent: ErrorComponent,
-});
+/* ============================================================
+   ROOT ROUTE
+   ============================================================ */
 
-function RootShell({ children }: { children: ReactNode }) {
+export const Route =
+  createRootRouteWithContext<{
+    queryClient: QueryClient;
+  }>()({
+    head: () => ({
+      /* ========================================================
+         META TAGS
+         ======================================================== */
+
+      meta: [
+        {
+          charSet: "utf-8",
+        },
+
+        {
+          name: "viewport",
+          content: "width=device-width, initial-scale=1",
+        },
+
+        {
+          title: "SODFA صدفة — Inventory, Sales & Returns",
+        },
+
+        {
+          name: "description",
+          content:
+            "SODFA store management: inventory, sales, returns and damaged returns powered by Google Sheets.",
+        },
+
+        {
+          name: "author",
+          content: "SODFA",
+        },
+
+        {
+          property: "og:title",
+          content: "SODFA صدفة — Store Management",
+        },
+
+        {
+          property: "og:description",
+          content:
+            "Inventory, sales, returns and damaged returns for the SODFA brand.",
+        },
+
+        {
+          property: "og:type",
+          content: "website",
+        },
+
+        {
+          name: "twitter:card",
+          content: "summary_large_image",
+        },
+
+        /* ======================================================
+           THEME / MOBILE
+           ====================================================== */
+
+        {
+          name: "theme-color",
+          content: "#0B2A52",
+        },
+
+        {
+          name: "mobile-web-app-capable",
+          content: "yes",
+        },
+
+        {
+          name: "apple-mobile-web-app-capable",
+          content: "yes",
+        },
+
+        {
+          name: "apple-mobile-web-app-status-bar-style",
+          content: "default",
+        },
+
+        {
+          name: "apple-mobile-web-app-title",
+          content: "SODFA",
+        },
+      ],
+
+      /* ========================================================
+         LINKS
+         ======================================================== */
+
+      links: [
+        /* Main CSS */
+        {
+          rel: "stylesheet",
+          href: appCss,
+        },
+
+        /* ======================================================
+           FAVICON
+           ====================================================== */
+
+        {
+          rel: "icon",
+          href: "/favicon.ico",
+          type: "image/x-icon",
+        },
+
+        {
+          rel: "icon",
+          href: "/favicon-16x16.png",
+          type: "image/png",
+          sizes: "16x16",
+        },
+
+        {
+          rel: "icon",
+          href: "/favicon-32x32.png",
+          type: "image/png",
+          sizes: "32x32",
+        },
+
+        {
+          rel: "icon",
+          href: "/android-chrome-192x192.png",
+          type: "image/png",
+          sizes: "192x192",
+        },
+
+        {
+          rel: "icon",
+          href: "/android-chrome-512x512.png",
+          type: "image/png",
+          sizes: "512x512",
+        },
+
+        /* ======================================================
+           APPLE ICON
+           ====================================================== */
+
+        {
+          rel: "apple-touch-icon",
+          href: "/apple-touch-icon.png",
+          sizes: "180x180",
+        },
+
+        /* ======================================================
+           WEB MANIFEST
+           ====================================================== */
+
+        {
+          rel: "manifest",
+          href: "/site.webmanifest",
+        },
+      ],
+    }),
+
+    shellComponent: RootShell,
+
+    component: RootComponent,
+
+    notFoundComponent: NotFoundComponent,
+
+    errorComponent: ErrorComponent,
+  });
+
+/* ============================================================
+   ROOT SHELL
+   ============================================================ */
+
+function RootShell({
+  children,
+}: {
+  children: ReactNode;
+}) {
   return (
     <html lang="en">
       <head>
         <HeadContent />
       </head>
+
       <body>
         {children}
+
         <Scripts />
       </body>
     </html>
   );
 }
+
+/* ============================================================
+   ROOT COMPONENT
+   ============================================================ */
 
 function RootComponent() {
   const { queryClient } = Route.useRouteContext();
@@ -130,7 +306,11 @@ function RootComponent() {
       <LanguageProvider>
         {/* Required: nested routes render here. Removing <Outlet /> breaks all child routes. */}
         <Outlet />
-        <Toaster position="top-center" richColors />
+
+        <Toaster
+          position="top-center"
+          richColors
+        />
       </LanguageProvider>
     </QueryClientProvider>
   );
