@@ -1,6 +1,11 @@
 import { useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
-import { Plus, Trash2, Warehouse as WarehouseIcon } from "lucide-react";
+import {
+  Package,
+  Plus,
+  Trash2,
+  Warehouse as WarehouseIcon,
+} from "lucide-react";
 import { toast } from "sonner";
 
 import { AppShell } from "@/components/AppShell";
@@ -67,17 +72,164 @@ function WarehousesPage() {
     (id: string) => api.deleteWarehouse(id),
   );
 
-  const count = (id: string) =>
+  /*
+   * المنتجات الموجودة داخل المخزن
+   */
+  const warehouseProducts = (id: string) =>
     (inventory.data ?? []).filter(
-      (p) => p.warehouse === id,
-    ).length;
+      (product) => product.warehouse === id,
+    );
+
+  /*
+   * عدد المنتجات المختلفة
+   */
+  const productCount = (id: string) =>
+    warehouseProducts(id).length;
+
+  /*
+   * إجمالي الكمية الموجودة في المخزن
+   */
+  const stockCount = (id: string) =>
+    warehouseProducts(id).reduce(
+      (total, product) =>
+        total + Number(product.remaining_qty || 0),
+      0,
+    );
+
+  /*
+   * التأكد من عدم تكرار اسم المخزن
+   */
+  const warehouseNameExists = (
+    value: string,
+    exceptId?: string,
+  ) => {
+    const normalized = value
+      .trim()
+      .toLowerCase();
+
+    return (warehouses.data ?? []).some(
+      (warehouse) =>
+        warehouse.warehouse_id !== exceptId &&
+        warehouse.warehouse_name
+          .trim()
+          .toLowerCase() === normalized,
+    );
+  };
+
+  const handleCreate = () => {
+    const trimmed = name.trim();
+
+    if (!trimmed) {
+      toast.error(t("err_required"));
+      return;
+    }
+
+    if (warehouseNameExists(trimmed)) {
+      toast.error("اسم المخزن موجود بالفعل");
+      return;
+    }
+
+    create.mutate(trimmed, {
+      onSuccess: () => {
+        toast.success(t("saved"));
+        setName("");
+      },
+
+      onError: (error) => {
+        toast.error(
+          errorMessage(error, lang),
+        );
+      },
+    });
+  };
+
+  const handleRename = (
+    warehouse: Warehouse,
+    value: string,
+  ) => {
+    const trimmed = value.trim();
+
+    if (!trimmed) {
+      toast.error(t("err_required"));
+      return;
+    }
+
+    if (
+      trimmed === warehouse.warehouse_name
+    ) {
+      return;
+    }
+
+    if (
+      warehouseNameExists(
+        trimmed,
+        warehouse.warehouse_id,
+      )
+    ) {
+      toast.error("اسم المخزن موجود بالفعل");
+      return;
+    }
+
+    rename.mutate(
+      {
+        id: warehouse.warehouse_id,
+        name: trimmed,
+      },
+      {
+        onSuccess: () => {
+          toast.success(t("saved"));
+        },
+
+        onError: (error) => {
+          toast.error(
+            errorMessage(error, lang),
+          );
+        },
+      },
+    );
+  };
+
+  const handleDelete = () => {
+    if (!toDelete) {
+      return;
+    }
+
+    const count =
+      productCount(
+        toDelete.warehouse_id,
+      );
+
+    if (count > 0) {
+      toast.error(
+        "لا يمكن حذف المخزن لأنه يحتوي على منتجات",
+      );
+      setToDelete(null);
+      return;
+    }
+
+    remove.mutate(
+      toDelete.warehouse_id,
+      {
+        onSuccess: () => {
+          toast.success(t("deleted"));
+          setToDelete(null);
+        },
+
+        onError: (error) => {
+          toast.error(
+            errorMessage(error, lang),
+          );
+        },
+      },
+    );
+  };
 
   return (
     <AppShell title={t("warehouses")}>
       <div className="min-h-full space-y-6">
 
         {/* =====================================================
-            HEADER / ADD WAREHOUSE
+            HEADER
         ====================================================== */}
 
         <Card
@@ -115,7 +267,7 @@ function WarehousesPage() {
                 </h2>
 
                 <p className="text-sm text-white/80">
-                  إدارة المستودعات وإضافة مستودع جديد
+                  إدارة المخازن وإضافة مخزن جديد
                 </p>
               </div>
             </div>
@@ -137,6 +289,11 @@ function WarehousesPage() {
                 onChange={(e) =>
                   setName(e.target.value)
                 }
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    handleCreate();
+                  }
+                }}
                 placeholder={t("warehouse_name")}
                 className="
                   h-11
@@ -155,34 +312,7 @@ function WarehousesPage() {
 
               <Button
                 disabled={create.isPending}
-                onClick={() => {
-                  if (!name.trim()) {
-                    toast.error(
-                      t("err_required"),
-                    );
-                    return;
-                  }
-
-                  create.mutate(
-                    name.trim(),
-                    {
-                      onSuccess: () => {
-                        toast.success(
-                          t("saved"),
-                        );
-                        setName("");
-                      },
-
-                      onError: (e) =>
-                        toast.error(
-                          errorMessage(
-                            e,
-                            lang,
-                          ),
-                        ),
-                    },
-                  );
-                }}
+                onClick={handleCreate}
                 className="
                   h-11
                   border
@@ -201,7 +331,9 @@ function WarehousesPage() {
               >
                 <Plus className="me-1 h-4 w-4" />
 
-                {t("add_warehouse")}
+                {create.isPending
+                  ? t("saving")
+                  : t("add_warehouse")}
               </Button>
             </div>
           </div>
@@ -212,27 +344,11 @@ function WarehousesPage() {
         ====================================================== */}
 
         {warehouses.isLoading ? (
-          <Card
-            className="
-              border
-              border-[#C084CC]/30
-              bg-white
-              p-6
-              shadow-sm
-            "
-          >
+          <Card className="border-[#C084CC]/30 bg-white p-6 shadow-sm">
             <Blocks.Loading label={t("loading")} />
           </Card>
         ) : warehouses.isError ? (
-          <Card
-            className="
-              border
-              border-[#C084CC]/30
-              bg-white
-              p-6
-              shadow-sm
-            "
-          >
+          <Card className="border-[#C084CC]/30 bg-white p-6 shadow-sm">
             <Blocks.Error
               label={errorMessage(
                 warehouses.error,
@@ -241,208 +357,260 @@ function WarehousesPage() {
             />
           </Card>
         ) : (warehouses.data ?? []).length === 0 ? (
-          <Card
-            className="
-              border
-              border-[#C084CC]/30
-              bg-white
-              p-6
-              shadow-sm
-            "
-          >
+          <Card className="border-[#C084CC]/30 bg-white p-6 shadow-sm">
             <Blocks.Empty
               label={t("no_results")}
             />
           </Card>
         ) : (
           <div className="grid gap-5 sm:grid-cols-2 xl:grid-cols-3">
-            {(warehouses.data ?? []).map((w) => {
-              const productCount = count(
-                w.warehouse_id,
-              );
+            {(warehouses.data ?? []).map(
+              (warehouse) => {
+                const products =
+                  productCount(
+                    warehouse.warehouse_id,
+                  );
 
-              return (
-                <Card
-                  key={w.warehouse_id}
-                  className="
-                    group
-                    relative
-                    overflow-hidden
-                    border
-                    border-[#C084CC]/40
-                    bg-gradient-to-br
-                    from-white
-                    via-white
-                    to-[#F8ECFA]
-                    p-0
-                    shadow-sm
-                    transition-all
-                    duration-300
-                    hover:-translate-y-1
-                    hover:border-[#9B4BA8]/70
-                    hover:shadow-lg
-                    hover:shadow-[#9B4BA8]/10
-                  "
-                >
-                  {/* TOP PURPLE LINE */}
+                const stock =
+                  stockCount(
+                    warehouse.warehouse_id,
+                  );
 
-                  <div
+                return (
+                  <Card
+                    key={
+                      warehouse.warehouse_id
+                    }
                     className="
-                      h-1
-                      w-full
-                      bg-gradient-to-r
-                      from-[#7B2C8E]
-                      via-[#9B4BA8]
-                      to-[#C084CC]
+                      group
+                      relative
+                      overflow-hidden
+                      border
+                      border-[#C084CC]/40
+                      bg-gradient-to-br
+                      from-white
+                      via-white
+                      to-[#F8ECFA]
+                      p-0
+                      shadow-sm
+                      transition-all
+                      duration-300
+                      hover:-translate-y-1
+                      hover:border-[#9B4BA8]/70
+                      hover:shadow-lg
+                      hover:shadow-[#9B4BA8]/10
                     "
-                  />
+                  >
 
-                  <div className="space-y-4 p-5">
-
-                    {/* WAREHOUSE HEADER */}
-
-                    <div className="flex items-start gap-3">
-
-                      <div
-                        className="
-                          flex h-11 w-11 shrink-0
-                          items-center justify-center
-                          rounded-xl
-                          bg-gradient-to-br
-                          from-[#7B2C8E]
-                          to-[#C084CC]
-                          shadow-sm
-                          shadow-[#9B4BA8]/20
-                        "
-                      >
-                        <WarehouseIcon
-                          className="
-                            h-5 w-5
-                            text-white
-                          "
-                        />
-                      </div>
-
-                      <div className="min-w-0 flex-1">
-
-                        <p
-                          className="
-                            mb-1
-                            text-xs
-                            font-medium
-                            text-[#9B4BA8]
-                          "
-                        >
-                          مستودع
-                        </p>
-
-                        <p
-                          className="
-                            truncate
-                            text-base
-                            font-bold
-                            text-gray-900
-                          "
-                        >
-                          {w.warehouse_name}
-                        </p>
-
-                      </div>
-
-                    </div>
-
-                    {/* WAREHOUSE NAME INPUT */}
-
-                    <div className="space-y-2">
-
-                      <label
-                        className="
-                          text-xs
-                          font-semibold
-                          text-gray-700
-                        "
-                      >
-                        اسم المستودع
-                      </label>
-
-                      <Input
-                        defaultValue={
-                          w.warehouse_name
-                        }
-                        onBlur={(e) => {
-                          const v =
-                            e.target.value.trim();
-
-                          if (
-                            !v ||
-                            v ===
-                              w.warehouse_name
-                          ) {
-                            return;
-                          }
-
-                          rename.mutate(
-                            {
-                              id: w.warehouse_id,
-                              name: v,
-                            },
-                            {
-                              onSuccess: () =>
-                                toast.success(
-                                  t("saved"),
-                                ),
-
-                              onError: (err) =>
-                                toast.error(
-                                  errorMessage(
-                                    err,
-                                    lang,
-                                  ),
-                                ),
-                            },
-                          );
-                        }}
-                        className="
-                          h-10
-                          border
-                          border-[#C084CC]/40
-                          bg-white
-                          text-gray-900
-                          shadow-none
-                          transition-all
-                          focus:border-[#9B4BA8]
-                          focus:ring-2
-                          focus:ring-[#9B4BA8]/20
-                        "
-                      />
-
-                    </div>
-
-                    {/* INFO */}
+                    {/* TOP LINE */}
 
                     <div
                       className="
-                        flex
-                        items-center
-                        justify-between
-                        rounded-xl
-                        border
-                        border-[#C084CC]/30
-                        bg-[#F8ECFA]
-                        px-3
-                        py-3
+                        h-1
+                        w-full
+                        bg-gradient-to-r
+                        from-[#7B2C8E]
+                        via-[#9B4BA8]
+                        to-[#C084CC]
                       "
-                    >
+                    />
 
-                      <div className="min-w-0">
+                    <div className="space-y-4 p-5">
 
-                        <p
+                      {/* HEADER */}
+
+                      <div className="flex items-start gap-3">
+
+                        <div
                           className="
-                            text-[11px]
-                            font-medium
-                            text-gray-500
+                            flex h-11 w-11 shrink-0
+                            items-center justify-center
+                            rounded-xl
+                            bg-gradient-to-br
+                            from-[#7B2C8E]
+                            to-[#C084CC]
+                            shadow-sm
+                            shadow-[#9B4BA8]/20
                           "
                         >
+                          <WarehouseIcon
+                            className="
+                              h-5 w-5
+                              text-white
+                            "
+                          />
+                        </div>
+
+                        <div className="min-w-0 flex-1">
+
+                          <p
+                            className="
+                              mb-1
+                              text-xs
+                              font-medium
+                              text-[#9B4BA8]
+                            "
+                          >
+                            مستودع
+                          </p>
+
+                          <p
+                            className="
+                              truncate
+                              text-base
+                              font-bold
+                              text-gray-900
+                            "
+                          >
+                            {
+                              warehouse.warehouse_name
+                            }
+                          </p>
+
+                        </div>
+
+                      </div>
+
+                      {/* RENAME */}
+
+                      <div className="space-y-2">
+
+                        <label
+                          className="
+                            text-xs
+                            font-semibold
+                            text-gray-700
+                          "
+                        >
+                          اسم المستودع
+                        </label>
+
+                        <Input
+                          defaultValue={
+                            warehouse.warehouse_name
+                          }
+                          disabled={
+                            rename.isPending
+                          }
+                          onBlur={(e) => {
+                            handleRename(
+                              warehouse,
+                              e.target.value,
+                            );
+                          }}
+                          onKeyDown={(e) => {
+                            if (
+                              e.key === "Enter"
+                            ) {
+                              e.currentTarget.blur();
+                            }
+                          }}
+                          className="
+                            h-10
+                            border
+                            border-[#C084CC]/40
+                            bg-white
+                            text-gray-900
+                            shadow-none
+                            transition-all
+                            focus:border-[#9B4BA8]
+                            focus:ring-2
+                            focus:ring-[#9B4BA8]/20
+                          "
+                        />
+
+                      </div>
+
+                      {/* STATS */}
+
+                      <div className="grid grid-cols-2 gap-3">
+
+                        <div
+                          className="
+                            flex
+                            items-center
+                            gap-3
+                            rounded-xl
+                            border
+                            border-[#C084CC]/30
+                            bg-[#F8ECFA]
+                            p-3
+                          "
+                        >
+
+                          <div
+                            className="
+                              flex
+                              h-9
+                              w-9
+                              shrink-0
+                              items-center
+                              justify-center
+                              rounded-lg
+                              bg-white
+                              shadow-sm
+                            "
+                          >
+                            <Package
+                              className="
+                                h-4
+                                w-4
+                                text-[#7B2C8E]
+                              "
+                            />
+                          </div>
+
+                          <div className="min-w-0">
+
+                            <p className="text-[10px] font-medium text-gray-500">
+                              المنتجات
+                            </p>
+
+                            <p className="text-lg font-bold text-[#7B2C8E]">
+                              {products}
+                            </p>
+
+                          </div>
+
+                        </div>
+
+                        <div
+                          className="
+                            rounded-xl
+                            border
+                            border-[#C084CC]/30
+                            bg-[#F8ECFA]
+                            p-3
+                            text-center
+                          "
+                        >
+
+                          <p className="text-[10px] font-medium text-gray-500">
+                            الكمية المتاحة
+                          </p>
+
+                          <p className="mt-1 text-lg font-bold text-[#7B2C8E]">
+                            {stock}
+                          </p>
+
+                        </div>
+
+                      </div>
+
+                      {/* ID */}
+
+                      <div
+                        className="
+                          rounded-xl
+                          border
+                          border-[#C084CC]/30
+                          bg-white
+                          px-3
+                          py-3
+                        "
+                      >
+
+                        <p className="text-[11px] font-medium text-gray-500">
                           Warehouse ID
                         </p>
 
@@ -456,139 +624,81 @@ function WarehousesPage() {
                             text-[#7B2C8E]
                           "
                         >
-                          {w.warehouse_id}
+                          {
+                            warehouse.warehouse_id
+                          }
                         </p>
 
                       </div>
 
-                      <div
+                      {/* DELETE */}
+
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        disabled={
+                          remove.isPending
+                        }
+                        onClick={() => {
+
+                          if (products > 0) {
+                            toast.error(
+                              "لا يمكن حذف المخزن لأنه يحتوي على منتجات",
+                            );
+                            return;
+                          }
+
+                          setToDelete(
+                            warehouse,
+                          );
+                        }}
                         className="
-                          rounded-lg
+                          w-full
+                          border
+                          border-[#C084CC]/30
                           bg-white
-                          px-3
-                          py-2
-                          text-center
-                          shadow-sm
-                          ring-1
-                          ring-[#C084CC]/30
+                          text-gray-700
+                          transition-all
+                          hover:border-red-300
+                          hover:bg-red-50
+                          hover:text-red-600
                         "
                       >
-
-                        <p
+                        <Trash2
                           className="
-                            text-lg
-                            font-bold
-                            text-[#7B2C8E]
+                            me-1
+                            h-4 w-4
+                            text-red-500
                           "
-                        >
-                          {productCount}
-                        </p>
+                        />
 
-                        <p
-                          className="
-                            whitespace-nowrap
-                            text-[10px]
-                            font-medium
-                            text-gray-500
-                          "
-                        >
-                          {t(
-                            "products_count",
-                          )}
-                        </p>
-
-                      </div>
+                        {t("delete")}
+                      </Button>
 
                     </div>
-
-                    {/* DELETE */}
-
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      onClick={() => {
-                        if (
-                          productCount > 0
-                        ) {
-                          toast.error(
-                            t(
-                              "warehouse_has_stock",
-                            ),
-                          );
-                          return;
-                        }
-
-                        setToDelete(w);
-                      }}
-                      className="
-                        w-full
-                        border
-                        border-[#C084CC]/30
-                        bg-white
-                        text-gray-700
-                        transition-all
-                        hover:border-red-300
-                        hover:bg-red-50
-                        hover:text-red-600
-                      "
-                    >
-                      <Trash2
-                        className="
-                          me-1
-                          h-4 w-4
-                          text-red-500
-                          transition-colors
-                          group-hover:text-red-600
-                        "
-                      />
-
-                      {t("delete")}
-                    </Button>
-
-                  </div>
-                </Card>
-              );
-            })}
+                  </Card>
+                );
+              },
+            )}
           </div>
         )}
 
         {/* =====================================================
-            DELETE DIALOG
+            DELETE CONFIRMATION
         ====================================================== */}
 
         <ConfirmDialog
           open={toDelete !== null}
-          onOpenChange={(v) =>
-            !v && setToDelete(null)
-          }
+          onOpenChange={(open) => {
+            if (!open) {
+              setToDelete(null);
+            }
+          }}
           title={t(
             "confirm_delete_warehouse",
           )}
           busy={remove.isPending}
-          onConfirm={() => {
-            if (!toDelete) return;
-
-            remove.mutate(
-              toDelete.warehouse_id,
-              {
-                onSuccess: () => {
-                  toast.success(
-                    t("deleted"),
-                  );
-
-                  setToDelete(null);
-                },
-
-                onError: (e) =>
-                  toast.error(
-                    errorMessage(
-                      e,
-                      lang,
-                    ),
-                  ),
-              },
-            );
-          }}
+          onConfirm={handleDelete}
         />
 
       </div>

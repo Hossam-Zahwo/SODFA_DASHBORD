@@ -283,7 +283,13 @@ function DamagedPage() {
       return;
     }
 
-    if (Number(qty) <= 0) {
+    // Validate quantity
+    const quantity = Number(qty);
+
+    if (
+      !Number.isFinite(quantity) ||
+      quantity <= 0
+    ) {
       toast.error(
         t("invalid_qty"),
       );
