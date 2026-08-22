@@ -654,6 +654,27 @@ function SalesPage() {
           </div>
         </div>
 
+        <SellingSection
+          camera={camera}
+          setCamera={setCamera}
+          manual={manual}
+          setManual={setManual}
+          matches={matches}
+          cart={cart}
+          total={total}
+          warehouses={
+            warehouses.data ?? []
+          }
+          lang={lang}
+          t={t}
+          handleCode={handleCode}
+          addToCart={addToCart}
+          setQty={setQty}
+          completeSale={completeSale}
+          recordPending={
+            record.isPending
+          }
+        />
 
         <SalesFilters
           range={range}
@@ -687,29 +708,6 @@ function SalesPage() {
           products={soldProducts}
           maxQty={maxProductQty}
           lang={lang}
-        />
-
-
-        <SellingSection
-          camera={camera}
-          setCamera={setCamera}
-          manual={manual}
-          setManual={setManual}
-          matches={matches}
-          cart={cart}
-          total={total}
-          warehouses={
-            warehouses.data ?? []
-          }
-          lang={lang}
-          t={t}
-          handleCode={handleCode}
-          addToCart={addToCart}
-          setQty={setQty}
-          completeSale={completeSale}
-          recordPending={
-            record.isPending
-          }
         />
 
 

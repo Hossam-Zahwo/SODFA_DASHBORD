@@ -4,15 +4,17 @@ import {
   Link,
   createRootRouteWithContext,
   useRouter,
+  useRouterState,
   HeadContent,
   Scripts,
 } from "@tanstack/react-router";
-import { useEffect, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 
 import appCss from "../styles.css?url";
 import { reportLovableError } from "../lib/lovable-error-reporting";
 import { LanguageProvider } from "@/lib/i18n";
 import { Toaster } from "@/components/ui/sonner";
+import { supabase } from "../lib/supabase";
 
 /* ============================================================
    404 PAGE
@@ -304,8 +306,7 @@ function RootComponent() {
   return (
     <QueryClientProvider client={queryClient}>
       <LanguageProvider>
-        {/* Required: nested routes render here. Removing <Outlet /> breaks all child routes. */}
-        <Outlet />
+        <AuthGate />
 
         <Toaster
           position="top-center"
@@ -314,4 +315,71 @@ function RootComponent() {
       </LanguageProvider>
     </QueryClientProvider>
   );
+}
+
+function AuthGate() {
+  const pathname = useRouterState({
+    select: (state) => state.location.pathname,
+  });
+  const [checking, setChecking] = useState(true);
+  const [authenticated, setAuthenticated] = useState(false);
+
+  useEffect(() => {
+    let mounted = true;
+
+    const checkSession = async () => {
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+
+      if (mounted) {
+        setAuthenticated(Boolean(session?.user));
+        setChecking(false);
+      }
+    };
+
+    void checkSession();
+
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((event, session) => {
+      if (!mounted) {
+        return;
+      }
+
+      const hasSession = Boolean(session?.user);
+      setAuthenticated(hasSession);
+
+      if (event === "SIGNED_OUT") {
+        window.location.replace("/login");
+      }
+    });
+
+    return () => {
+      mounted = false;
+      subscription.unsubscribe();
+    };
+  }, []);
+
+  const isLoginPage = pathname.startsWith("/login");
+
+  useEffect(() => {
+    if (checking) {
+      return;
+    }
+
+    if (!authenticated && !isLoginPage) {
+      window.location.replace("/login");
+    }
+
+    if (authenticated && isLoginPage) {
+      window.location.replace("/");
+    }
+  }, [authenticated, checking, isLoginPage]);
+
+  if (checking || (!authenticated && !isLoginPage) || (authenticated && isLoginPage)) {
+    return <div className="min-h-screen bg-[#08070b]" />;
+  }
+
+  return <Outlet />;
 }

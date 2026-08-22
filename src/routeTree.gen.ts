@@ -12,11 +12,13 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as DamagedReturnsRouteImport } from './routes/damaged-returns'
 import { Route as InventoryRouteImport } from './routes/inventory'
+import { Route as LoginRouteImport } from './routes/login'
 import { Route as McpRouteImport } from './routes/mcp'
 import { Route as ReturnsRouteImport } from './routes/returns'
 import { Route as SalesRouteImport } from './routes/sales'
 import { Route as ScannerRouteImport } from './routes/scanner'
 import { Route as SettingsRouteImport } from './routes/settings'
+import { Route as TransactionsRouteImport } from './routes/transactions'
 import { Route as WarehousesRouteImport } from './routes/warehouses'
 import { Route as Char91DotmcpChar93ListToolsRouteImport } from './routes/[.mcp]/list-tools'
 import { Route as Char91DotwellKnownChar93OauthProtectedResourceRouteImport } from './routes/[.well-known]/oauth-protected-resource'
@@ -35,6 +37,11 @@ const DamagedReturnsRoute = DamagedReturnsRouteImport.update({
 const InventoryRoute = InventoryRouteImport.update({
   id: '/inventory',
   path: '/inventory',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const LoginRoute = LoginRouteImport.update({
+  id: '/login',
+  path: '/login',
   getParentRoute: () => rootRouteImport,
 } as any)
 const McpRoute = McpRouteImport.update({
@@ -60,6 +67,11 @@ const ScannerRoute = ScannerRouteImport.update({
 const SettingsRoute = SettingsRouteImport.update({
   id: '/settings',
   path: '/settings',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const TransactionsRoute = TransactionsRouteImport.update({
+  id: '/transactions',
+  path: '/transactions',
   getParentRoute: () => rootRouteImport,
 } as any)
 const WarehousesRoute = WarehousesRouteImport.update({
@@ -90,11 +102,13 @@ export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/damaged-returns': typeof DamagedReturnsRoute
   '/inventory': typeof InventoryRoute
+  '/login': typeof LoginRoute
   '/mcp': typeof McpRoute
   '/returns': typeof ReturnsRoute
   '/sales': typeof SalesRoute
   '/scanner': typeof ScannerRoute
   '/settings': typeof SettingsRoute
+  '/transactions': typeof TransactionsRoute
   '/warehouses': typeof WarehousesRoute
   '/.mcp/list-tools': typeof Char91DotmcpChar93ListToolsRoute
   '/.well-known/oauth-protected-resource': typeof Char91DotwellKnownChar93OauthProtectedResourceRoute
@@ -104,11 +118,13 @@ export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/damaged-returns': typeof DamagedReturnsRoute
   '/inventory': typeof InventoryRoute
+  '/login': typeof LoginRoute
   '/mcp': typeof McpRoute
   '/returns': typeof ReturnsRoute
   '/sales': typeof SalesRoute
   '/scanner': typeof ScannerRoute
   '/settings': typeof SettingsRoute
+  '/transactions': typeof TransactionsRoute
   '/warehouses': typeof WarehousesRoute
   '/.mcp/list-tools': typeof Char91DotmcpChar93ListToolsRoute
   '/.well-known/oauth-protected-resource': typeof Char91DotwellKnownChar93OauthProtectedResourceRoute
@@ -119,11 +135,13 @@ export interface FileRoutesById {
   '/': typeof IndexRoute
   '/damaged-returns': typeof DamagedReturnsRoute
   '/inventory': typeof InventoryRoute
+  '/login': typeof LoginRoute
   '/mcp': typeof McpRoute
   '/returns': typeof ReturnsRoute
   '/sales': typeof SalesRoute
   '/scanner': typeof ScannerRoute
   '/settings': typeof SettingsRoute
+  '/transactions': typeof TransactionsRoute
   '/warehouses': typeof WarehousesRoute
   '/.mcp/list-tools': typeof Char91DotmcpChar93ListToolsRoute
   '/.well-known/oauth-protected-resource': typeof Char91DotwellKnownChar93OauthProtectedResourceRoute
@@ -135,11 +153,13 @@ export interface FileRouteTypes {
     | '/'
     | '/damaged-returns'
     | '/inventory'
+    | '/login'
     | '/mcp'
     | '/returns'
     | '/sales'
     | '/scanner'
     | '/settings'
+    | '/transactions'
     | '/warehouses'
     | '/.mcp/list-tools'
     | '/.well-known/oauth-protected-resource'
@@ -149,11 +169,13 @@ export interface FileRouteTypes {
     | '/'
     | '/damaged-returns'
     | '/inventory'
+    | '/login'
     | '/mcp'
     | '/returns'
     | '/sales'
     | '/scanner'
     | '/settings'
+    | '/transactions'
     | '/warehouses'
     | '/.mcp/list-tools'
     | '/.well-known/oauth-protected-resource'
@@ -163,11 +185,13 @@ export interface FileRouteTypes {
     | '/'
     | '/damaged-returns'
     | '/inventory'
+    | '/login'
     | '/mcp'
     | '/returns'
     | '/sales'
     | '/scanner'
     | '/settings'
+    | '/transactions'
     | '/warehouses'
     | '/.mcp/list-tools'
     | '/.well-known/oauth-protected-resource'
@@ -178,11 +202,13 @@ export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   DamagedReturnsRoute: typeof DamagedReturnsRoute
   InventoryRoute: typeof InventoryRoute
+  LoginRoute: typeof LoginRoute
   McpRoute: typeof McpRoute
   ReturnsRoute: typeof ReturnsRoute
   SalesRoute: typeof SalesRoute
   ScannerRoute: typeof ScannerRoute
   SettingsRoute: typeof SettingsRoute
+  TransactionsRoute: typeof TransactionsRoute
   WarehousesRoute: typeof WarehousesRoute
   Char91DotmcpChar93ListToolsRoute: typeof Char91DotmcpChar93ListToolsRoute
   Char91DotwellKnownChar93OauthProtectedResourceRoute: typeof Char91DotwellKnownChar93OauthProtectedResourceRoute
@@ -210,6 +236,13 @@ declare module '@tanstack/react-router' {
       path: '/inventory'
       fullPath: '/inventory'
       preLoaderRoute: typeof InventoryRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/login': {
+      id: '/login'
+      path: '/login'
+      fullPath: '/login'
+      preLoaderRoute: typeof LoginRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/mcp': {
@@ -247,6 +280,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof SettingsRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/transactions': {
+      id: '/transactions'
+      path: '/transactions'
+      fullPath: '/transactions'
+      preLoaderRoute: typeof TransactionsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/warehouses': {
       id: '/warehouses'
       path: '/warehouses'
@@ -282,11 +322,13 @@ const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   DamagedReturnsRoute: DamagedReturnsRoute,
   InventoryRoute: InventoryRoute,
+  LoginRoute: LoginRoute,
   McpRoute: McpRoute,
   ReturnsRoute: ReturnsRoute,
   SalesRoute: SalesRoute,
   ScannerRoute: ScannerRoute,
   SettingsRoute: SettingsRoute,
+  TransactionsRoute: TransactionsRoute,
   WarehousesRoute: WarehousesRoute,
   Char91DotmcpChar93ListToolsRoute: Char91DotmcpChar93ListToolsRoute,
   Char91DotwellKnownChar93OauthProtectedResourceRoute:

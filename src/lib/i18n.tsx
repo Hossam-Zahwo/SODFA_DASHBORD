@@ -9,6 +9,7 @@ const dict = {
   dashboard: { ar: "لوحة التحكم", en: "Dashboard" },
   inventory: { ar: "المخزون", en: "Inventory" },
   sales: { ar: "المبيعات", en: "Sales" },
+  transactions: { ar: "المعاملات", en: "Transactions" },
   returns: { ar: "المرتجعات", en: "Returns" },
   normal_returns: { ar: "المرتجعات العادية", en: "Normal Returns" },
   damaged_returns: { ar: "المرتجعات التالفة", en: "Damaged Returns" },

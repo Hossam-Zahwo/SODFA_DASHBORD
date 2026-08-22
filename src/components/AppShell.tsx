@@ -1,6 +1,7 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Link, useRouterState } from "@tanstack/react-router";
 import {
+  ArrowLeftRight,
   BarChart3,
   Boxes,
   Menu,
@@ -10,6 +11,8 @@ import {
   Settings as SettingsIcon,
   ShoppingCart,
   Warehouse as WarehouseIcon,
+  LogOut,
+  UserCircle,
 } from "lucide-react";
 import type { ReactNode } from "react";
 
@@ -23,6 +26,8 @@ import {
 
 import { useI18n, type TKey } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
+
+import { supabase } from "@/lib/supabase";
 
 /* ============================================================
    BRAND COLORS
@@ -67,31 +72,43 @@ const NAV: {
     key: "dashboard",
     icon: BarChart3,
   },
+
   {
     to: "/inventory",
     key: "inventory",
     icon: Boxes,
   },
+
   {
     to: "/sales",
     key: "sales",
     icon: ShoppingCart,
   },
+
+  {
+    to: "/transactions",
+    key: "transactions",
+    icon: ArrowLeftRight,
+  },
+
   {
     to: "/returns",
     key: "normal_returns",
     icon: RotateCcw,
   },
+
   {
     to: "/damaged-returns",
     key: "damaged_returns",
     icon: PackageX,
   },
+
   {
     to: "/warehouses",
     key: "warehouses",
     icon: WarehouseIcon,
   },
+
   {
     to: "/scanner",
     key: "scanner",
@@ -105,7 +122,7 @@ const NAV: {
 ];
 
 /* ============================================================
-   NAVIGATION
+   NAVIGATION LINKS
    ============================================================ */
 
 function NavLinks({
@@ -134,18 +151,18 @@ function NavLinks({
             onClick={onNavigate}
             className={cn(
               `
-              group
-              relative
-              flex
-              items-center
-              gap-3
-              rounded-xl
-              px-4
-              py-3
-              text-[15px]
-              font-medium
-              transition-all
-              duration-200
+                group
+                relative
+                flex
+                items-center
+                gap-3
+                rounded-xl
+                px-4
+                py-3
+                text-[15px]
+                font-medium
+                transition-all
+                duration-200
               `,
               active
                 ? `
@@ -157,7 +174,7 @@ function NavLinks({
                   text-zinc-400
                   hover:bg-[#17121A]
                   hover:text-white
-                `
+                `,
             )}
             style={{
               fontFamily: '"Cairo", sans-serif',
@@ -182,15 +199,19 @@ function NavLinks({
               />
             )}
 
+            {/* Icon */}
+
             <Icon
               className={cn(
                 "h-5 w-5 shrink-0 transition-all duration-200",
                 active
                   ? "text-[#A94FBC]"
                   : "text-zinc-500 group-hover:text-[#A94FBC]",
-                "group-hover:scale-105"
+                "group-hover:scale-105",
               )}
             />
+
+            {/* Label */}
 
             <span className="truncate">
               {t(key)}
@@ -234,7 +255,7 @@ function Brand() {
           color: BRAND.white,
         }}
       >
-صدفه
+        صدفه
       </p>
 
       {/* English Brand */}
@@ -294,13 +315,13 @@ function LanguageToggle() {
           onClick={() => setLang(l)}
           className={cn(
             `
-            rounded-lg
-            px-3
-            py-1
-            text-sm
-            font-medium
-            transition-all
-            duration-200
+              rounded-lg
+              px-3
+              py-1
+              text-sm
+              font-medium
+              transition-all
+              duration-200
             `,
             lang === l
               ? `
@@ -311,7 +332,7 @@ function LanguageToggle() {
                 text-zinc-500
                 hover:bg-zinc-800
                 hover:text-white
-              `
+              `,
           )}
           style={
             lang === l
@@ -338,6 +359,163 @@ function LanguageToggle() {
 }
 
 /* ============================================================
+   ACCOUNT SECTION
+   ============================================================ */
+
+function AccountSection() {
+  const [email, setEmail] = useState<string>("");
+
+  useEffect(() => {
+    let mounted = true;
+
+    const loadUser = async () => {
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+
+      if (mounted) {
+        setEmail(user?.email ?? "");
+      }
+    };
+
+    loadUser();
+
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange(
+      (_event, session) => {
+        if (mounted) {
+          setEmail(session?.user?.email ?? "");
+        }
+      },
+    );
+
+    return () => {
+      mounted = false;
+      subscription.unsubscribe();
+    };
+  }, []);
+
+  /* ============================================================
+     LOGOUT
+     ============================================================ */
+
+  const handleLogout = async () => {
+    const { error } =
+      await supabase.auth.signOut();
+
+    if (error) {
+      console.error(
+        "Logout error:",
+        error,
+      );
+
+      return;
+    }
+
+    window.location.href = "/login";
+  };
+
+  return (
+    <div className="px-4 pb-4">
+      <div
+        className="
+          rounded-xl
+          border
+          p-3
+        "
+        style={{
+          backgroundColor: BRAND.card,
+          borderColor: BRAND.border,
+        }}
+      >
+        {/* USER INFO */}
+
+        <div className="flex items-center gap-3">
+          <div
+            className="
+              flex
+              h-10
+              w-10
+              shrink-0
+              items-center
+              justify-center
+              rounded-xl
+            "
+            style={{
+              backgroundColor:
+                "rgba(130,50,146,0.12)",
+              color: BRAND.purpleLight,
+            }}
+          >
+            <UserCircle className="h-5 w-5" />
+          </div>
+
+          <div className="min-w-0 flex-1">
+            <p
+              className="text-xs font-bold text-white"
+              style={{
+                fontFamily:
+                  '"Cairo", sans-serif',
+              }}
+            >
+              الحساب
+            </p>
+
+            <p
+              dir="ltr"
+              className="
+                mt-0.5
+                truncate
+                text-[10px]
+                text-zinc-500
+              "
+            >
+              {email || "جاري التحميل..."}
+            </p>
+          </div>
+        </div>
+
+        {/* LOGOUT BUTTON */}
+
+        <button
+          type="button"
+          onClick={handleLogout}
+          className="
+            mt-3
+            flex
+            w-full
+            items-center
+            justify-center
+            gap-2
+            rounded-lg
+            px-3
+            py-2
+            text-xs
+            font-medium
+            text-red-400
+            transition-all
+            duration-200
+            hover:bg-red-500/10
+            hover:text-red-300
+          "
+          style={{
+            fontFamily:
+              '"Cairo", sans-serif',
+          }}
+        >
+          <LogOut className="h-4 w-4" />
+
+          <span>
+            تسجيل الخروج
+          </span>
+        </button>
+      </div>
+    </div>
+  );
+}
+
+/* ============================================================
    APP SHELL
    ============================================================ */
 
@@ -350,13 +528,16 @@ export function AppShell({
 }) {
   const { dir } = useI18n();
 
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] =
+    useState(false);
 
   return (
     <>
       {/* Load Fonts */}
 
-      <style>{FONT_STYLES}</style>
+      <style>
+        {FONT_STYLES}
+      </style>
 
       <div
         dir={dir}
@@ -367,8 +548,10 @@ export function AppShell({
           text-white
         "
         style={{
-          backgroundColor: BRAND.background,
-          fontFamily: '"Cairo", sans-serif',
+          backgroundColor:
+            BRAND.background,
+          fontFamily:
+            '"Cairo", sans-serif',
         }}
       >
         {/* ======================================================
@@ -388,8 +571,10 @@ export function AppShell({
             lg:flex
           "
           style={{
-            backgroundColor: BRAND.sidebar,
-            borderColor: BRAND.border,
+            backgroundColor:
+              BRAND.sidebar,
+            borderColor:
+              BRAND.border,
           }}
         >
           {/* Brand */}
@@ -399,7 +584,8 @@ export function AppShell({
           <div
             className="h-px"
             style={{
-              backgroundColor: BRAND.border,
+              backgroundColor:
+                BRAND.border,
             }}
           />
 
@@ -417,6 +603,10 @@ export function AppShell({
             <NavLinks />
           </div>
 
+          {/* Account */}
+
+          <AccountSection />
+
           {/* Sidebar Bottom Accent */}
 
           <div className="px-6 pb-5">
@@ -427,7 +617,8 @@ export function AppShell({
                 opacity-40
               "
               style={{
-                backgroundColor: BRAND.purple,
+                backgroundColor:
+                  BRAND.purple,
               }}
             />
           </div>
@@ -438,6 +629,7 @@ export function AppShell({
             ====================================================== */}
 
         <div className="flex min-w-0 flex-1 flex-col">
+
           {/* ====================================================
               HEADER
               ==================================================== */}
@@ -459,9 +651,11 @@ export function AppShell({
             style={{
               backgroundColor:
                 "rgba(10,10,12,0.92)",
-              borderColor: BRAND.border,
+              borderColor:
+                BRAND.border,
             }}
           >
+
             {/* Mobile Menu */}
 
             <Sheet
@@ -480,7 +674,8 @@ export function AppShell({
                     lg:hidden
                   "
                   style={{
-                    borderColor: BRAND.border,
+                    borderColor:
+                      BRAND.border,
                   }}
                   aria-label="Menu"
                 >
@@ -523,12 +718,20 @@ export function AppShell({
                   }}
                 />
 
+                {/* Mobile Navigation */}
+
                 <div className="mt-4">
                   <NavLinks
                     onNavigate={() =>
                       setOpen(false)
                     }
                   />
+                </div>
+
+                {/* Mobile Account */}
+
+                <div className="mt-6">
+                  <AccountSection />
                 </div>
               </SheetContent>
             </Sheet>

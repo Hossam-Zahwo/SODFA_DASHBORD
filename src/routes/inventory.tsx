@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
 import {
   Eye,
@@ -7,6 +7,7 @@ import {
   Pencil,
   Trash2,
   RefreshCw,
+  Search,
   Package,
   ShoppingCart,
   Boxes,
@@ -14,6 +15,8 @@ import {
   BarChart3,
   TrendingUp,
   Warehouse,
+  CheckSquare,
+  Square,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -116,6 +119,8 @@ export const Route = createFileRoute("/inventory")({
    INVENTORY PAGE
    ============================================================ */
 
+type StockFilter = "all" | "full" | "low" | "out";
+
 function InventoryPage() {
   const { t, lang } = useI18n();
 
@@ -124,6 +129,7 @@ function InventoryPage() {
 
   const [q, setQ] = useState("");
   const [wh, setWh] = useState(ALL_WAREHOUSES);
+  const [stockFilter, setStockFilter] = useState<StockFilter>("all");
 
   const [editing, setEditing] =
     useState<Product | null>(null);
@@ -139,6 +145,15 @@ function InventoryPage() {
 
   const [toDelete, setToDelete] =
     useState<Product | null>(null);
+
+  const [selectedProducts, setSelectedProducts] =
+    useState<string[]>([]);
+
+  const [bulkDeleteOpen, setBulkDeleteOpen] =
+    useState(false);
+
+  const [bulkDeleting, setBulkDeleting] =
+    useState(false);
 
   const del = useApiMutation((id: string) =>
     api.deleteProduct(id)
@@ -156,6 +171,16 @@ function InventoryPage() {
         wh === ALL_WAREHOUSES ||
         p.warehouse === wh;
 
+      const remainingQty = Number(p.remaining_qty || 0);
+
+      const okStock =
+        stockFilter === "all" ||
+        (stockFilter === "full" && remainingQty > 5) ||
+        (stockFilter === "low" &&
+          remainingQty > 0 &&
+          remainingQty <= 5) ||
+        (stockFilter === "out" && remainingQty <= 0);
+
       const okQ =
         !term ||
         p.product_name
@@ -168,9 +193,56 @@ function InventoryPage() {
           .toLowerCase()
           .includes(term);
 
-      return okWh && okQ;
+      return okWh && okStock && okQ;
     });
-  }, [inventory.data, q, wh]);
+  }, [inventory.data, q, wh, stockFilter]);
+
+  // Keep selection limited to products currently visible after search/filter.
+  const visibleProductIds = useMemo(
+    () => list.map((product) => product.product_id),
+    [list]
+  );
+
+  const allVisibleSelected =
+    list.length > 0 &&
+    list.every((product) =>
+      selectedProducts.includes(product.product_id)
+    );
+
+  const toggleProductSelection = (productId: string) => {
+    setSelectedProducts((current) =>
+      current.includes(productId)
+        ? current.filter((id) => id !== productId)
+        : [...current, productId]
+    );
+  };
+
+  const toggleSelectAll = () => {
+    setSelectedProducts((current) => {
+      if (allVisibleSelected) {
+        return current.filter(
+          (id) => !visibleProductIds.includes(id)
+        );
+      }
+
+      return Array.from(
+        new Set([...current, ...visibleProductIds])
+      );
+    });
+  };
+
+  // Remove IDs that no longer exist in the inventory after a refresh/delete.
+  useEffect(() => {
+    const validIds = new Set(
+      (inventory.data ?? []).map(
+        (product) => product.product_id
+      )
+    );
+
+    setSelectedProducts((current) =>
+      current.filter((id) => validIds.has(id))
+    );
+  }, [inventory.data]);
 
   /* =========================================================
      INVENTORY STATISTICS
@@ -208,6 +280,81 @@ function InventoryPage() {
         Number(product.remaining_qty || 0) <= 0
     ).length;
 
+    /*
+     * FINANCIAL VALUES
+     *
+     * stock_qty      = إجمالي الكمية الأصلية التي دخلت المخزون
+     * sold_qty       = كل الكميات التي تم بيعها، سواء تمت من الموقع
+     *                  أو كانت مبيعات قديمة تم تسجيلها عند نقل البيانات.
+     * remaining_qty  = الكمية الموجودة فعليًا حاليًا.
+     *
+     * لذلك:
+     * originalInventoryValue = stock_qty * price
+     * soldValue               = sold_qty * price
+     * currentInventoryValue   = remaining_qty * price
+     *
+     * ملاحظة: بما أن Product يحتوي على سعر واحد فقط، يتم استخدام
+     * السعر الحالي للمنتج في الحسابات المالية المعروضة هنا.
+     */
+    const totalOriginalInventoryValue = list.reduce(
+      (sum, product) =>
+        sum +
+        Number(product.stock_qty || 0) *
+          Number(product.price || 0),
+      0
+    );
+
+    const totalSoldValue = list.reduce(
+      (sum, product) =>
+        sum +
+        Number(product.sold_qty || 0) *
+          Number(product.price || 0),
+      0
+    );
+
+    const totalCurrentInventoryValue = list.reduce(
+      (sum, product) =>
+        sum +
+        Number(product.remaining_qty || 0) *
+          Number(product.price || 0),
+      0
+    );
+
+    const warehouseValues = new Map<
+      string,
+      {
+        originalValue: number;
+        inventoryValue: number;
+        soldValue: number;
+      }
+    >();
+
+    list.forEach((product) => {
+      const warehouse =
+        product.warehouse || "unknown";
+
+      const current =
+        warehouseValues.get(warehouse) ?? {
+          originalValue: 0,
+          inventoryValue: 0,
+          soldValue: 0,
+        };
+
+      current.originalValue +=
+        Number(product.stock_qty || 0) *
+        Number(product.price || 0);
+
+      current.inventoryValue +=
+        Number(product.remaining_qty || 0) *
+        Number(product.price || 0);
+
+      current.soldValue +=
+        Number(product.sold_qty || 0) *
+        Number(product.price || 0);
+
+      warehouseValues.set(warehouse, current);
+    });
+
     return {
       totalProducts,
       totalStock,
@@ -215,6 +362,18 @@ function InventoryPage() {
       totalRemaining,
       lowStockProducts,
       outOfStockProducts,
+      totalOriginalInventoryValue,
+      totalSoldValue,
+      totalCurrentInventoryValue,
+      warehouseValues:
+        Array.from(
+          warehouseValues.entries()
+        ).map(
+          ([warehouse, values]) => ({
+            warehouse,
+            ...values,
+          })
+        ),
     };
   }, [list]);
 
@@ -267,6 +426,32 @@ function InventoryPage() {
             "linear-gradient(135deg, #F3E5F5 0%, #FAF5FC 45%, #F3E5F5 100%)",
         }}
       >
+        <div className="flex flex-col gap-4 px-1 sm:flex-row sm:items-end sm:justify-between">
+          <div>
+            <p className="text-sm font-semibold text-[#7B2C8E]">
+              إدارة المنتجات
+            </p>
+
+            <h1 className="mt-1 text-2xl font-black text-[#4B3150]">
+              المخزون والمنتجات
+            </h1>
+          </div>
+
+          <Button
+            onClick={() => {
+              setEditing(null);
+              setFormOpen(true);
+            }}
+            className="h-11 text-white shadow-md transition-all hover:-translate-y-0.5 hover:brightness-105"
+            style={{
+              background: BRAND.purpleGradient,
+            }}
+          >
+            <Plus className="me-1 h-4 w-4" />
+            {t("add_product")}
+          </Button>
+        </div>
+
         {/* SEARCH & CONTROLS */}
 
         <InventoryControls
@@ -274,20 +459,33 @@ function InventoryPage() {
           setQ={setQ}
           wh={wh}
           setWh={setWh}
+          stockFilter={stockFilter}
+          setStockFilter={setStockFilter}
           warehouses={warehouses.data ?? []}
           isFetching={inventory.isFetching}
           onRefresh={() =>
             void inventory.refetch()
           }
-          onAddProduct={() => {
-            setEditing(null);
-            setFormOpen(true);
-          }}
           searchPlaceholder={t(
             "search_placeholder"
           )}
-          addProductLabel={t("add_product")}
         />
+
+        {q.trim() &&
+          !inventory.isLoading &&
+          !inventory.isError && (
+            <SearchResults
+              products={list}
+              warehouses={warehouses.data ?? []}
+              onView={setViewing}
+              onPrint={setPrinting}
+              onEdit={(product) => {
+                setEditing(product);
+                setFormOpen(true);
+              }}
+              onDelete={setToDelete}
+            />
+          )}
 
         {/* LOADING / ERROR / EMPTY */}
 
@@ -310,6 +508,8 @@ function InventoryPage() {
           <>
             <InventoryStatistics
               statistics={statistics}
+              warehouses={warehouses.data ?? []}
+              lang={lang}
             />
 
             <InventoryCharts
@@ -332,6 +532,19 @@ function InventoryPage() {
                 setFormOpen(true);
               }}
               onDelete={setToDelete}
+              selectedProducts={selectedProducts}
+              allVisibleSelected={
+                allVisibleSelected
+              }
+              onToggleSelectAll={
+                toggleSelectAll
+              }
+              onToggleProductSelection={
+                toggleProductSelection
+              }
+              onBulkDelete={() =>
+                setBulkDeleteOpen(true)
+              }
             />
           </>
         )}
@@ -370,6 +583,54 @@ function InventoryPage() {
         }
       />
 
+      {/* BULK DELETE */}
+
+      <ConfirmDialog
+        open={bulkDeleteOpen}
+        onOpenChange={(v) =>
+          !v && setBulkDeleteOpen(false)
+        }
+        title="تأكيد حذف المنتجات المحددة"
+        busy={bulkDeleting}
+        onConfirm={() => {
+          const ids = [...selectedProducts];
+
+          if (
+            ids.length === 0 ||
+            bulkDeleting
+          ) {
+            setBulkDeleteOpen(false);
+            return;
+          }
+
+          setBulkDeleting(true);
+
+          Promise.all(
+            ids.map((id) =>
+              api.deleteProduct(id)
+            )
+          )
+            .then(() => {
+              toast.success(
+                `تم حذف ${ids.length} منتج بنجاح`
+              );
+
+              setSelectedProducts([]);
+              setBulkDeleteOpen(false);
+
+              void inventory.refetch();
+            })
+            .catch((e) => {
+              toast.error(
+                errorMessage(e, lang)
+              );
+            })
+            .finally(() => {
+              setBulkDeleting(false);
+            });
+        }}
+      />
+
       {/* DELETE */}
 
       <ConfirmDialog
@@ -391,12 +652,17 @@ function InventoryPage() {
                 toast.success(
                   t("deleted")
                 );
+
                 setToDelete(null);
+                void inventory.refetch();
               },
 
               onError: (e) =>
                 toast.error(
-                  errorMessage(e, lang)
+                  errorMessage(
+                    e,
+                    lang
+                  )
                 ),
             }
           );
@@ -415,23 +681,25 @@ function InventoryControls({
   setQ,
   wh,
   setWh,
+  stockFilter,
+  setStockFilter,
   warehouses,
   isFetching,
   onRefresh,
-  onAddProduct,
   searchPlaceholder,
-  addProductLabel,
 }: {
   q: string;
   setQ: (value: string) => void;
   wh: string;
   setWh: (value: string) => void;
+  stockFilter: StockFilter;
+  setStockFilter: (
+    value: StockFilter
+  ) => void;
   warehouses: any[];
   isFetching: boolean;
   onRefresh: () => void;
-  onAddProduct: () => void;
   searchPlaceholder: string;
-  addProductLabel: string;
 }) {
   return (
     <Card
@@ -490,7 +758,7 @@ function InventoryControls({
           background: BRAND.cardGradient,
         }}
       >
-        <div className="flex flex-col gap-3 md:flex-row">
+        <div className="flex flex-col gap-3 md:flex-row md:flex-wrap">
           <Input
             value={q}
             onChange={(e) =>
@@ -526,6 +794,53 @@ function InventoryControls({
             "
           />
 
+          {/* STOCK FILTER */}
+
+          <select
+            value={stockFilter}
+            onChange={(e) =>
+              setStockFilter(
+                e.target.value as StockFilter
+              )
+            }
+            className="
+              h-11
+              w-full
+              rounded-md
+              border
+              bg-white
+              px-3
+              text-sm
+              text-gray-900
+              shadow-sm
+              outline-none
+              focus:ring-2
+              focus:ring-[#9B4BA8]
+              md:w-56
+            "
+            style={{
+              borderColor:
+                BRAND.borderPurple,
+            }}
+            aria-label="فلتر حالة المخزون"
+          >
+            <option value="all">
+              كل المخزون
+            </option>
+
+            <option value="full">
+              المخزون الكامل
+            </option>
+
+            <option value="low">
+              المخزون على وشك النفاذ
+            </option>
+
+            <option value="out">
+              المخزون النافذ
+            </option>
+          </select>
+
           <Button
             variant="outline"
             size="icon"
@@ -554,27 +869,214 @@ function InventoryControls({
               }
             />
           </Button>
-
-          <Button
-            onClick={onAddProduct}
-            className="
-              h-11
-              text-white
-              shadow-md
-              transition-all
-              hover:-translate-y-0.5
-              hover:brightness-105
-              md:ms-auto
-            "
-            style={{
-              background: BRAND.purpleGradient,
-            }}
-          >
-            <Plus className="me-1 h-4 w-4" />
-            {addProductLabel}
-          </Button>
         </div>
       </div>
+    </Card>
+  );
+}
+
+/* ============================================================
+   SEARCH RESULTS
+   ============================================================ */
+
+function SearchResults({
+  products,
+  warehouses,
+  onView,
+  onPrint,
+  onEdit,
+  onDelete,
+}: {
+  products: Product[];
+  warehouses: any[];
+  onView: (product: Product) => void;
+  onPrint: (product: Product) => void;
+  onEdit: (product: Product) => void;
+  onDelete: (product: Product) => void;
+}) {
+  return (
+    <Card
+      className="overflow-hidden border p-0 shadow-lg"
+      style={{
+        background: BRAND.cardGradient,
+        borderColor: BRAND.borderPurple,
+      }}
+    >
+      <div
+        className="flex items-center justify-between gap-3 p-4 text-white"
+        style={{
+          background: BRAND.purpleGradient,
+        }}
+      >
+        <div>
+          <h2 className="font-bold">
+            نتائج البحث
+          </h2>
+
+          <p className="mt-1 text-xs text-white/75">
+            {products.length.toLocaleString()} منتج مطابق
+          </p>
+        </div>
+
+        <Search className="h-5 w-5 text-white/80" />
+      </div>
+
+      {products.length === 0 ? (
+        <div className="p-6 text-center text-sm text-[#8A7890]">
+          لا توجد نتائج مطابقة للاسم أو الكود أو الباركود.
+        </div>
+      ) : (
+        <div className="overflow-x-auto">
+          <table className="w-full min-w-[760px] text-right text-sm">
+            <thead className="border-b border-[#D8B4E2] text-xs text-[#8A7890]">
+              <tr>
+                <th className="px-4 py-3">
+                  المنتج
+                </th>
+
+                <th className="px-4 py-3">
+                  الكود / الباركود
+                </th>
+
+                <th className="px-4 py-3">
+                  المخزن
+                </th>
+
+                <th className="px-4 py-3">
+                  المتبقي
+                </th>
+
+                <th className="px-4 py-3">
+                  الإجراءات
+                </th>
+              </tr>
+            </thead>
+
+            <tbody className="divide-y divide-[#EADCF0]">
+              {products.map((product) => (
+                <tr
+                  key={product.product_id}
+                  className="transition-colors hover:bg-[#FAF5FC]"
+                >
+                  <td className="px-4 py-3">
+                    <div className="flex items-center gap-3">
+                      <ProductImage
+                        url={product.image_url}
+                        alt={product.product_name}
+                        className="
+                          h-14
+                          w-14
+                          shrink-0
+                          rounded-xl
+                          border
+                          border-[#D8B4E2]
+                          bg-white
+                        "
+                      />
+
+                      <div className="min-w-0">
+                        <p className="truncate font-semibold text-[#4B3150]">
+                          {product.product_name}
+                        </p>
+
+                        <p className="mt-1 text-[11px] text-[#8A7890]">
+                          {product.product_id}
+                        </p>
+                      </div>
+                    </div>
+                  </td>
+
+                  <td className="px-4 py-3 text-xs text-[#8A7890]">
+                    <span>
+                      {product.product_id}
+                    </span>
+
+                    <span className="mt-1 block">
+                      {product.barcode ||
+                        "بدون باركود"}
+                    </span>
+                  </td>
+
+                  <td className="px-4 py-3 text-[#6B5A70]">
+                    {warehouseName(
+                      warehouses,
+                      product.warehouse
+                    )}
+                  </td>
+
+                  <td className="px-4 py-3 font-bold text-[#7B2C8E]">
+                    {product.remaining_qty}
+                  </td>
+
+                  <td className="px-4 py-3">
+                    <div className="flex flex-wrap gap-2">
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() =>
+                          onView(product)
+                        }
+                        className="border bg-white text-[#7B2C8E] hover:bg-[#F3E5F5]"
+                        style={{
+                          borderColor:
+                            BRAND.borderPurple,
+                        }}
+                      >
+                        <Eye className="me-1 h-3.5 w-3.5" />
+                        عرض
+                      </Button>
+
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() =>
+                          onEdit(product)
+                        }
+                        className="border bg-white text-[#7B2C8E] hover:bg-[#F3E5F5]"
+                        style={{
+                          borderColor:
+                            BRAND.borderPurple,
+                        }}
+                      >
+                        <Pencil className="me-1 h-3.5 w-3.5" />
+                        تعديل
+                      </Button>
+
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() =>
+                          onPrint(product)
+                        }
+                        className="border bg-white text-[#7B2C8E] hover:bg-[#F3E5F5]"
+                        style={{
+                          borderColor:
+                            BRAND.borderPurple,
+                        }}
+                      >
+                        <Printer className="me-1 h-3.5 w-3.5" />
+                        باركود
+                      </Button>
+
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        onClick={() =>
+                          onDelete(product)
+                        }
+                        className="text-[#8A7890] hover:bg-red-50 hover:text-red-600"
+                      >
+                        <Trash2 className="me-1 h-3.5 w-3.5" />
+                        حذف
+                      </Button>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
     </Card>
   );
 }
@@ -585,6 +1087,8 @@ function InventoryControls({
 
 function InventoryStatistics({
   statistics,
+  warehouses,
+  lang,
 }: {
   statistics: {
     totalProducts: number;
@@ -593,43 +1097,65 @@ function InventoryStatistics({
     totalRemaining: number;
     lowStockProducts: number;
     outOfStockProducts: number;
+    totalOriginalInventoryValue: number;
+    totalSoldValue: number;
+    totalCurrentInventoryValue: number;
+    warehouseValues: Array<{
+      warehouse: string;
+      originalValue: number;
+      inventoryValue: number;
+      soldValue: number;
+    }>;
   };
+  warehouses: any[];
+  lang: any;
 }) {
   const cards = [
     {
       title: "إجمالي المنتجات",
       value: statistics.totalProducts,
-      description: "عدد المنتجات الموجودة",
+      description:
+        "عدد المنتجات الموجودة",
       icon: Package,
     },
+
     {
       title: "إجمالي المخزون",
       value: statistics.totalStock,
-      description: "كل الوحدات المسجلة",
+      description:
+        "كل الوحدات المسجلة",
       icon: Boxes,
     },
+
     {
       title: "تم بيعها",
       value: statistics.totalSold,
-      description: "إجمالي الوحدات المباعة",
+      description:
+        "إجمالي الوحدات المباعة",
       icon: ShoppingCart,
     },
+
     {
       title: "المتبقي",
       value: statistics.totalRemaining,
-      description: "الوحدات المتاحة للبيع",
+      description:
+        "الوحدات المتاحة للبيع",
       icon: Warehouse,
     },
+
     {
       title: "مخزون منخفض",
       value: statistics.lowStockProducts,
-      description: "منتجات تحتاج متابعة",
+      description:
+        "منتجات تحتاج متابعة",
       icon: AlertTriangle,
     },
+
     {
       title: "نفد المخزون",
       value: statistics.outOfStockProducts,
-      description: "منتجات غير متاحة حاليًا",
+      description:
+        "منتجات غير متاحة حاليًا",
       icon: AlertTriangle,
     },
   ];
@@ -644,8 +1170,10 @@ function InventoryStatistics({
           shadow-sm
         "
         style={{
-          background: BRAND.purpleGradient,
-          borderColor: BRAND.purpleLight,
+          background:
+            BRAND.purpleGradient,
+          borderColor:
+            BRAND.purpleLight,
         }}
       >
         <div className="flex items-center gap-3">
@@ -722,7 +1250,8 @@ function InventoryStatistics({
                   <Icon
                     className="h-5 w-5"
                     style={{
-                      color: BRAND.purpleDark,
+                      color:
+                        BRAND.purpleDark,
                     }}
                   />
                 </div>
@@ -730,6 +1259,230 @@ function InventoryStatistics({
             </Card>
           );
         })}
+      </div>
+
+      {/* FINANCIAL VALUES */}
+
+      <div className="grid gap-4 md:grid-cols-3">
+        <Card
+          className="border p-5 shadow-sm transition-all duration-300 hover:-translate-y-0.5 hover:shadow-md"
+          style={{
+            background: BRAND.cardGradient,
+            borderColor: BRAND.borderPurple,
+          }}
+        >
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <p className="text-sm font-medium text-[#6B5A70]">
+                قيمة البضاعة الأصلية
+              </p>
+              <p className="mt-2 text-2xl font-black text-[#7B2C8E]">
+                {fmtMoney(
+                  statistics.totalOriginalInventoryValue,
+                  lang
+                )}
+              </p>
+              <p className="mt-1 text-xs text-[#8A7890]">
+                قيمة كل البضاعة التي كانت موجودة في البداية
+              </p>
+            </div>
+            <div
+              className="rounded-xl p-2.5"
+              style={{
+                background:
+                  "linear-gradient(135deg, #F3E5F5, #E8CBEA)",
+              }}
+            >
+              <Boxes
+                className="h-5 w-5"
+                style={{ color: BRAND.purpleDark }}
+              />
+            </div>
+          </div>
+        </Card>
+
+        <Card
+          className="border p-5 shadow-sm transition-all duration-300 hover:-translate-y-0.5 hover:shadow-md"
+          style={{
+            background: BRAND.cardGradient,
+            borderColor: BRAND.borderPurple,
+          }}
+        >
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <p className="text-sm font-medium text-[#6B5A70]">
+                قيمة البضاعة المباعة
+              </p>
+              <p className="mt-2 text-2xl font-black text-[#7B2C8E]">
+                {fmtMoney(
+                  statistics.totalSoldValue,
+                  lang
+                )}
+              </p>
+              <p className="mt-1 text-xs text-[#8A7890]">
+                تشمل المبيعات المسجلة القديمة والحالية
+              </p>
+            </div>
+            <div
+              className="rounded-xl p-2.5"
+              style={{
+                background:
+                  "linear-gradient(135deg, #F3E5F5, #E8CBEA)",
+              }}
+            >
+              <ShoppingCart
+                className="h-5 w-5"
+                style={{ color: BRAND.purpleDark }}
+              />
+            </div>
+          </div>
+        </Card>
+
+        <Card
+          className="border p-5 shadow-sm transition-all duration-300 hover:-translate-y-0.5 hover:shadow-md"
+          style={{
+            background: BRAND.cardGradient,
+            borderColor: BRAND.borderPurple,
+          }}
+        >
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <p className="text-sm font-medium text-[#6B5A70]">
+                قيمة المخزون الحالي
+              </p>
+              <p className="mt-2 text-2xl font-black text-[#7B2C8E]">
+                {fmtMoney(
+                  statistics.totalCurrentInventoryValue,
+                  lang
+                )}
+              </p>
+              <p className="mt-1 text-xs text-[#8A7890]">
+                قيمة البضاعة المتبقية الموجودة فعليًا
+              </p>
+            </div>
+            <div
+              className="rounded-xl p-2.5"
+              style={{
+                background:
+                  "linear-gradient(135deg, #F3E5F5, #E8CBEA)",
+              }}
+            >
+              <Warehouse
+                className="h-5 w-5"
+                style={{ color: BRAND.purpleDark }}
+              />
+            </div>
+          </div>
+        </Card>
+      </div>
+
+      {/* WAREHOUSE VALUES */}
+
+      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+        {statistics.warehouseValues.map(
+          (item) => (
+            <Card
+              key={item.warehouse}
+              className="border p-4 shadow-sm transition-all duration-300 hover:-translate-y-0.5 hover:shadow-md"
+              style={{
+                background:
+                  BRAND.cardGradient,
+                borderColor:
+                  BRAND.borderPurple,
+              }}
+            >
+              <div className="mb-3 flex items-center gap-2">
+                <div
+                  className="rounded-lg p-2"
+                  style={{
+                    background:
+                      "#F3E5F5",
+                  }}
+                >
+                  <Warehouse
+                    className="h-4 w-4"
+                    style={{
+                      color:
+                        BRAND.purpleDark,
+                    }}
+                  />
+                </div>
+
+                <div>
+                  <p className="text-sm font-bold text-[#4B3150]">
+                    {warehouseName(
+                      warehouses,
+                      item.warehouse
+                    )}
+                  </p>
+
+                  <p className="text-[11px] text-[#8A7890]">
+                    قيمة المنتجات حسب المخزن
+                  </p>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-3 gap-2">
+                <div
+                  className="rounded-xl border p-3"
+                  style={{
+                    borderColor:
+                      BRAND.borderPurple,
+                  }}
+                >
+                  <p className="text-[11px] text-[#8A7890]">
+                    الأصلية
+                  </p>
+
+                  <p className="mt-1 text-base font-bold text-[#7B2C8E]">
+                    {fmtMoney(
+                      item.originalValue,
+                      lang
+                    )}
+                  </p>
+                </div>
+
+                <div
+                  className="rounded-xl border p-3"
+                  style={{
+                    borderColor:
+                      BRAND.borderPurple,
+                  }}
+                >
+                  <p className="text-[11px] text-[#8A7890]">
+                    الموجود
+                  </p>
+
+                  <p className="mt-1 text-base font-bold text-[#7B2C8E]">
+                    {fmtMoney(
+                      item.inventoryValue,
+                      lang
+                    )}
+                  </p>
+                </div>
+
+                <div
+                  className="rounded-xl border p-3"
+                  style={{
+                    borderColor:
+                      BRAND.borderPurple,
+                  }}
+                >
+                  <p className="text-[11px] text-[#8A7890]">
+                    المباع
+                  </p>
+
+                  <p className="mt-1 text-base font-bold text-[#7B2C8E]">
+                    {fmtMoney(
+                      item.soldValue,
+                      lang
+                    )}
+                  </p>
+                </div>
+              </div>
+            </Card>
+          )
+        )}
       </div>
     </section>
   );
@@ -764,8 +1517,10 @@ function InventoryCharts({
           shadow-sm
         "
         style={{
-          background: BRAND.purpleGradient,
-          borderColor: BRAND.purpleLight,
+          background:
+            BRAND.purpleGradient,
+          borderColor:
+            BRAND.purpleLight,
         }}
       >
         <div className="flex items-center gap-3">
@@ -834,13 +1589,19 @@ function InventoryCharts({
             <ChartBar
               label="تم البيع"
               value={statistics.totalSold}
-              percentage={soldPercentage}
+              percentage={
+                soldPercentage
+              }
             />
 
             <ChartBar
               label="المتبقي"
-              value={statistics.totalRemaining}
-              percentage={remainingPercentage}
+              value={
+                statistics.totalRemaining
+              }
+              percentage={
+                remainingPercentage
+              }
             />
           </div>
 
@@ -1022,7 +1783,8 @@ function ChartBar({
           rounded-full
         "
         style={{
-          backgroundColor: "#EADCF0",
+          backgroundColor:
+            "#EADCF0",
         }}
       >
         <div
@@ -1060,7 +1822,9 @@ function StatusChartBar({
 }) {
   const percentage = Math.min(
     100,
-    Math.round((value / total) * 100)
+    Math.round(
+      (value / total) * 100
+    )
   );
 
   return (
@@ -1082,7 +1846,8 @@ function StatusChartBar({
           rounded-full
         "
         style={{
-          backgroundColor: "#EADCF0",
+          backgroundColor:
+            "#EADCF0",
         }}
       >
         <div
@@ -1118,6 +1883,11 @@ function ProductsSection({
   onPrint,
   onEdit,
   onDelete,
+  selectedProducts,
+  allVisibleSelected,
+  onToggleSelectAll,
+  onToggleProductSelection,
+  onBulkDelete,
 }: {
   products: Product[];
   warehouses: any[];
@@ -1127,6 +1897,13 @@ function ProductsSection({
   onPrint: (product: Product) => void;
   onEdit: (product: Product) => void;
   onDelete: (product: Product) => void;
+  selectedProducts: string[];
+  allVisibleSelected: boolean;
+  onToggleSelectAll: () => void;
+  onToggleProductSelection: (
+    productId: string
+  ) => void;
+  onBulkDelete: () => void;
 }) {
   return (
     <section className="space-y-5">
@@ -1173,6 +1950,58 @@ function ProductsSection({
         </Badge>
       </div>
 
+      {/* BULK SELECTION */}
+
+      <div
+        className="
+          flex flex-col gap-3 rounded-2xl border p-4 shadow-sm
+          sm:flex-row sm:items-center sm:justify-between
+        "
+        style={{
+          background:
+            BRAND.cardGradient,
+          borderColor:
+            BRAND.borderPurple,
+        }}
+      >
+        <button
+          type="button"
+          onClick={
+            onToggleSelectAll
+          }
+          className="flex items-center gap-3 text-right font-medium text-[#7B2C8E]"
+        >
+          {allVisibleSelected ? (
+            <CheckSquare className="h-5 w-5" />
+          ) : (
+            <Square className="h-5 w-5" />
+          )}
+
+          <span>
+            {allVisibleSelected
+              ? "إلغاء تحديد الكل"
+              : "تحديد كل المنتجات"}
+          </span>
+
+          <span className="text-sm text-[#8A7890]">
+            ({selectedProducts.length} محدد)
+          </span>
+        </button>
+
+        <Button
+          type="button"
+          variant="outline"
+          disabled={
+            selectedProducts.length === 0
+          }
+          onClick={onBulkDelete}
+          className="border-red-200 text-red-600 hover:bg-red-50 hover:text-red-700 disabled:opacity-50"
+        >
+          <Trash2 className="me-2 h-4 w-4" />
+          حذف المحدد ({selectedProducts.length})
+        </Button>
+      </div>
+
       <div
         className="
           grid
@@ -1193,6 +2022,14 @@ function ProductsSection({
             onPrint={onPrint}
             onEdit={onEdit}
             onDelete={onDelete}
+            selected={selectedProducts.includes(
+              product.product_id
+            )}
+            onToggleSelect={() =>
+              onToggleProductSelection(
+                product.product_id
+              )
+            }
           />
         ))}
       </div>
@@ -1213,6 +2050,8 @@ function ProductCard({
   onPrint,
   onEdit,
   onDelete,
+  selected,
+  onToggleSelect,
 }: {
   product: Product;
   warehouses: any[];
@@ -1222,6 +2061,8 @@ function ProductCard({
   onPrint: (product: Product) => void;
   onEdit: (product: Product) => void;
   onDelete: (product: Product) => void;
+  selected: boolean;
+  onToggleSelect: () => void;
 }) {
   const stockPercentage =
     product.stock_qty > 0
@@ -1258,6 +2099,33 @@ function ProductCard({
       {/* PRODUCT IMAGE */}
 
       <div className="relative">
+        <button
+          type="button"
+          onClick={onToggleSelect}
+          aria-label={
+            selected
+              ? "إلغاء تحديد المنتج"
+              : "تحديد المنتج"
+          }
+          className="absolute left-3 top-3 z-10 rounded-lg border bg-white/95 p-1.5 shadow-md transition hover:scale-105"
+          style={{
+            borderColor:
+              BRAND.borderPurple,
+          }}
+        >
+          {selected ? (
+            <CheckSquare
+              className="h-5 w-5"
+              style={{
+                color:
+                  BRAND.purpleDark,
+              }}
+            />
+          ) : (
+            <Square className="h-5 w-5 text-[#8A7890]" />
+          )}
+        </button>
+
         <ProductImage
           url={product.image_url}
           alt={product.product_name}
@@ -1348,7 +2216,8 @@ function ProductCard({
         <p
           className="text-lg font-bold"
           style={{
-            color: BRAND.purpleDark,
+            color:
+              BRAND.purpleDark,
           }}
         >
           {fmtMoney(

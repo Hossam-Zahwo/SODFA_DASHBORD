@@ -2133,6 +2133,224 @@ export const api = {
     },
 
   /* ==========================================================
+     DELETE NORMAL RETURN
+     ========================================================== */
+
+  deleteReturn:
+    async (
+      return_id: string,
+    ) => {
+      const returnId = s(return_id).trim();
+
+      if (!returnId) {
+        throw new ApiError(
+          "RETURN_ID_REQUIRED",
+        );
+      }
+
+      /*
+       * IMPORTANT:
+       * Read the return BEFORE deleting it.
+       *
+       * We need product_id and qty in order to
+       * restore the inventory after the return is deleted.
+       *
+       * We DO NOT use DELETE ... SELECT because
+       * Supabase RLS can make the deleted row unavailable
+       * in the returned mutation result even when the delete
+       * itself is successful.
+       */
+      const {
+        data: returnRow,
+        error: returnFetchError,
+      } = await supabase
+        .from("returns")
+        .select(
+          "return_id, product_id, qty",
+        )
+        .eq(
+          "return_id",
+          returnId,
+        )
+        .maybeSingle();
+
+      if (returnFetchError) {
+        console.error(
+          "[SODFA] Failed to read return before delete:",
+          returnFetchError,
+        );
+
+        throw supabaseError(
+          returnFetchError,
+        );
+      }
+
+      if (!returnRow) {
+        throw new ApiError(
+          "RETURN_NOT_FOUND",
+        );
+      }
+
+      const productId =
+        s(returnRow.product_id).trim();
+
+      const qty = Math.max(
+        0,
+        n(returnRow.qty),
+      );
+
+      if (!productId) {
+        throw new ApiError(
+          "RETURN_PRODUCT_ID_MISSING",
+        );
+      }
+
+      if (qty <= 0) {
+        throw new ApiError(
+          "RETURN_QUANTITY_INVALID",
+        );
+      }
+
+      /*
+       * Read the current inventory BEFORE deleting the return.
+       *
+       * We need the current values so we can safely restore
+       * the inventory state after deleting the return.
+       */
+      const {
+        data: product,
+        error: productError,
+      } = await supabase
+        .from("inventory")
+        .select(
+          "product_id, sold_qty, remaining_qty",
+        )
+        .eq(
+          "product_id",
+          productId,
+        )
+        .maybeSingle();
+
+      if (productError) {
+        console.error(
+          "[SODFA] Failed to read inventory before deleting return:",
+          productError,
+        );
+
+        throw supabaseError(
+          productError,
+        );
+      }
+
+      if (!product) {
+        throw new ApiError(
+          "PRODUCT_NOT_FOUND",
+        );
+      }
+
+      /*
+       * Delete the return DIRECTLY.
+       *
+       * IMPORTANT:
+       * Do NOT use .select() here.
+       *
+       * The previous implementation depended on the deleted
+       * row being returned by Supabase, which can be affected
+       * by RLS policies.
+       */
+      const {
+        error: deleteError,
+      } = await supabase
+        .from("returns")
+        .delete()
+        .eq(
+          "return_id",
+          returnId,
+        );
+
+      if (deleteError) {
+        console.error(
+          "[SODFA] Delete return failed:",
+          deleteError,
+        );
+
+        throw supabaseError(
+          deleteError,
+        );
+      }
+
+      /*
+       * The return has now been deleted successfully.
+       *
+       * Restore the inventory state:
+       *
+       * When creating a normal return:
+       *
+       * sold_qty      -= return qty
+       * remaining_qty += return qty
+       *
+       * Therefore, when deleting that return, we reverse it:
+       *
+       * sold_qty      += return qty
+       * remaining_qty -= return qty
+       */
+      const currentSold = Math.max(
+        0,
+        n(product.sold_qty),
+      );
+
+      const currentRemaining =
+        Math.max(
+          0,
+          n(product.remaining_qty),
+        );
+
+      const restoredSold =
+        Math.max(
+          0,
+          currentSold + qty,
+        );
+
+      const restoredRemaining =
+        Math.max(
+          0,
+          currentRemaining - qty,
+        );
+
+      const {
+        error: inventoryError,
+      } = await supabase
+        .from("inventory")
+        .update({
+          sold_qty:
+            restoredSold,
+          remaining_qty:
+            restoredRemaining,
+        })
+        .eq(
+          "product_id",
+          productId,
+        );
+
+      if (inventoryError) {
+        console.error(
+          "[SODFA] Return deleted but inventory update failed:",
+          inventoryError,
+        );
+
+        throw supabaseError(
+          inventoryError,
+        );
+      }
+
+      return {
+        success: true,
+        return_id: returnId,
+        product_id: productId,
+        qty,
+      };
+    },
+  /* ==========================================================
      DAMAGED RETURNS
      ========================================================== */
 
@@ -2444,6 +2662,39 @@ export const api = {
         throw supabaseError(
           error
         );
+      }
+
+      return {
+        success: true,
+      };
+    },
+
+  /* ==========================================================
+     DELETE DAMAGED RETURN
+     ========================================================== */
+
+  deleteDamagedReturn:
+    async (
+      damaged_return_id: string,
+    ) => {
+      if (!damaged_return_id) {
+        throw new ApiError(
+          "DAMAGED_RETURN_ID_REQUIRED",
+        );
+      }
+
+      const {
+        error,
+      } = await supabase
+        .from("damaged_returns")
+        .delete()
+        .eq(
+          "damaged_return_id",
+          damaged_return_id,
+        );
+
+      if (error) {
+        throw supabaseError(error);
       }
 
       return {
