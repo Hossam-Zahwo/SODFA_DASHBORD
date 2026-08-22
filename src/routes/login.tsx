@@ -1,6 +1,7 @@
 import { FormEvent, useState } from "react";
 
 import { useNavigate, createFileRoute } from "@tanstack/react-router";
+
 import {
   Eye,
   EyeOff,
@@ -35,17 +36,14 @@ function LoginPage() {
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
-
   const [error, setError] = useState("");
 
   const handleLogin = async (
     e: FormEvent<HTMLFormElement>,
   ) => {
     e.preventDefault();
-
     setError("");
 
     if (!email.trim() || !password.trim()) {
@@ -54,7 +52,6 @@ function LoginPage() {
           ? "يرجى إدخال البريد الإلكتروني وكلمة المرور"
           : "Please enter your email and password",
       );
-
       return;
     }
 
@@ -71,6 +68,7 @@ function LoginPage() {
         console.error(error);
 
         const errorMessage = error.message.toLowerCase();
+
         const isUnconfirmed =
           errorMessage.includes("email not confirmed") ||
           errorMessage.includes("email_not_confirmed");
@@ -190,46 +188,40 @@ function LoginPage() {
               <div
                 className="
                   flex
-                  h-16
-                  w-16
+                  h-auto
+                  w-60
                   items-center
                   justify-center
-                  rounded-2xl
-                  border
+                  overflow-hidden
+                  
+                
                 "
-                style={{
-                  backgroundColor:
-                    "rgba(130,50,146,0.12)",
-                  borderColor:
-                    "rgba(130,50,146,0.25)",
-                }}
+              
               >
-                <span
-                  className="text-2xl font-black"
-                  style={{
-                    color: BRAND.purpleLight,
-                  }}
-                >
-                  ص
-                </span>
+                {/* 
+                  ضع صورة الـ PNG داخل مجلد public
+                  ثم غيّر المسار هنا فقط.
+
+                  مثال:
+                  src="/sodfa-logo.png"
+                */}
+
+                <img
+                  src="/logo-login.png"
+                  alt="SODFA"
+                  className="
+                    h-full
+                    w-full
+                    object-contain
+                    p-2
+                  "
+                />
               </div>
             </div>
 
-            <h1 className="text-3xl font-black">
-              صدفه
-            </h1>
+          
 
-            <p
-              className="mt-2 text-xs font-bold"
-              style={{
-                fontFamily:
-                  '"Montserrat", sans-serif',
-                letterSpacing: "0.35em",
-                color: BRAND.purpleLight,
-              }}
-            >
-              SODFA
-            </p>
+      
 
             <div
               className="

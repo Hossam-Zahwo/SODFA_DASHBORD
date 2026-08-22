@@ -933,10 +933,6 @@ function TransactionsPage() {
           width:100%
         }
 
-        .timeline-date-row{
-          display:contents
-        }
-
         .company-expense-divider{
           grid-column:1/-1;
           width:100%;
@@ -1298,8 +1294,44 @@ function TransactionsPage() {
                 (date) => (
                   <div
                     key={date}
-                    className="timeline-date-row"
+                    className="contents"
                   >
+                    {(expensesByDate.get(
+                      date,
+                    ) ?? []).map(
+                      (e) => (
+                        <CompanyExpenseDivider
+                          key={e.id}
+                          expense={e}
+                          selected={
+                            selectedTransactionId ===
+                            e.id
+                          }
+                          saving={saving}
+                          onSelect={() =>
+                            setSelectedTransactionId(
+                              selectedTransactionId ===
+                                e.id
+                                ? null
+                                : e.id,
+                            )
+                          }
+                          onEdit={() =>
+                            openTransaction(
+                              'expense',
+                              '',
+                              e,
+                            )
+                          }
+                          onDelete={() =>
+                            void deleteTransaction(
+                              e,
+                            )
+                          }
+                        />
+                      ),
+                    )}
+
                     {companyAccounts
                       .slice(
                         0,
@@ -1343,42 +1375,6 @@ function TransactionsPage() {
                           }
                         />
                       ))}
-
-                    {(expensesByDate.get(
-                      date,
-                    ) ?? []).map(
-                      (e) => (
-                        <CompanyExpenseDivider
-                          key={e.id}
-                          expense={e}
-                          selected={
-                            selectedTransactionId ===
-                            e.id
-                          }
-                          saving={saving}
-                          onSelect={() =>
-                            setSelectedTransactionId(
-                              selectedTransactionId ===
-                                e.id
-                                ? null
-                                : e.id,
-                            )
-                          }
-                          onEdit={() =>
-                            openTransaction(
-                              'expense',
-                              '',
-                              e,
-                            )
-                          }
-                          onDelete={() =>
-                            void deleteTransaction(
-                              e,
-                            )
-                          }
-                        />
-                      ),
-                    )}
                   </div>
                 ),
               )}
@@ -1596,7 +1592,7 @@ function CompanyExpenseDivider({
                   'مصروف الشركة'}
               </p>
 
-              <div className="mt-0.5 flex items-center gap-1.5 text-[10px] text-white/80">
+              <div className="mt-0.5 flex items-center gap-1.5 text-sm font-semibold text-white">
                 <CalendarDays className="h-3 w-3" />
                 {dateText(
                   expense.transaction_date,
@@ -1781,7 +1777,7 @@ function AccountTransactionCell({
                         تحويل
                       </span>
 
-                      <div className="flex items-center gap-1 text-[10px] text-zinc-600">
+                      <div className="flex items-center gap-1.5 text-sm font-semibold text-white">
                         <CalendarDays className="h-3 w-3" />
                         {dateText(
                           t.transaction_date,
