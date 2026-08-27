@@ -128,7 +128,7 @@ function InventoryPage() {
   const warehouses = useWarehouses();
 
   const [q, setQ] = useState("");
-  const [wh, setWh] = useState(ALL_WAREHOUSES);
+  const [wh, setWh] = useState<string[]>([ALL_WAREHOUSES]);
   const [stockFilter, setStockFilter] = useState<StockFilter>("all");
 
   const [editing, setEditing] =
@@ -168,8 +168,8 @@ function InventoryPage() {
 
     return (inventory.data ?? []).filter((p) => {
       const okWh =
-        wh === ALL_WAREHOUSES ||
-        p.warehouse === wh;
+        wh.includes(ALL_WAREHOUSES) ||
+        wh.includes(p.warehouse);
 
       const remainingQty = Number(p.remaining_qty || 0);
 
@@ -557,8 +557,8 @@ function InventoryPage() {
         onOpenChange={setFormOpen}
         product={editing}
         warehouses={warehouses.data ?? []}
-        {...(wh !== ALL_WAREHOUSES
-          ? { defaultWarehouse: wh }
+        {...(wh.length === 1 && wh[0] !== ALL_WAREHOUSES
+          ? { defaultWarehouse: wh[0] }
           : {})}
       />
 
@@ -690,8 +690,8 @@ function InventoryControls({
 }: {
   q: string;
   setQ: (value: string) => void;
-  wh: string;
-  setWh: (value: string) => void;
+  wh: string[];
+  setWh: (value: string[]) => void;
   stockFilter: StockFilter;
   setStockFilter: (
     value: StockFilter
@@ -744,7 +744,7 @@ function InventoryControls({
             </h2>
 
             <p className="mt-0.5 text-sm text-white/80">
-              ابحث عن المنتج أو اختر المخزن المطلوب لعرض البيانات.
+              ابحث عن المنتج أو اختر مستودعًا واحدًا أو أكثر لعرض البيانات.
             </p>
           </div>
         </div>
@@ -2211,20 +2211,27 @@ function ProductCard({
           </p>
         </div>
 
-        {/* PRICE */}
+        {/* PRICES */}
 
-        <p
-          className="text-lg font-bold"
-          style={{
-            color:
-              BRAND.purpleDark,
-          }}
-        >
-          {fmtMoney(
-            product.price,
-            lang
-          )}
-        </p>
+        <div className="grid grid-cols-2 gap-2 rounded-xl border p-2.5" style={{ borderColor: BRAND.borderPurple, background: "linear-gradient(135deg, #FFFFFF, #FAF5FC)" }}>
+          <div className="min-w-0">
+            <p className="text-[10px] text-[#8A7890]">السعر العادي</p>
+            <p className="mt-1 truncate text-base font-bold text-[#6B5A70]">
+              {fmtMoney(product.price, lang)}
+            </p>
+          </div>
+
+          <div className="min-w-0 border-r border-[#EADCF0] pr-2 text-right">
+            <p className="text-[10px] text-[#8A7890]">سعر البيع</p>
+            {product.selling_price !== null && product.selling_price !== undefined ? (
+              <p className="mt-1 truncate text-base font-black text-[#7B2C8E]">
+                {fmtMoney(product.selling_price, lang)}
+              </p>
+            ) : (
+              <p className="mt-1 text-xs font-medium text-[#A99AAE]">غير محدد</p>
+            )}
+          </div>
+        </div>
 
         {/* STOCK NUMBERS */}
 

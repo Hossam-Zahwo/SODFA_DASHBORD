@@ -1,6 +1,9 @@
 import { createFileRoute } from '@tanstack/react-router'
+
 import { useEffect, useMemo, useState } from 'react'
+
 import type { ReactNode } from 'react'
+
 import {
   ArrowDownLeft,
   ArrowUpRight,
@@ -15,6 +18,7 @@ import {
   Wallet,
   X,
 } from 'lucide-react'
+
 import { AppShell } from '../components/AppShell'
 import { supabase } from '../lib/supabase'
 
@@ -69,6 +73,7 @@ type AccountForm = {
 
 const today = () => {
   const n = new Date()
+
   return new Date(
     n.getTime() - n.getTimezoneOffset() * 60000,
   )
@@ -76,11 +81,15 @@ const today = () => {
     .slice(0, 10)
 }
 
-const dateOnly = (v?: string | null) => v?.slice(0, 10) ?? ''
+const dateOnly = (v?: string | null) =>
+  v?.slice(0, 10) ?? ''
 
 const dateText = (v?: string | null) => {
   const [y, m, d] = dateOnly(v).split('-')
-  return y && m && d ? `${d}/${m}/${y}` : '—'
+
+  return y && m && d
+    ? `${d}/${m}/${y}`
+    : '—'
 }
 
 const money = (v: number) =>
@@ -89,7 +98,8 @@ const money = (v: number) =>
     maximumFractionDigits: 2,
   }).format(v)
 
-const dbDate = (v: string) => `${v}T00:00:00+03:00`
+const dbDate = (v: string) =>
+  `${v}T00:00:00+03:00`
 
 const blankTx = (
   accountId = '',
@@ -110,11 +120,20 @@ const blankAccount = (): AccountForm => ({
 })
 
 function TransactionsPage() {
-  const [accounts, setAccounts] = useState<Account[]>([])
-  const [transactions, setTransactions] = useState<Transaction[]>([])
-  const [businesses, setBusinesses] = useState<Named[]>([])
-  const [platforms, setPlatforms] = useState<Named[]>([])
-  const [financialAccounts, setFinancialAccounts] = useState<Named[]>([])
+  const [accounts, setAccounts] =
+    useState<Account[]>([])
+
+  const [transactions, setTransactions] =
+    useState<Transaction[]>([])
+
+  const [businesses, setBusinesses] =
+    useState<Named[]>([])
+
+  const [platforms, setPlatforms] =
+    useState<Named[]>([])
+
+  const [financialAccounts, setFinancialAccounts] =
+    useState<Named[]>([])
 
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
@@ -123,15 +142,27 @@ function TransactionsPage() {
   const [error, setError] = useState('')
   const [notice, setNotice] = useState('')
 
-  const [businessFilter, setBusinessFilter] = useState('')
-  const [columnCount, setColumnCount] = useState(4)
+  const [businessFilter, setBusinessFilter] =
+    useState('')
+
+  const [columnCount, setColumnCount] =
+    useState(4)
 
   const [search, setSearch] = useState('')
-  const [accountFilter, setAccountFilter] = useState('all')
-  const [typeFilter, setTypeFilter] = useState('all')
-  const [dateFrom, setDateFrom] = useState('')
-  const [dateTo, setDateTo] = useState('')
-  const [filtersOpen, setFiltersOpen] = useState(false)
+  const [accountFilter, setAccountFilter] =
+    useState('all')
+
+  const [typeFilter, setTypeFilter] =
+    useState('all')
+
+  const [dateFrom, setDateFrom] =
+    useState('')
+
+  const [dateTo, setDateTo] =
+    useState('')
+
+  const [filtersOpen, setFiltersOpen] =
+    useState(false)
 
   const [transactionForm, setTransactionForm] =
     useState<TransactionForm>(blankTx())
@@ -201,11 +232,25 @@ function TransactionsPage() {
         throw bad.error
       }
 
-      setTransactions((r[0].data ?? []) as Transaction[])
-      setAccounts((r[1].data ?? []) as Account[])
-      setBusinesses((r[2].data ?? []) as Named[])
-      setPlatforms((r[3].data ?? []) as Named[])
-      setFinancialAccounts((r[4].data ?? []) as Named[])
+      setTransactions(
+        (r[0].data ?? []) as Transaction[],
+      )
+
+      setAccounts(
+        (r[1].data ?? []) as Account[],
+      )
+
+      setBusinesses(
+        (r[2].data ?? []) as Named[],
+      )
+
+      setPlatforms(
+        (r[3].data ?? []) as Named[],
+      )
+
+      setFinancialAccounts(
+        (r[4].data ?? []) as Named[],
+      )
 
       setBusinessFilter((v) =>
         v &&
@@ -217,6 +262,7 @@ function TransactionsPage() {
       )
     } catch (e) {
       console.error(e)
+
       setError(
         e instanceof Error
           ? e.message
@@ -233,24 +279,36 @@ function TransactionsPage() {
   }, [])
 
   const accountMap = useMemo(
-    () => new Map(accounts.map((x) => [x.id, x])),
+    () =>
+      new Map(
+        accounts.map((x) => [x.id, x]),
+      ),
     [accounts],
   )
 
   const businessMap = useMemo(
-    () => new Map(businesses.map((x) => [x.id, x.name])),
+    () =>
+      new Map(
+        businesses.map((x) => [x.id, x.name]),
+      ),
     [businesses],
   )
 
   const platformMap = useMemo(
-    () => new Map(platforms.map((x) => [x.id, x.name])),
+    () =>
+      new Map(
+        platforms.map((x) => [x.id, x.name]),
+      ),
     [platforms],
   )
 
   const financialMap = useMemo(
     () =>
       new Map(
-        financialAccounts.map((x) => [x.id, x.name]),
+        financialAccounts.map((x) => [
+          x.id,
+          x.name,
+        ]),
       ),
     [financialAccounts],
   )
@@ -258,24 +316,38 @@ function TransactionsPage() {
   const companyAccounts = useMemo(
     () =>
       accounts.filter(
-        (x) => x.business_id === businessFilter,
+        (x) =>
+          x.business_id === businessFilter,
       ),
     [accounts, businessFilter],
   )
 
-  const safeColumnCount = Math.max(
-    1,
-    Math.min(
-      columnCount,
-      Math.max(companyAccounts.length, 1),
-    ),
-  )
+  // 0 = الكل
+  const safeColumnCount =
+    columnCount === 0
+      ? Math.max(
+          companyAccounts.length,
+          1,
+        )
+      : Math.max(
+          1,
+          Math.min(
+            columnCount,
+            Math.max(
+              companyAccounts.length,
+              1,
+            ),
+          ),
+        )
 
   const filtered = useMemo(
     () =>
       transactions
         .filter((t) => {
-          if (t.business_id !== businessFilter) {
+          if (
+            t.business_id !==
+            businessFilter
+          ) {
             return false
           }
 
@@ -287,25 +359,37 @@ function TransactionsPage() {
             t.description,
             t.transaction_type,
             a?.name,
-            businessMap.get(t.business_id),
-            platformMap.get(a?.platform_id ?? ''),
+            businessMap.get(
+              t.business_id,
+            ),
+            platformMap.get(
+              a?.platform_id ?? '',
+            ),
             financialMap.get(
-              a?.default_financial_account_id ?? '',
+              a?.default_financial_account_id ??
+                '',
             ),
           ]
             .filter(Boolean)
             .join(' ')
             .toLowerCase()
 
-          const d = dateOnly(t.transaction_date)
-          const q = search.trim().toLowerCase()
+          const d = dateOnly(
+            t.transaction_date,
+          )
+
+          const q = search
+            .trim()
+            .toLowerCase()
 
           return (
             (!q || text.includes(q)) &&
             (accountFilter === 'all' ||
-              t.account_id === accountFilter) &&
+              t.account_id ===
+                accountFilter) &&
             (typeFilter === 'all' ||
-              t.transaction_type === typeFilter) &&
+              t.transaction_type ===
+                typeFilter) &&
             (!dateFrom || d >= dateFrom) &&
             (!dateTo || d <= dateTo)
           )
@@ -340,7 +424,10 @@ function TransactionsPage() {
   )
 
   const transactionsByAccount = useMemo(() => {
-    const m = new Map<string, Transaction[]>()
+    const m = new Map<
+      string,
+      Transaction[]
+    >()
 
     companyAccounts.forEach((a) =>
       m.set(a.id, []),
@@ -348,7 +435,8 @@ function TransactionsPage() {
 
     filtered.forEach((t) => {
       if (
-        t.transaction_type === 'transfer' &&
+        t.transaction_type ===
+          'transfer' &&
         t.account_id
       ) {
         m.get(t.account_id)?.push(t)
@@ -362,12 +450,18 @@ function TransactionsPage() {
     () =>
       filtered
         .filter(
-          (t) => t.transaction_type === 'expense',
+          (t) =>
+            t.transaction_type ===
+            'expense',
         )
         .sort(
           (a, b) =>
-            dateOnly(b.transaction_date).localeCompare(
-              dateOnly(a.transaction_date),
+            dateOnly(
+              b.transaction_date,
+            ).localeCompare(
+              dateOnly(
+                a.transaction_date,
+              ),
             ) ||
             (b.created_at ?? '').localeCompare(
               a.created_at ?? '',
@@ -377,10 +471,15 @@ function TransactionsPage() {
   )
 
   const expensesByDate = useMemo(() => {
-    const m = new Map<string, Transaction[]>()
+    const m = new Map<
+      string,
+      Transaction[]
+    >()
 
     expenses.forEach((e) => {
-      const d = dateOnly(e.transaction_date)
+      const d = dateOnly(
+        e.transaction_date,
+      )
 
       m.set(d, [
         ...(m.get(d) ?? []),
@@ -395,20 +494,30 @@ function TransactionsPage() {
     const s = new Set<string>()
 
     expenses.forEach((e) =>
-      s.add(dateOnly(e.transaction_date)),
+      s.add(
+        dateOnly(e.transaction_date),
+      ),
     )
 
     companyAccounts.forEach((a) =>
       (
-        transactionsByAccount.get(a.id) ?? []
+        transactionsByAccount.get(
+          a.id,
+        ) ?? []
       ).forEach((t) =>
-        s.add(dateOnly(t.transaction_date)),
+        s.add(
+          dateOnly(
+            t.transaction_date,
+          ),
+        ),
       ),
     )
 
     return [...s]
       .filter(Boolean)
-      .sort((a, b) => b.localeCompare(a))
+      .sort((a, b) =>
+        b.localeCompare(a),
+      )
   }, [
     expenses,
     companyAccounts,
@@ -424,8 +533,10 @@ function TransactionsPage() {
 
     transactions.forEach((t) => {
       if (
-        t.business_id === businessFilter &&
-        t.transaction_type === 'transfer' &&
+        t.business_id ===
+          businessFilter &&
+        t.transaction_type ===
+          'transfer' &&
         t.account_id
       ) {
         m.set(
@@ -445,48 +556,63 @@ function TransactionsPage() {
 
   const totalTransfers = filtered
     .filter(
-      (t) => t.transaction_type === 'transfer',
+      (t) =>
+        t.transaction_type ===
+        'transfer',
     )
     .reduce(
-      (s, t) => s + Number(t.amount || 0),
+      (s, t) =>
+        s + Number(t.amount || 0),
       0,
     )
 
   const totalExpenses = filtered
     .filter(
-      (t) => t.transaction_type === 'expense',
+      (t) =>
+        t.transaction_type ===
+        'expense',
     )
     .reduce(
-      (s, t) => s + Number(t.amount || 0),
+      (s, t) =>
+        s + Number(t.amount || 0),
       0,
     )
 
   const companyTransfers = transactions
     .filter(
       (t) =>
-        t.business_id === businessFilter &&
-        t.transaction_type === 'transfer',
+        t.business_id ===
+          businessFilter &&
+        t.transaction_type ===
+          'transfer',
     )
     .reduce(
-      (s, t) => s + Number(t.amount || 0),
+      (s, t) =>
+        s + Number(t.amount || 0),
       0,
     )
 
   const companyExpenses = transactions
     .filter(
       (t) =>
-        t.business_id === businessFilter &&
-        t.transaction_type === 'expense',
+        t.business_id ===
+          businessFilter &&
+        t.transaction_type ===
+          'expense',
     )
     .reduce(
-      (s, t) => s + Number(t.amount || 0),
+      (s, t) =>
+        s + Number(t.amount || 0),
       0,
     )
 
   const currentBalance =
-    companyTransfers - companyExpenses
+    companyTransfers -
+    companyExpenses
 
-  const changeBusiness = (v: string) => {
+  const changeBusiness = (
+    v: string,
+  ) => {
     setBusinessFilter(v)
     setAccountFilter('all')
     setSelectedTransactionId(null)
@@ -513,15 +639,22 @@ function TransactionsPage() {
 
       setTransactionForm({
         transaction_type:
-          item.transaction_type === 'expense'
+          item.transaction_type ===
+          'expense'
             ? 'expense'
             : 'transfer',
+
         transaction_date: dateOnly(
           item.transaction_date,
         ),
+
         amount: String(item.amount),
-        account_id: item.account_id ?? '',
-        description: item.description ?? '',
+
+        account_id:
+          item.account_id ?? '',
+
+        description:
+          item.description ?? '',
       })
     } else {
       setEditingTransaction(null)
@@ -547,30 +680,38 @@ function TransactionsPage() {
     setTransactionForm(blankTx())
   }
 
-  const openAccount = (a?: Account) => {
+  const openAccount = (
+    a?: Account,
+  ) => {
     if (a) {
       setEditingAccount(a)
 
       setAccountForm({
         name: a.name,
         business_id: a.business_id,
-        platform_id: a.platform_id ?? '',
+        platform_id:
+          a.platform_id ?? '',
         default_financial_account_id:
-          a.default_financial_account_id ?? '',
+          a.default_financial_account_id ??
+          '',
       })
     } else {
       setEditingAccount(null)
 
       setAccountForm({
         ...blankAccount(),
+
         business_id:
           businessFilter ||
           businesses[0]?.id ||
           '',
+
         platform_id:
           platforms[0]?.id || '',
+
         default_financial_account_id:
-          financialAccounts[0]?.id || '',
+          financialAccounts[0]?.id ||
+          '',
       })
     }
 
@@ -583,211 +724,223 @@ function TransactionsPage() {
     setAccountForm(blankAccount())
   }
 
-  const saveTransaction = async () => {
-    if (
-      !transactionForm.transaction_date ||
-      !transactionForm.amount
-    ) {
-      setError('أدخل المبلغ والتاريخ أولًا')
-      return
-    }
-
-    const amount = Number(
-      transactionForm.amount,
-    )
-
-    if (
-      !Number.isFinite(amount) ||
-      amount <= 0
-    ) {
-      setError('أدخل مبلغ صحيح')
-      return
-    }
-
-    let account: Account | null = null
-
-    if (
-      transactionForm.transaction_type ===
-      'transfer'
-    ) {
-      if (!transactionForm.account_id) {
-        setError(
-          'اختر الحساب الخاص بالتحويل',
-        )
-        return
-      }
-
-      account =
-        accountMap.get(
-          transactionForm.account_id,
-        ) ?? null
-
-      if (!account) {
-        setError('الحساب غير موجود')
-        return
-      }
-
+  const saveTransaction =
+    async () => {
       if (
-        account.business_id !==
-        businessFilter
+        !transactionForm.transaction_date ||
+        !transactionForm.amount
       ) {
         setError(
-          'الحساب لا يتبع الشركة المحددة',
+          'أدخل المبلغ والتاريخ أولًا',
         )
         return
       }
-    }
 
-    const businessId =
-      transactionForm.transaction_type ===
-      'expense'
-        ? businessFilter
-        : account?.business_id
+      const amount = Number(
+        transactionForm.amount,
+      )
 
-    if (!businessId) {
-      setError('الشركة غير محددة')
-      return
-    }
+      if (
+        !Number.isFinite(amount) ||
+        amount <= 0
+      ) {
+        setError('أدخل مبلغ صحيح')
+        return
+      }
 
-    setSaving(true)
-    setError('')
+      let account: Account | null =
+        null
 
-    const payload = {
-      business_id: businessId,
-
-      account_id:
-        transactionForm.transaction_type ===
-        'expense'
-          ? null
-          : transactionForm.account_id,
-
-      transaction_date: dbDate(
-        transactionForm.transaction_date,
-      ),
-
-      amount,
-
-      transaction_type:
-        transactionForm.transaction_type,
-
-      description:
-        transactionForm.description.trim() ||
-        null,
-
-      currency: 'EGP',
-      status: 'completed',
-
-      to_financial_account_id:
+      if (
         transactionForm.transaction_type ===
         'transfer'
-          ? account
-              ?.default_financial_account_id ||
-            null
-          : null,
-    }
+      ) {
+        if (
+          !transactionForm.account_id
+        ) {
+          setError(
+            'اختر الحساب الخاص بالتحويل',
+          )
+          return
+        }
 
-    try {
-      const r = editingTransaction
-        ? await supabase
-            .from('transactions')
-            .update({
-              ...payload,
-              updated_at:
-                new Date().toISOString(),
-            })
-            .eq(
-              'id',
-              editingTransaction.id,
-            )
-        : await supabase
-            .from('transactions')
-            .insert({
-              ...payload,
-              created_at:
-                new Date().toISOString(),
-              updated_at:
-                new Date().toISOString(),
-            })
+        account =
+          accountMap.get(
+            transactionForm.account_id,
+          ) ?? null
 
-      if (r.error) {
-        throw r.error
+        if (!account) {
+          setError(
+            'الحساب غير موجود',
+          )
+          return
+        }
+
+        if (
+          account.business_id !==
+          businessFilter
+        ) {
+          setError(
+            'الحساب لا يتبع الشركة المحددة',
+          )
+          return
+        }
       }
 
-      const wasEdit =
-        !!editingTransaction
+      const businessId =
+        transactionForm.transaction_type ===
+        'expense'
+          ? businessFilter
+          : account?.business_id
 
-      closeTransaction()
-
-      setNotice(
-        wasEdit
-          ? 'تم تعديل الحركة بنجاح'
-          : transactionForm.transaction_type ===
-              'expense'
-            ? 'تمت إضافة المصروف للشركة بنجاح'
-            : 'تمت إضافة التحويل بنجاح',
-      )
-
-      await fetchData()
-    } catch (e) {
-      console.error(e)
-
-      setError(
-        e instanceof Error
-          ? e.message
-          : 'تعذر حفظ الحركة',
-      )
-    } finally {
-      setSaving(false)
-    }
-  }
-
-  const deleteTransaction = async (
-    t: Transaction,
-  ) => {
-    if (
-      !window.confirm(
-        `هل أنت متأكد من حذف الحركة بقيمة ${money(
-          Number(t.amount || 0),
-        )} ج.م؟`,
-      )
-    ) {
-      return
-    }
-
-    setSaving(true)
-    setError('')
-
-    try {
-      const r = await supabase
-        .from('transactions')
-        .delete()
-        .eq('id', t.id)
-
-      if (r.error) {
-        throw r.error
+      if (!businessId) {
+        setError('الشركة غير محددة')
+        return
       }
 
-      setSelectedTransactionId(null)
+      setSaving(true)
+      setError('')
 
-      setNotice(
-        t.transaction_type === 'expense'
-          ? 'تم حذف المصروف بنجاح'
-          : 'تم حذف التحويل بنجاح',
-      )
+      const payload = {
+        business_id: businessId,
 
-      await fetchData()
-    } catch (e) {
-      console.error(e)
+        account_id:
+          transactionForm.transaction_type ===
+          'expense'
+            ? null
+            : transactionForm.account_id,
 
-      setError(
-        e instanceof Error
-          ? e.message
-          : 'تعذر حذف الحركة',
-      )
-    } finally {
-      setSaving(false)
+        transaction_date: dbDate(
+          transactionForm.transaction_date,
+        ),
+
+        amount,
+
+        transaction_type:
+          transactionForm.transaction_type,
+
+        description:
+          transactionForm.description.trim() ||
+          null,
+
+        currency: 'EGP',
+        status: 'completed',
+
+        to_financial_account_id:
+          transactionForm.transaction_type ===
+          'transfer'
+            ? account
+                ?.default_financial_account_id ||
+              null
+            : null,
+      }
+
+      try {
+        const r = editingTransaction
+          ? await supabase
+              .from('transactions')
+              .update({
+                ...payload,
+                updated_at:
+                  new Date().toISOString(),
+              })
+              .eq(
+                'id',
+                editingTransaction.id,
+              )
+          : await supabase
+              .from('transactions')
+              .insert({
+                ...payload,
+                created_at:
+                  new Date().toISOString(),
+                updated_at:
+                  new Date().toISOString(),
+              })
+
+        if (r.error) {
+          throw r.error
+        }
+
+        const wasEdit =
+          !!editingTransaction
+
+        const savedType =
+          transactionForm.transaction_type
+
+        closeTransaction()
+
+        setNotice(
+          wasEdit
+            ? 'تم تعديل الحركة بنجاح'
+            : savedType === 'expense'
+              ? 'تمت إضافة المصروف للشركة بنجاح'
+              : 'تمت إضافة التحويل بنجاح',
+        )
+
+        await fetchData()
+      } catch (e) {
+        console.error(e)
+
+        setError(
+          e instanceof Error
+            ? e.message
+            : 'تعذر حفظ الحركة',
+        )
+      } finally {
+        setSaving(false)
+      }
     }
-  }
+
+  const deleteTransaction =
+    async (
+      t: Transaction,
+    ) => {
+      if (
+        !window.confirm(
+          `هل أنت متأكد من حذف الحركة بقيمة ${money(
+            Number(t.amount || 0),
+          )} ج.م؟`,
+        )
+      ) {
+        return
+      }
+
+      setSaving(true)
+      setError('')
+
+      try {
+        const r = await supabase
+          .from('transactions')
+          .delete()
+          .eq('id', t.id)
+
+        if (r.error) {
+          throw r.error
+        }
+
+        setSelectedTransactionId(null)
+
+        setNotice(
+          t.transaction_type ===
+            'expense'
+            ? 'تم حذف المصروف بنجاح'
+            : 'تم حذف التحويل بنجاح',
+        )
+
+        await fetchData()
+      } catch (e) {
+        console.error(e)
+
+        setError(
+          e instanceof Error
+            ? e.message
+            : 'تعذر حذف الحركة',
+        )
+      } finally {
+        setSaving(false)
+      }
+    }
 
   const saveAccount = async () => {
     if (
@@ -805,10 +958,13 @@ function TransactionsPage() {
 
     const p = {
       name: accountForm.name.trim(),
+
       business_id:
         accountForm.business_id,
+
       platform_id:
         accountForm.platform_id || null,
+
       default_financial_account_id:
         accountForm
           .default_financial_account_id ||
@@ -842,7 +998,8 @@ function TransactionsPage() {
         throw r.error
       }
 
-      const edit = !!editingAccount
+      const edit =
+        !!editingAccount
 
       closeAccount()
 
@@ -869,92 +1026,145 @@ function TransactionsPage() {
   return (
     <AppShell title="الإدارة المالية">
       <style>{`
-        .action-button{
-          display:inline-flex;
-          height:2.65rem;
-          align-items:center;
-          justify-content:center;
-          gap:.45rem;
-          border-radius:.7rem;
-          border:1px solid rgba(255,255,255,.1);
-          padding:0 1rem;
-          font-size:.82rem;
-          font-weight:700;
-          transition:.2s
+        .action-button {
+          display: inline-flex;
+          height: 2.65rem;
+          align-items: center;
+          justify-content: center;
+          gap: .45rem;
+          border-radius: .7rem;
+          border: 1px solid rgba(255,255,255,.1);
+          padding: 0 1rem;
+          font-size: .82rem;
+          font-weight: 700;
+          transition: .2s;
         }
 
-        .action-button:hover{
-          background:rgba(255,255,255,.05)
+        .action-button:hover {
+          background: rgba(255,255,255,.05);
         }
 
-        .action-button.primary{
-          border-color:transparent;
-          background:#823292;
-          color:#fff
+        .action-button.primary {
+          border-color: transparent;
+          background: #823292;
+          color: #fff;
         }
 
-        .action-button.primary:hover{
-          background:#9d43ad
+        .action-button.primary:hover {
+          background: #9d43ad;
         }
 
-        .field{
-          margin-top:.35rem;
-          min-height:2.45rem;
-          width:100%;
-          border-radius:.55rem;
-          border:1px solid rgba(255,255,255,.1);
-          background:rgba(0,0,0,.22);
-          padding:0 .75rem;
-          color:#fff;
-          outline:none
+        .field {
+          margin-top: .35rem;
+          min-height: 2.45rem;
+          width: 100%;
+          border-radius: .55rem;
+          border: 1px solid rgba(255,255,255,.1);
+          background: rgba(0,0,0,.22);
+          padding: 0 .75rem;
+          color: #fff;
+          outline: none;
         }
 
-        .field:focus{
-          border-color:#823292
+        .field:focus {
+          border-color: #823292;
         }
 
-        .field option{
-          background:#111114;
-          color:#fff
+        .field option {
+          background: #111114;
+          color: #fff;
         }
 
-        .accounts-grid{
-          display:grid;
-          grid-template-columns:repeat(
+        /*
+         * جدول الحسابات:
+         * لا يتم عمل Responsive له على الموبايل.
+         * يحتفظ بنفس عدد الأعمدة وحجم الكمبيوتر،
+         * والموبايل يعرض Scroll أفقي فقط.
+         */
+        .ledger-scroll {
+          width: 100%;
+          max-width: 100%;
+          overflow-x: auto;
+          overflow-y: visible;
+          -webkit-overflow-scrolling: touch;
+          scrollbar-width: thin;
+        }
+
+        .ledger-scroll::-webkit-scrollbar {
+          height: 8px;
+        }
+
+        .accounts-grid {
+          display: grid;
+          grid-template-columns: repeat(
             var(--account-columns),
-            minmax(0,1fr)
+            minmax(260px, 1fr)
           );
-          gap:.75rem;
-          width:100%
+          gap: .75rem;
+          width: max(
+            100%,
+            calc(var(--account-columns) * 260px)
+          );
+          min-width: calc(
+            var(--account-columns) * 260px
+          );
         }
 
-        .account-transaction-cell{
-          min-width:0;
-          width:100%
+        .account-transaction-cell {
+          min-width: 0;
+          width: 100%;
         }
 
-        .company-expense-divider{
-          grid-column:1/-1;
-          width:100%;
-          min-width:0
+        .company-expense-divider {
+          grid-column: 1 / -1;
+          width: 100%;
+          min-width: 0;
         }
 
-        .company-expense-divider-card{
-          width:100%
+        .company-expense-divider-card {
+          width: 100%;
         }
 
-        @media(max-width:1100px){
-          .accounts-grid{
-            grid-template-columns:repeat(
-              min(2,var(--account-columns)),
-              minmax(0,1fr)
-            )
+        /*
+         * مهم:
+         * لا توجد Media Query تغيّر جدول الحسابات
+         * إلى عمودين أو عمود واحد.
+         * لذلك على الموبايل يظل الجدول بحجم PC
+         * ويظهر Scroll أفقي.
+         */
+        @media(max-width: 1100px) {
+          .accounts-grid {
+            grid-template-columns: repeat(
+              var(--account-columns),
+              minmax(260px, 1fr)
+            );
+
+            width: max(
+              100%,
+              calc(var(--account-columns) * 260px)
+            );
+
+            min-width: calc(
+              var(--account-columns) * 260px
+            );
           }
         }
 
-        @media(max-width:700px){
-          .accounts-grid{
-            grid-template-columns:1fr
+        @media(max-width: 700px) {
+          .accounts-grid {
+            grid-template-columns: repeat(
+              var(--account-columns),
+              minmax(260px, 1fr)
+            );
+
+            width: max(
+              100%,
+              calc(var(--account-columns) * 260px)
+            );
+
+            min-width: calc(
+              var(--account-columns) * 260px
+            );
           }
         }
       `}</style>
@@ -999,6 +1209,7 @@ function TransactionsPage() {
                     : 'h-4 w-4'
                 }
               />
+
               تحديث
             </button>
           </div>
@@ -1064,35 +1275,41 @@ function TransactionsPage() {
               عدد الأعمدة
 
               <select
-                value={safeColumnCount}
-                onChange={(e) =>
+                value={columnCount}
+                onChange={(e) => {
+                  const value =
+                    e.target.value
+
                   setColumnCount(
-                    Number(
-                      e.target.value,
-                    ),
+                    value === 'all'
+                      ? 0
+                      : Number(value),
                   )
-                }
+                }}
                 className="field"
               >
-                {Array.from(
-                  {
-                    length: Math.max(
-                      companyAccounts.length,
-                      1,
-                    ),
-                  },
-                  (_, i) => i + 1,
-                ).map((n) => (
-                  <option
-                    key={n}
-                    value={n}
-                  >
-                    {n}{' '}
-                    {n === 1
-                      ? 'عمود'
-                      : 'أعمدة'}
-                  </option>
-                ))}
+                <option value="all">
+                  الكل
+                </option>
+
+                {Array.from({
+                  length: Math.max(
+                    companyAccounts.length,
+                    1,
+                  ),
+                }, (_, i) => i + 1).map(
+                  (n) => (
+                    <option
+                      key={n}
+                      value={n}
+                    >
+                      {n}{' '}
+                      {n === 1
+                        ? 'عمود'
+                        : 'أعمدة'}
+                    </option>
+                  ),
+                )}
               </select>
             </label>
 
@@ -1115,7 +1332,10 @@ function TransactionsPage() {
                       : 'text-red-300'
                   }`}
                 >
-                  {money(currentBalance)} ج.م
+                  {money(
+                    currentBalance,
+                  )}{' '}
+                  ج.م
                 </p>
               </div>
             </div>
@@ -1171,9 +1391,7 @@ function TransactionsPage() {
             <input
               value={search}
               onChange={(e) =>
-                setSearch(
-                  e.target.value,
-                )
+                setSearch(e.target.value)
               }
               placeholder="بحث بالحساب أو البيان..."
               className="h-10 min-w-[220px] flex-1 bg-transparent text-sm outline-none"
@@ -1181,9 +1399,7 @@ function TransactionsPage() {
 
             <button
               onClick={() =>
-                setFiltersOpen(
-                  (v) => !v,
-                )
+                setFiltersOpen((v) => !v)
               }
               className="action-button"
             >
@@ -1245,61 +1461,72 @@ function TransactionsPage() {
         ) : !companyAccounts.length ? (
           <Empty text="لا توجد حسابات لهذه الشركة" />
         ) : (
+          /*
+           * هذا هو الجزء الوحيد غير Responsive.
+           * على الكمبيوتر يظهر بالحجم الطبيعي.
+           * على الموبايل يتم الحفاظ على نفس العرض
+           * ويظهر Scroll أفقي بدل تصغير الجدول.
+           */
           <section className="rounded-2xl border border-white/10 bg-[#09090b] p-3">
-            <div
-              className="accounts-grid"
-              style={
-                {
-                  '--account-columns':
+            <div className="ledger-scroll">
+              <div
+                className="accounts-grid"
+                style={
+                  {
+                    '--account-columns':
+                      safeColumnCount,
+                  } as React.CSSProperties
+                }
+              >
+                {companyAccounts
+                  .slice(
+                    0,
                     safeColumnCount,
-                } as React.CSSProperties
-              }
-            >
-              {companyAccounts
-                .slice(
-                  0,
-                  safeColumnCount,
-                )
-                .map((a) => (
-                  <AccountLedgerHeader
-                    key={`h-${a.id}`}
-                    account={a}
-                    balance={
-                      balances.get(a.id) ?? 0
-                    }
-                    platformName={
-                      platformMap.get(
-                        a.platform_id ?? '',
-                      ) ??
-                      'منصة غير محددة'
-                    }
-                    onAddTransfer={() =>
-                      openTransaction(
-                        'transfer',
-                        a.id,
-                      )
-                    }
-                    onAddExpense={() =>
-                      openTransaction(
-                        'expense',
-                      )
-                    }
-                    onEditAccount={() =>
-                      openAccount(a)
-                    }
-                  />
-                ))}
+                  )
+                  .map((a) => (
+                    <AccountLedgerHeader
+                      key={`h-${a.id}`}
+                      account={a}
+                      balance={
+                        balances.get(
+                          a.id,
+                        ) ?? 0
+                      }
+                      platformName={
+                        platformMap.get(
+                          a.platform_id ??
+                            '',
+                        ) ??
+                        'منصة غير محددة'
+                      }
+                      onAddTransfer={() =>
+                        openTransaction(
+                          'transfer',
+                          a.id,
+                        )
+                      }
+                      onAddExpense={() =>
+                        openTransaction(
+                          'expense',
+                        )
+                      }
+                      onEditAccount={() =>
+                        openAccount(a)
+                      }
+                    />
+                  ))}
 
-              {timelineDates.map(
-                (date) => (
-                  <div
-                    key={date}
-                    className="contents"
-                  >
-                    {(expensesByDate.get(
-                      date,
-                    ) ?? []).map(
-                      (e) => (
+                {timelineDates.map(
+                  (date) => (
+                    <div
+                      key={date}
+                      className="contents"
+                    >
+                      {(
+                        expensesByDate.get(
+                          date,
+                        ) ?? []
+                      ).map((e) => (
                         <CompanyExpenseDivider
                           key={e.id}
                           expense={e}
@@ -1329,67 +1556,68 @@ function TransactionsPage() {
                             )
                           }
                         />
-                      ),
-                    )}
-
-                    {companyAccounts
-                      .slice(
-                        0,
-                        safeColumnCount,
-                      )
-                      .map((a) => (
-                        <AccountTransactionCell
-                          key={`${a.id}-${date}`}
-                          transactions={(
-                            transactionsByAccount.get(
-                              a.id,
-                            ) ?? []
-                          ).filter(
-                            (t) =>
-                              dateOnly(
-                                t.transaction_date,
-                              ) === date,
-                          )}
-                          selectedId={
-                            selectedTransactionId
-                          }
-                          saving={saving}
-                          onSelect={(id) =>
-                            setSelectedTransactionId(
-                              selectedTransactionId ===
-                                id
-                                ? null
-                                : id,
-                            )
-                          }
-                          onEdit={(t) =>
-                            openTransaction(
-                              'transfer',
-                              t.account_id ??
-                                a.id,
-                              t,
-                            )
-                          }
-                          onDelete={
-                            deleteTransaction
-                          }
-                        />
                       ))}
-                  </div>
-                ),
-              )}
 
-              {!timelineDates.length && (
-                <div
-                  style={{
-                    gridColumn: '1/-1',
-                  }}
-                  className="rounded-xl border border-white/10 py-12 text-center text-sm text-zinc-600"
-                >
-                  <Wallet className="mx-auto mb-2 h-7 w-7 text-zinc-700" />
-                  لا توجد حركات لهذا الحساب حتى الآن
-                </div>
-              )}
+                      {companyAccounts
+                        .slice(
+                          0,
+                          safeColumnCount,
+                        )
+                        .map((a) => (
+                          <AccountTransactionCell
+                            key={`${a.id}-${date}`}
+                            transactions={(
+                              transactionsByAccount.get(
+                                a.id,
+                              ) ?? []
+                            ).filter(
+                              (t) =>
+                                dateOnly(
+                                  t.transaction_date,
+                                ) === date,
+                            )}
+                            selectedId={
+                              selectedTransactionId
+                            }
+                            saving={saving}
+                            onSelect={(id) =>
+                              setSelectedTransactionId(
+                                selectedTransactionId ===
+                                  id
+                                  ? null
+                                  : id,
+                              )
+                            }
+                            onEdit={(t) =>
+                              openTransaction(
+                                'transfer',
+                                t.account_id ??
+                                  a.id,
+                                t,
+                              )
+                            }
+                            onDelete={
+                              deleteTransaction
+                            }
+                          />
+                        ))}
+                    </div>
+                  ),
+                )}
+
+                {!timelineDates.length && (
+                  <div
+                    style={{
+                      gridColumn: '1/-1',
+                    }}
+                    className="rounded-xl border border-white/10 py-12 text-center text-sm text-zinc-600"
+                  >
+                    <Wallet className="mx-auto mb-2 h-7 w-7 text-zinc-700" />
+
+                    لا توجد حركات لهذا الحساب حتى الآن
+                  </div>
+                )}
+              </div>
             </div>
           </section>
         )}
@@ -1417,12 +1645,8 @@ function TransactionsPage() {
             !!editingTransaction
           }
           saving={saving}
-          onChange={
-            setTransactionForm
-          }
-          onClose={
-            closeTransaction
-          }
+          onChange={setTransactionForm}
+          onClose={closeTransaction}
           onSave={() =>
             void saveTransaction()
           }
@@ -1594,6 +1818,7 @@ function CompanyExpenseDivider({
 
               <div className="mt-0.5 flex items-center gap-1.5 text-sm font-semibold text-white">
                 <CalendarDays className="h-3 w-3" />
+
                 {dateText(
                   expense.transaction_date,
                 )}
@@ -1779,6 +2004,7 @@ function AccountTransactionCell({
 
                       <div className="flex items-center gap-1.5 text-sm font-semibold text-white">
                         <CalendarDays className="h-3 w-3" />
+
                         {dateText(
                           t.transaction_date,
                         )}
@@ -1862,7 +2088,8 @@ function TransactionModal({
   onSave: () => void
 }) {
   const expense =
-    form.transaction_type === 'expense'
+    form.transaction_type ===
+    'expense'
 
   return (
     <Modal
@@ -1935,7 +2162,9 @@ function TransactionModal({
       ) : (
         <FormField label="الحساب">
           <input
-            value={account?.name ?? ''}
+            value={
+              account?.name ?? ''
+            }
             readOnly
             className="field"
           />
@@ -2068,9 +2297,7 @@ function Select({
       <select
         value={value}
         onChange={(e) =>
-          onChange(
-            e.target.value,
-          )
+          onChange(e.target.value)
         }
         className="field"
       >
@@ -2108,9 +2335,7 @@ function DateFilter({
         type="date"
         value={value}
         onChange={(e) =>
-          onChange(
-            e.target.value,
-          )
+          onChange(e.target.value)
         }
         className="field"
       />
@@ -2160,6 +2385,7 @@ function Actions({
         {saving && (
           <Loader2 className="h-4 w-4 animate-spin" />
         )}
+
         حفظ
       </button>
     </div>

@@ -208,6 +208,7 @@ export interface Product {
 
   purchase_price?: number;
   price: number;
+  selling_price?: number | null;
 
   stock_qty: number;
   sold_qty: number;
@@ -399,6 +400,13 @@ export function normalizeProduct(
     ),
 
     price,
+
+    selling_price:
+      raw.selling_price === undefined ||
+      raw.selling_price === null ||
+      raw.selling_price === ""
+        ? null
+        : n(raw.selling_price),
 
     stock_qty: stock,
 
@@ -800,6 +808,13 @@ export async function apiPost<T>(
 
         image_url:
           s(params.image_url),
+
+        selling_price:
+          params.selling_price === undefined ||
+          params.selling_price === null ||
+          params.selling_price === ""
+            ? null
+            : n(params.selling_price),
       })) as T;
 
     case "update_product":
@@ -823,6 +838,13 @@ export async function apiPost<T>(
           params.price !==
           undefined
             ? n(params.price)
+            : undefined,
+
+        selling_price:
+          params.selling_price !== undefined
+            ? (params.selling_price === null || params.selling_price === ""
+                ? null
+                : n(params.selling_price))
             : undefined,
 
         stock_qty:
@@ -1052,6 +1074,7 @@ export const api = {
       warehouse: string;
       image_url?: string;
       purchase_price?: number;
+      selling_price?: number | null;
     }) => {
       const productName =
         p.product_name.trim();
@@ -1129,6 +1152,13 @@ export const api = {
         sale_price:
           salePrice,
 
+        selling_price:
+          p.selling_price === null ||
+          p.selling_price === undefined ||
+          p.selling_price === ""
+            ? null
+            : Math.max(0, n(p.selling_price)),
+
         stock_qty:
           stockQty,
 
@@ -1191,6 +1221,7 @@ export const api = {
 
       price?: number;
       purchase_price?: number;
+      selling_price?: number | null;
 
       stock_qty?: number;
       sold_qty?: number;
@@ -1276,6 +1307,15 @@ export const api = {
               current.purchase_price
             );
 
+      const nextSellingPrice =
+        p.selling_price === undefined
+          ? (current.selling_price === null || current.selling_price === undefined
+              ? null
+              : Math.max(0, n(current.selling_price)))
+          : p.selling_price === null || p.selling_price === ""
+            ? null
+            : Math.max(0, n(p.selling_price));
+
       const update: Record<
         string,
         unknown
@@ -1310,6 +1350,11 @@ export const api = {
       ) {
         update.sale_price =
           nextSalePrice;
+      }
+
+      if (p.selling_price !== undefined) {
+        update.selling_price =
+          nextSellingPrice;
       }
 
       if (
@@ -1751,10 +1796,11 @@ export const api = {
       }
 
       const unitPrice =
-        Math.max(
-          0,
-          n(product.sale_price)
-        );
+        product.selling_price !== null &&
+        product.selling_price !== undefined &&
+        product.selling_price !== ""
+          ? Math.max(0, n(product.selling_price))
+          : Math.max(0, n(product.sale_price));
 
       const newSold =
         n(product.sold_qty) +
@@ -2011,10 +2057,11 @@ export const api = {
         );
 
       const price =
-        Math.max(
-          0,
-          n(product.sale_price)
-        );
+        product.selling_price !== null &&
+        product.selling_price !== undefined &&
+        product.selling_price !== ""
+          ? Math.max(0, n(product.selling_price))
+          : Math.max(0, n(product.sale_price));
 
       const newSold =
         Math.max(
