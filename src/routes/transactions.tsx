@@ -71,18 +71,67 @@ type AccountForm = {
   default_financial_account_id: string
 }
 
-const today = () => {
-  const n = new Date()
+const APP_TIME_ZONE = 'Africa/Cairo'
 
-  return new Date(
-    n.getTime() - n.getTimezoneOffset() * 60000,
-  )
-    .toISOString()
-    .slice(0, 10)
+const dateParts = (date: Date) => {
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone: APP_TIME_ZONE,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).formatToParts(date)
+
+  const get = (type: Intl.DateTimeFormatPartTypes) =>
+    parts.find((part) => part.type === type)?.value ?? ''
+
+  return {
+    year: get('year'),
+    month: get('month'),
+    day: get('day'),
+  }
 }
 
-const dateOnly = (v?: string | null) =>
-  v?.slice(0, 10) ?? ''
+const today = () => {
+  const { year, month, day } = dateParts(new Date())
+
+  return year && month && day
+    ? `${year}-${month}-${day}`
+    : ''
+}
+
+/*
+ * توحيد التاريخ على تاريخ القاهرة بدون تغيير اليوم بسبب UTC.
+ *
+ * - لو القيمة DATE فقط مثل 2026-09-02 نحتفظ بها كما هي.
+ * - لو القيمة TIMESTAMP / TIMESTAMPTZ نحولها إلى توقيت القاهرة
+ *   ثم نأخذ السنة والشهر واليوم.
+ *
+ * هذا يمنع مشكلة ظهور الحركة في اليوم السابق أو التالي بسبب فرق التوقيت.
+ */
+const dateOnly = (v?: string | null) => {
+  const value = v?.trim()
+
+  if (!value) return ''
+
+  const match = value.match(/^(\d{4}-\d{2}-\d{2})/)
+
+  // DATE صريح بدون وقت: لا نسمح للـ JavaScript بتحويله إلى UTC.
+  if (match && value.length === 10) {
+    return match[1]
+  }
+
+  const date = new Date(value)
+
+  if (Number.isNaN(date.getTime())) {
+    return match?.[1] ?? ''
+  }
+
+  const { year, month, day } = dateParts(date)
+
+  return year && month && day
+    ? `${year}-${month}-${day}`
+    : match?.[1] ?? ''
+}
 
 const dateText = (v?: string | null) => {
   const [y, m, d] = dateOnly(v).split('-')
@@ -98,8 +147,13 @@ const money = (v: number) =>
     maximumFractionDigits: 2,
   }).format(v)
 
+/*
+ * نستخدم الساعة 12 ظهرًا UTC عند حفظ تاريخ فقط.
+ * هذا يمنع انتقال التاريخ لليوم السابق/التالي عند تحويل Supabase
+ * بين المناطق الزمنية. ويتم دائمًا عرض/فلترة التاريخ بتوقيت القاهرة.
+ */
 const dbDate = (v: string) =>
-  `${v}T00:00:00+03:00`
+  `${v}T12:00:00.000Z`
 
 const blankTx = (
   accountId = '',

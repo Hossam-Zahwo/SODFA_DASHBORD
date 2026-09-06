@@ -16,10 +16,7 @@ export const keys = {
   sales: ["sales"] as const,
   returns: ["returns"] as const,
   damaged: ["damaged"] as const,
-
-  // NEW
   products: ["products"] as const,
-
   connection: ["connection"] as const,
 };
 
@@ -103,8 +100,11 @@ export const useProducts = () =>
    ============================================================ */
 
 /**
- * Every mutation refreshes all connected views
- * so no page shows stale data.
+ * Refresh every connected query after a successful mutation.
+ *
+ * Important:
+ * We return the Promise so mutations can wait until
+ * the connected queries have been invalidated/refetched.
  */
 
 export function useRefreshAll() {
@@ -132,7 +132,6 @@ export function useRefreshAll() {
         queryKey: keys.damaged,
       }),
 
-      // NEW
       qc.invalidateQueries({
         queryKey: keys.products,
       }),
@@ -151,14 +150,21 @@ export function useApiMutation<
     args: TArgs,
   ) => Promise<TResult>,
 ) {
-  const refresh =
-    useRefreshAll();
+  const refresh = useRefreshAll();
 
   return useMutation({
     mutationFn: fn,
 
-    onSuccess: () => {
-      void refresh();
+    /*
+     * IMPORTANT:
+     * Do NOT use `void refresh()` here.
+     *
+     * Returning/awaiting the Promise makes React Query wait
+     * for the refresh before considering the mutation completely
+     * finished.
+     */
+    onSuccess: async () => {
+      await refresh();
     },
   });
 }

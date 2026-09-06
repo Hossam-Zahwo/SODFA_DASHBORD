@@ -121,11 +121,13 @@ function InventoryPage() {
   const [wh, setWh] = useState<string[]>([ALL_WAREHOUSES]);
   const [stockFilter, setStockFilter] = useState<StockFilter>("all");
 
-  // يظهر إجمالي سعر البيع فقط عند اختيار مستودع واحد تحديدًا.
-  const selectedWarehouseId =
-    wh.length === 1 && wh[0] !== ALL_WAREHOUSES
-      ? wh[0]
-      : null;
+  // المستودعات المحددة حاليًا.
+  const selectedWarehouseIds = useMemo(() => {
+    if (wh.includes(ALL_WAREHOUSES)) {
+      return Array.from(new Set((inventory.data ?? []).map((product) => product.warehouse).filter(Boolean)));
+    }
+    return wh.filter(Boolean);
+  }, [wh, inventory.data]);
   const [editing, setEditing] =
     useState<Product | null>(null);
   const [formOpen, setFormOpen] =
@@ -229,41 +231,37 @@ function InventoryPage() {
 *  ========================================================= */
 
   const selectedWarehouseSellingPrice = useMemo(() => {
-    if (!selectedWarehouseId) {
-      return {
-        visible: false,
-        total: 0,
-        productCount: 0,
-      };
+    if (selectedWarehouseIds.length === 0) {
+      return { visible: false, total: 0, productCount: 0, warehouseCount: 0 };
     }
 
-    // نعتمد على كل منتجات المستودع، وليس نتائج البحث أو فلتر المخزون،
-    // حتى يكون الرقم إجماليًا فعليًا لكل منتجات المستودع.
-    const warehouseProducts = (inventory.data ?? []).filter(
-      (product) => product.warehouse === selectedWarehouseId
+    const selectedProducts = (inventory.data ?? []).filter((product) =>
+      selectedWarehouseIds.includes(product.warehouse)
     );
 
-    const productsWithSellingPrice = warehouseProducts.filter(
-      (product) =>
-        product.selling_price !== null &&
-        product.selling_price !== undefined &&
-        Number(product.selling_price) > 0
+    const everySelectedWarehouseHasProducts = selectedWarehouseIds.every((warehouseId) =>
+      selectedProducts.some((product) => product.warehouse === warehouseId)
     );
 
-    const total = productsWithSellingPrice.reduce(
-      (sum, product) =>
-        sum +
-        Number(product.stock_qty || 0) *
-          Number(product.selling_price || 0),
-      0
+    const everyProductHasSellingPrice = selectedProducts.every((product) =>
+      product.selling_price !== null &&
+      product.selling_price !== undefined &&
+      Number.isFinite(Number(product.selling_price)) &&
+      Number(product.selling_price) > 0
     );
 
-    return {
-      visible: productsWithSellingPrice.length > 0,
-      total,
-      productCount: productsWithSellingPrice.length,
-    };
-  }, [inventory.data, selectedWarehouseId]);
+    const visible = selectedProducts.length > 0 && everySelectedWarehouseHasProducts && everyProductHasSellingPrice;
+
+    if (!visible) {
+      return { visible: false, total: 0, productCount: selectedProducts.length, warehouseCount: selectedWarehouseIds.length };
+    }
+
+    const total = selectedProducts.reduce((sum, product) =>
+      sum + Number(product.stock_qty || 0) * Number(product.selling_price || 0), 0
+    );
+
+    return { visible: true, total, productCount: selectedProducts.length, warehouseCount: selectedWarehouseIds.length };
+  }, [inventory.data, selectedWarehouseIds]);
 
   /* =========================================================
 *     INVENTORY STATISTICS*
@@ -532,7 +530,7 @@ function InventoryPage() {
               statistics={statistics}
               warehouses={warehouses.data ?? []}
               lang={lang}
-              selectedWarehouseId={selectedWarehouseId}
+              selectedWarehouseIds={selectedWarehouseIds}
               selectedWarehouseSellingPrice={selectedWarehouseSellingPrice}
             />
             <InventoryCharts
@@ -1070,7 +1068,7 @@ function InventoryStatistics({
   statistics,
   warehouses,
   lang,
-  selectedWarehouseId,
+  selectedWarehouseIds,
   selectedWarehouseSellingPrice,
 }: {
   statistics: {
@@ -1094,11 +1092,12 @@ function InventoryStatistics({
   };
   warehouses: any[];
   lang: any;
-  selectedWarehouseId: string | null;
+  selectedWarehouseIds: string[];
   selectedWarehouseSellingPrice: {
     visible: boolean;
     total: number;
     productCount: number;
+    warehouseCount: number;
   };
 }) {
   const cards = [
@@ -1243,7 +1242,6 @@ function InventoryStatistics({
       {/* FINANCIAL VALUES */}
       <div
         className={`grid gap-4 ${
-          selectedWarehouseId &&
           selectedWarehouseSellingPrice.visible
             ? "md:grid-cols-2 xl:grid-cols-4"
             : "md:grid-cols-3"
@@ -1361,8 +1359,7 @@ function InventoryStatistics({
           </Card>
         )}
 
-        {selectedWarehouseId &&
-          selectedWarehouseSellingPrice.visible && (
+        {selectedWarehouseSellingPrice.visible && (
             <Card
               className="border p-5 shadow-sm transition-all duration-300 hover:-translate-y-0.5 hover:shadow-md"
               style={{
@@ -1382,7 +1379,7 @@ function InventoryStatistics({
                     )}
                   </p>
                   <p className="mt-1 text-xs text-[#8A7890]">
-                    إجمالي قيمة المنتجات التي لها سعر بيع داخل المستودع المحدد
+                    إجمالي قيمة المنتجات التي لها سعر بيع في جميع المستودعات المحددة
                   </p>
                 </div>
                 <div

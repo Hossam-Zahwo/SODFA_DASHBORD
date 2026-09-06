@@ -2,6 +2,9 @@
 
 export const FALLBACK_IMAGE = "/placeholder-product.svg";
 
+/** Single storage bucket used by every image upload in the app. */
+export const IMAGE_BUCKET = "product-images";
+
 export function driveFileId(url: string): string | null {
   if (!url) return null;
   const patterns = [

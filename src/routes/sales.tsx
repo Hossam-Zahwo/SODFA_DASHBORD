@@ -1,5 +1,7 @@
 import { useCallback, useMemo, useState } from "react";
+
 import { createFileRoute } from "@tanstack/react-router";
+
 import {
   BarChart3,
   Boxes,
@@ -16,6 +18,7 @@ import {
   Wallet,
   X,
 } from "lucide-react";
+
 import { toast } from "sonner";
 
 import { AppShell } from "@/components/AppShell";
@@ -52,6 +55,7 @@ import {
 } from "@/hooks/useSodfa";
 
 import { useUsbScanner } from "@/hooks/useUsbScanner";
+
 import { api, type Product } from "@/lib/api";
 
 import {
@@ -85,7 +89,6 @@ import {
    White:         #FFFFFF
    ============================================================ */
 
-
 /* ============================================================
    ROUTE
    ============================================================ */
@@ -111,10 +114,8 @@ export const Route = createFileRoute("/sales")({
       },
     ],
   }),
-
   component: SalesPage,
 });
-
 
 /* ============================================================
    TYPES
@@ -157,7 +158,6 @@ const RANGES: SalesRange[] = [
   },
 ];
 
-
 /* ============================================================
    MAIN PAGE
    ============================================================ */
@@ -182,7 +182,6 @@ function SalesPage() {
   const [wh, setWh] =
     useState(ALL_WAREHOUSES);
 
-
   /* ============================================================
      RECORD SALE
      ============================================================ */
@@ -194,7 +193,6 @@ function SalesPage() {
       warehouse: string;
     }) => api.recordSale(p),
   );
-
 
   /* ============================================================
      ADD PRODUCT TO CART
@@ -245,7 +243,6 @@ function SalesPage() {
     [t],
   );
 
-
   /* ============================================================
      BARCODE HANDLER
      ============================================================ */
@@ -286,45 +283,49 @@ function SalesPage() {
     ],
   );
 
-
   /* ============================================================
      USB SCANNER
      ============================================================ */
 
   useUsbScanner(handleCode);
 
-
   /* ============================================================
      MANUAL SEARCH
+
+     - No result limit.
+     - All matching products are returned.
      ============================================================ */
 
   const matches = useMemo(() => {
     const term =
       manual.trim().toLowerCase();
 
-    if (!term) return [];
+    if (!term) {
+      return [];
+    }
 
     return (
       inventory.data ?? []
-    )
-      .filter(
-        (p) =>
-          p.product_name
-            .toLowerCase()
-            .includes(term) ||
-          p.product_id
-            .toLowerCase()
-            .includes(term) ||
-          p.barcode
-            .toLowerCase()
-            .includes(term),
-      )
-      .slice(0, 8);
+    ).filter((p) => {
+      const haystack = [
+        p.product_name,
+        p.name_ar,
+        p.name_en,
+        p.product_id,
+        p.barcode,
+        p.category_name,
+        ...(p.keywords ?? []),
+      ]
+        .filter(Boolean)
+        .join(" ")
+        .toLowerCase();
+
+      return haystack.includes(term);
+    });
   }, [
     manual,
     inventory.data,
   ]);
-
 
   /* ============================================================
      CART TOTAL
@@ -334,10 +335,15 @@ function SalesPage() {
     (sum, line) =>
       sum +
       line.qty *
-        line.product.price,
+        (line.product.selling_price != null
+          ? Number(
+              line.product.selling_price,
+            )
+          : Number(
+              line.product.price,
+            )),
     0,
   );
-
 
   /* ============================================================
      SET CART QUANTITY
@@ -380,22 +386,21 @@ function SalesPage() {
       }),
     );
 
-
   /* ============================================================
      COMPLETE SALE
      ============================================================ */
 
   const completeSale = async () => {
-    if (cart.length === 0) return;
+    if (cart.length === 0) {
+      return;
+    }
 
     try {
       for (const line of cart) {
         await record.mutateAsync({
           product_id:
             line.product.product_id,
-
           qty: line.qty,
-
           warehouse:
             line.product.warehouse,
         });
@@ -415,7 +420,6 @@ function SalesPage() {
       );
     }
   };
-
 
   /* ============================================================
      FILTERED SALES
@@ -450,7 +454,6 @@ function SalesPage() {
       to,
       wh,
     ]);
-
 
   /* ============================================================
      SALES STATISTICS
@@ -495,9 +498,19 @@ function SalesPage() {
       };
     }, [filteredSales]);
 
-
   /* ============================================================
      SOLD PRODUCTS
+     
+     Only sales created by the SODFA application
+     are included here.
+     
+     New SODFA sales use IDs like:
+     SODFA-SAL-xxxxxxxx
+     
+     Old/imported/manual records such as:
+     SAL-xxxxxxxx
+     
+     are intentionally excluded.
      ============================================================ */
 
   const soldProducts =
@@ -515,6 +528,14 @@ function SalesPage() {
         >();
 
       for (const sale of filteredSales) {
+        if (
+          !sale.sale_id.startsWith(
+            "SODFA-SAL-",
+          )
+        ) {
+          continue;
+        }
+
         const name =
           sale.product_name ||
           "منتج غير معروف";
@@ -584,7 +605,6 @@ function SalesPage() {
         )
       : 0;
 
-
   /* ============================================================
      PAGE
      ============================================================ */
@@ -596,17 +616,13 @@ function SalesPage() {
         {/* HEADER */}
 
         <div className="relative overflow-hidden rounded-3xl border border-[#9B4BA8]/30 bg-gradient-to-br from-[#050505] via-[#151019] to-[#7B2C8E] p-6 text-white shadow-xl">
-
           <div className="absolute -right-16 -top-16 h-40 w-40 rounded-full bg-[#C084CC]/30 blur-3xl" />
 
           <div className="absolute -bottom-20 -left-10 h-40 w-40 rounded-full bg-[#7B2C8E]/30 blur-3xl" />
 
           <div className="relative flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
-
             <div>
-
               <div className="mb-2 flex items-center gap-2">
-
                 <div className="rounded-xl border border-white/10 bg-white/10 p-2 backdrop-blur">
                   <ShoppingCart className="h-5 w-5" />
                 </div>
@@ -614,7 +630,6 @@ function SalesPage() {
                 <span className="text-sm font-medium text-[#C084CC]">
                   SODFA POS
                 </span>
-
               </div>
 
               <h1 className="text-2xl font-bold sm:text-3xl">
@@ -625,17 +640,14 @@ function SalesPage() {
                 راقب أداء المبيعات ونفّذ عمليات البيع
                 بسرعة باستخدام الباركود أو البحث اليدوي.
               </p>
-
             </div>
 
             <div className="flex items-center gap-3 rounded-2xl border border-white/10 bg-white/5 px-5 py-4 backdrop-blur">
-
               <div className="rounded-xl bg-[#9B4BA8]/20 p-3">
                 <TrendingUp className="h-6 w-6 text-[#C084CC]" />
               </div>
 
               <div>
-
                 <p className="text-xs text-white/50">
                   إجمالي الفترة
                 </p>
@@ -646,11 +658,8 @@ function SalesPage() {
                     lang,
                   )}
                 </p>
-
               </div>
-
             </div>
-
           </div>
         </div>
 
@@ -691,25 +700,21 @@ function SalesPage() {
           t={t}
         />
 
-
         <SalesOverview
           stats={salesStats}
           lang={lang}
         />
-
 
         <SalesAnalytics
           stats={salesStats}
           lang={lang}
         />
 
-
         <SoldProductsSection
           products={soldProducts}
           maxQty={maxProductQty}
           lang={lang}
         />
-
 
         <SalesHistory
           sales={sales}
@@ -723,12 +728,10 @@ function SalesPage() {
           lang={lang}
           t={t}
         />
-
       </div>
     </AppShell>
   );
 }
-
 
 /* ============================================================
    FIND PRODUCT
@@ -754,7 +757,6 @@ function findProductForSale(
   );
 }
 
-
 /* ============================================================
    FILTERS
    ============================================================ */
@@ -775,38 +777,30 @@ function SalesFilters({
   setRange: (
     value: RangeKey,
   ) => void;
-
   from: string;
   setFrom: (
     value: string,
   ) => void;
-
   to: string;
   setTo: (
     value: string,
   ) => void;
-
   wh: string;
   setWh: (
     value: string,
   ) => void;
-
   warehouses: any[];
   t: any;
 }) {
   return (
     <Card className="overflow-hidden border-[#9B4BA8]/15 bg-white p-0 shadow-sm dark:border-[#9B4BA8]/20 dark:bg-[#0B080D]">
-
       <div className="border-b border-[#9B4BA8]/10 bg-[#9B4BA8]/5 p-5 dark:border-[#9B4BA8]/20 dark:bg-[#9B4BA8]/10">
-
         <div className="flex items-center gap-3">
-
           <div className="rounded-xl bg-[#9B4BA8]/10 p-2.5 dark:bg-[#9B4BA8]/20">
             <BarChart3 className="h-5 w-5 text-[#9B4BA8] dark:text-[#C084CC]" />
           </div>
 
           <div>
-
             <h2 className="font-bold text-slate-900 dark:text-white">
               تحليل المبيعات
             </h2>
@@ -814,20 +808,13 @@ function SalesFilters({
             <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
               اختر الفترة والمخزن لعرض بيانات المبيعات.
             </p>
-
           </div>
-
         </div>
-
       </div>
 
-
       <div className="p-5">
-
         <div className="flex flex-wrap gap-2">
-
           {RANGES.map((item) => (
-
             <Button
               key={item.key}
               size="sm"
@@ -847,9 +834,7 @@ function SalesFilters({
             >
               {t(item.label)}
             </Button>
-
           ))}
-
 
           <WarehouseSelect
             value={wh}
@@ -858,16 +843,11 @@ function SalesFilters({
             includeAll
             className="w-full sm:w-56"
           />
-
         </div>
 
-
         {range === "custom" && (
-
           <div className="mt-5 flex flex-wrap items-end gap-4 border-t border-[#9B4BA8]/10 pt-5 dark:border-[#9B4BA8]/20">
-
             <div>
-
               <Label htmlFor="sales-from">
                 {t("from")}
               </Label>
@@ -883,12 +863,9 @@ function SalesFilters({
                 }
                 className="mt-1 focus-visible:ring-[#9B4BA8]"
               />
-
             </div>
 
-
             <div>
-
               <Label htmlFor="sales-to">
                 {t("to")}
               </Label>
@@ -904,18 +881,13 @@ function SalesFilters({
                 }
                 className="mt-1 focus-visible:ring-[#9B4BA8]"
               />
-
             </div>
-
           </div>
-
         )}
-
       </div>
     </Card>
   );
 }
-
 
 /* ============================================================
    OVERVIEW
@@ -931,12 +903,9 @@ function SalesOverview({
     transactions: number;
     averageSale: number;
   };
-
   lang: any;
 }) {
-
   const cards = [
-
     {
       title: "إجمالي المبيعات",
       value: fmtMoney(
@@ -992,13 +961,10 @@ function SalesOverview({
       accent:
         "from-[#C084CC] to-[#9B4BA8]",
     },
-
   ];
-
 
   return (
     <section className="space-y-4">
-
       <SectionTitle
         icon={ShoppingCart}
         title="نظرة عامة على المبيعات"
@@ -1006,35 +972,26 @@ function SalesOverview({
       />
 
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-
         {cards.map((card) => {
-
-          const Icon =
-            card.icon;
+          const Icon = card.icon;
 
           return (
-
             <Card
               key={card.title}
               className="group relative overflow-hidden border-slate-200 bg-white p-5 shadow-sm transition-all duration-300 hover:-translate-y-1 hover:border-[#9B4BA8]/30 hover:shadow-lg dark:border-slate-800 dark:bg-[#0B080D]"
             >
-
               <div
                 className={`absolute inset-x-0 top-0 h-1 bg-gradient-to-r ${card.accent}`}
               />
 
-
               <div className="flex items-start gap-4">
-
                 <div
                   className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl ${card.box}`}
                 >
                   <Icon className="h-6 w-6" />
                 </div>
 
-
                 <div className="min-w-0">
-
                   <p className="text-xs font-medium text-slate-500 dark:text-slate-400">
                     {card.title}
                   </p>
@@ -1046,22 +1003,15 @@ function SalesOverview({
                   <p className="mt-1 text-xs leading-5 text-slate-500 dark:text-slate-400">
                     {card.description}
                   </p>
-
                 </div>
-
               </div>
-
             </Card>
-
           );
         })}
-
       </div>
-
     </section>
   );
 }
-
 
 /* ============================================================
    ANALYTICS
@@ -1077,37 +1027,24 @@ function SalesAnalytics({
     transactions: number;
     averageSale: number;
   };
-
   lang: any;
 }) {
-
   return (
-
     <section className="space-y-4">
-
       <SectionTitle
         icon={BarChart3}
         title="التحليل البياني للمبيعات"
         description="نظرة سريعة على قيمة المبيعات وحركة المنتجات."
       />
 
-
       <div className="grid gap-5 lg:grid-cols-2">
-
-
         <Card className="border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-[#0B080D]">
-
           <div className="flex items-center gap-3">
-
             <div className="rounded-xl bg-[#9B4BA8]/10 p-2.5 dark:bg-[#9B4BA8]/20">
-
               <Wallet className="h-5 w-5 text-[#9B4BA8] dark:text-[#C084CC]" />
-
             </div>
 
-
             <div>
-
               <h3 className="font-bold text-slate-900 dark:text-white">
                 قيمة المبيعات
               </h3>
@@ -1115,16 +1052,11 @@ function SalesAnalytics({
               <p className="text-xs text-slate-500 dark:text-slate-400">
                 إجمالي قيمة البيع خلال الفترة.
               </p>
-
             </div>
-
           </div>
 
-
           <div className="mt-7">
-
             <div className="mb-2 flex items-center justify-between text-sm">
-
               <span className="text-slate-600 dark:text-slate-300">
                 إجمالي المبيعات
               </span>
@@ -1135,12 +1067,9 @@ function SalesAnalytics({
                   lang,
                 )}
               </strong>
-
             </div>
 
-
             <div className="h-3 overflow-hidden rounded-full bg-[#9B4BA8]/10 dark:bg-slate-800">
-
               <div
                 className="h-full rounded-full bg-gradient-to-r from-[#7B2C8E] via-[#9B4BA8] to-[#C084CC] transition-all duration-700"
                 style={{
@@ -1150,33 +1079,22 @@ function SalesAnalytics({
                       : "0%",
                 }}
               />
-
             </div>
-
           </div>
-
 
           <Explanation>
             هذا الشريط يمثل إجمالي قيمة المبيعات للفترة
             المحددة.
           </Explanation>
-
         </Card>
 
-
         <Card className="border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-[#0B080D]">
-
           <div className="flex items-center gap-3">
-
             <div className="rounded-xl bg-[#9B4BA8]/10 p-2.5 dark:bg-[#9B4BA8]/20">
-
               <Boxes className="h-5 w-5 text-[#9B4BA8] dark:text-[#C084CC]" />
-
             </div>
 
-
             <div>
-
               <h3 className="font-bold text-slate-900 dark:text-white">
                 الوحدات المباعة
               </h3>
@@ -1184,16 +1102,11 @@ function SalesAnalytics({
               <p className="text-xs text-slate-500 dark:text-slate-400">
                 إجمالي المنتجات التي خرجت من المخزون.
               </p>
-
             </div>
-
           </div>
 
-
           <div className="mt-7">
-
             <div className="mb-2 flex items-center justify-between text-sm">
-
               <span className="text-slate-600 dark:text-slate-300">
                 عدد الوحدات
               </span>
@@ -1201,12 +1114,9 @@ function SalesAnalytics({
               <strong className="text-slate-900 dark:text-white">
                 {stats.totalQty.toLocaleString()}
               </strong>
-
             </div>
 
-
             <div className="h-3 overflow-hidden rounded-full bg-[#9B4BA8]/10 dark:bg-slate-800">
-
               <div
                 className="h-full rounded-full bg-gradient-to-r from-[#7B2C8E] to-[#C084CC] transition-all duration-700"
                 style={{
@@ -1216,25 +1126,18 @@ function SalesAnalytics({
                       : "0%",
                 }}
               />
-
             </div>
-
           </div>
-
 
           <Explanation>
             زيادة عدد الوحدات المباعة تعني زيادة حركة
             المنتجات.
           </Explanation>
-
         </Card>
-
       </div>
-
     </section>
   );
 }
-
 
 /* ============================================================
    SOLD PRODUCTS
@@ -1252,26 +1155,19 @@ function SoldProductsSection({
     total: number;
     price: number;
   }[];
-
   maxQty: number;
   lang: any;
 }) {
-
   return (
-
     <section className="space-y-4">
-
       <SectionTitle
         icon={Package}
         title="المنتجات المباعة"
         description="أكثر المنتجات مبيعًا في الفترة والمخزن المحددين."
       />
 
-
       {products.length === 0 ? (
-
         <Card className="border-slate-200 p-10 text-center dark:border-slate-800">
-
           <ImageIcon className="mx-auto h-10 w-10 text-[#9B4BA8]/50" />
 
           <p className="mt-3 font-semibold text-slate-900 dark:text-white">
@@ -1281,18 +1177,12 @@ function SoldProductsSection({
           <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
             جرّب تغيير الفترة الزمنية أو المخزن.
           </p>
-
         </Card>
-
       ) : (
-
         <Card className="overflow-hidden border-slate-200 p-0 shadow-sm dark:border-slate-800">
-
           <div className="divide-y divide-slate-100 dark:divide-slate-800">
-
             {products.map(
               (item, index) => {
-
                 const percentage =
                   maxQty > 0
                     ? Math.round(
@@ -1303,16 +1193,12 @@ function SoldProductsSection({
                     : 0;
 
                 return (
-
                   <div
                     key={`${item.productName}-${index}`}
                     className="flex flex-col gap-4 p-5 transition-colors hover:bg-[#9B4BA8]/5 sm:flex-row sm:items-center dark:hover:bg-[#9B4BA8]/10"
                   >
-
                     <div className="relative shrink-0">
-
                       {item.product ? (
-
                         <ProductImage
                           url={
                             item.product
@@ -1324,96 +1210,64 @@ function SoldProductsSection({
                           }
                           className="h-20 w-20 rounded-2xl border object-cover"
                         />
-
                       ) : (
-
                         <div className="flex h-20 w-20 items-center justify-center rounded-2xl border bg-[#9B4BA8]/5 dark:bg-slate-800">
-
                           <ImageIcon className="h-7 w-7 text-[#9B4BA8]/50" />
-
                         </div>
-
                       )}
-
 
                       <span className="absolute -right-2 -top-2 flex h-7 w-7 items-center justify-center rounded-full bg-[#7B2C8E] text-xs font-bold text-white shadow-md">
                         {index + 1}
                       </span>
-
                     </div>
 
-
                     <div className="min-w-0 flex-1">
-
                       <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
-
                         <div>
-
                           <h3 className="font-bold text-slate-900 dark:text-white">
                             {item.productName}
                           </h3>
 
                           <p className="text-xs text-slate-500 dark:text-slate-400">
-
                             {item.product
                               ? `SKU: ${item.product.product_id}`
                               : "بيانات المنتج غير موجودة في المخزون"}
-
                           </p>
-
                         </div>
 
-
                         <p className="text-lg font-bold text-[#9B4BA8] dark:text-[#C084CC]">
-
                           {fmtMoney(
                             item.total,
                             lang,
                           )}
-
                         </p>
-
                       </div>
 
-
                       <div className="mt-3">
-
                         <div className="mb-1 flex justify-between text-xs text-slate-500">
-
                           <span>
                             الكمية المباعة
                           </span>
 
                           <span className="font-semibold text-slate-900 dark:text-white">
-
                             {item.qty.toLocaleString()}{" "}
                             وحدة
-
                           </span>
-
                         </div>
 
-
                         <div className="h-2.5 overflow-hidden rounded-full bg-[#9B4BA8]/10 dark:bg-slate-800">
-
                           <div
                             className="h-full rounded-full bg-gradient-to-r from-[#7B2C8E] via-[#9B4BA8] to-[#C084CC] transition-all duration-700"
                             style={{
                               width: `${percentage}%`,
                             }}
                           />
-
                         </div>
-
                       </div>
-
                     </div>
 
-
                     <div className="grid grid-cols-2 gap-2 sm:w-44">
-
                       <div className="rounded-xl bg-[#9B4BA8]/5 p-3 text-center dark:bg-slate-900">
-
                         <p className="text-[11px] text-slate-500">
                           الكمية
                         </p>
@@ -1421,12 +1275,9 @@ function SoldProductsSection({
                         <p className="mt-1 font-bold text-slate-900 dark:text-white">
                           {item.qty.toLocaleString()}
                         </p>
-
                       </div>
 
-
                       <div className="rounded-xl bg-[#9B4BA8]/5 p-3 text-center dark:bg-slate-900">
-
                         <p className="text-[11px] text-slate-500">
                           سعر الوحدة
                         </p>
@@ -1437,43 +1288,28 @@ function SoldProductsSection({
                             lang,
                           )}
                         </p>
-
                       </div>
-
                     </div>
-
                   </div>
-
                 );
               },
             )}
-
           </div>
 
-
           <div className="border-t bg-[#9B4BA8]/5 p-4 dark:border-slate-800 dark:bg-slate-900">
-
             <p className="text-sm leading-6 text-slate-500 dark:text-slate-400">
-
               <strong className="text-slate-900 dark:text-white">
                 شرح:
               </strong>{" "}
-
               المنتجات مرتبة من الأكثر مبيعًا إلى الأقل
               مبيعًا حسب عدد الوحدات.
-
             </p>
-
           </div>
-
         </Card>
-
       )}
-
     </section>
   );
 }
-
 
 /* ============================================================
    SELLING AREA
@@ -1497,79 +1333,51 @@ function SellingSection({
   recordPending,
 }: {
   camera: boolean;
-
   setCamera: (
     value: boolean,
   ) => void;
-
   manual: string;
-
   setManual: (
     value: string,
   ) => void;
-
   matches: Product[];
-
   cart: CartLine[];
-
   total: number;
-
   warehouses: any[];
-
   lang: any;
-
   t: any;
-
   handleCode: (
     code: string,
   ) => void;
-
   addToCart: (
     product: Product,
   ) => void;
-
   setQty: (
     id: string,
     qty: number,
   ) => void;
-
   completeSale: () => void;
-
   recordPending: boolean;
 }) {
-
   return (
-
     <section className="space-y-4">
-
       <SectionTitle
         icon={ScanLine}
         title="تنفيذ عملية بيع"
         description="استخدم السكانر أو الكاميرا أو البحث اليدوي لإضافة المنتجات إلى السلة."
       />
 
-
       <div className="grid gap-6 xl:grid-cols-[1.1fr_1fr]">
-
-
         {/* SEARCH SIDE */}
 
         <div className="space-y-4">
-
-
           <Card className="border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-[#0B080D]">
-
             <div className="mb-4 flex items-center gap-3">
-
               <div className="rounded-xl bg-[#9B4BA8]/10 p-2.5 dark:bg-[#9B4BA8]/20">
-
                 <ScanLine className="h-5 w-5 text-[#9B4BA8] dark:text-[#C084CC]" />
-
               </div>
 
-
               <div>
-
                 <h2 className="font-bold text-slate-900 dark:text-white">
                   السكانر والبيع السريع
                 </h2>
@@ -1577,23 +1385,18 @@ function SellingSection({
                 <p className="text-xs text-slate-500 dark:text-slate-400">
                   USB Scanner أو كاميرا الهاتف
                 </p>
-
               </div>
-
             </div>
-
 
             <Input
               data-scanner-input="true"
               placeholder={t("usb_hint")}
               className="h-12 border-[#9B4BA8]/20 bg-[#9B4BA8]/5 focus-visible:ring-[#9B4BA8] dark:border-slate-700 dark:bg-slate-900"
               onKeyDown={(e) => {
-
                 if (
                   e.key ===
                   "Enter"
                 ) {
-
                   handleCode(
                     e.currentTarget
                       .value,
@@ -1601,12 +1404,9 @@ function SellingSection({
 
                   e.currentTarget.value =
                     "";
-
                 }
-
               }}
             />
-
 
             <Button
               variant="outline"
@@ -1617,17 +1417,11 @@ function SellingSection({
                 )
               }
             >
-
               {camera ? (
-
                 <X className="me-1 h-4 w-4" />
-
               ) : (
-
                 <Camera className="me-1 h-4 w-4" />
-
               )}
-
 
               {camera
                 ? t(
@@ -1636,31 +1430,23 @@ function SellingSection({
                 : t(
                     "open_camera",
                   )}
-
             </Button>
 
-
             {camera && (
-
               <div className="mt-4 overflow-hidden rounded-2xl border border-[#9B4BA8]/20">
-
                 <CameraScanner
                   onDetected={
                     handleCode
                   }
                 />
-
               </div>
-
             )}
-
           </Card>
 
+          {/* MANUAL SEARCH */}
 
           <Card className="border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-[#0B080D]">
-
             <div className="mb-4">
-
               <Label>
                 {t(
                   "manual_search",
@@ -1670,9 +1456,7 @@ function SellingSection({
               <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
                 ابحث بالاسم أو SKU أو الباركود.
               </p>
-
             </div>
-
 
             <Input
               value={manual}
@@ -1687,90 +1471,100 @@ function SellingSection({
               className="h-12 focus-visible:ring-[#9B4BA8]"
             />
 
+            {matches.length > 0 && (
+              <div className="mt-4 max-h-[55vh] space-y-2 overflow-y-auto pe-1">
+                {matches.map(
+                  (product) => {
+                    const displayPrice =
+                      product.selling_price !=
+                      null
+                        ? Number(
+                            product.selling_price,
+                          )
+                        : Number(
+                            product.price,
+                          );
 
-            <div className="mt-4 space-y-2">
-
-              {matches.map(
-                (product) => (
-
-                  <button
-                    key={
-                      product.product_id
-                    }
-                    type="button"
-                    onClick={() =>
-                      addToCart(
-                        product,
-                      )
-                    }
-                    className="flex w-full items-center gap-3 rounded-2xl border border-slate-200 bg-white p-3 text-start transition-all hover:-translate-y-0.5 hover:border-[#9B4BA8]/50 hover:bg-[#9B4BA8]/5 hover:shadow-sm dark:border-slate-800 dark:bg-slate-950 dark:hover:border-[#9B4BA8]/60 dark:hover:bg-[#9B4BA8]/10"
-                  >
-
-                    <ProductImage
-                      url={
-                        product.image_url
-                      }
-                      alt={
-                        product.product_name
-                      }
-                      className="h-14 w-14 shrink-0 rounded-xl object-cover"
-                    />
-
-
-                    <span className="min-w-0 flex-1">
-
-                      <span className="block truncate text-sm font-semibold text-slate-900 dark:text-white">
-                        {
-                          product.product_name
-                        }
-                      </span>
-
-                      <span className="block text-xs text-slate-500">
-                        {
+                    return (
+                      <button
+                        key={
                           product.product_id
-                        }{" "}
-                        •{" "}
-                        {t(
-                          "remaining",
-                        )}
-                        :{" "}
-                        {
-                          product.remaining_qty
                         }
-                      </span>
+                        type="button"
+                        onClick={() =>
+                          addToCart(
+                            product,
+                          )
+                        }
+                        className="flex w-full items-center gap-3 rounded-2xl border border-slate-200 bg-white p-3 text-start transition-all hover:-translate-y-0.5 hover:border-[#9B4BA8]/50 hover:bg-[#9B4BA8]/5 hover:shadow-sm dark:border-slate-800 dark:bg-slate-950 dark:hover:border-[#9B4BA8]/60 dark:hover:bg-[#9B4BA8]/10"
+                      >
+                        <ProductImage
+                          url={
+                            product.image_url
+                          }
+                          alt={
+                            product.product_name
+                          }
+                          className="h-14 w-14 shrink-0 rounded-xl object-cover"
+                        />
 
-                    </span>
+                        <span className="min-w-0 flex-1">
+                          <span className="block truncate text-sm font-semibold text-slate-900 dark:text-white">
+                            {
+                              product.product_name
+                            }
+                          </span>
 
+                          <span className="block text-xs text-slate-500">
+                            {
+                              product.product_id
+                            }{" "}
+                            •{" "}
+                            {t(
+                              "remaining",
+                            )}
+                            :{" "}
+                            {
+                              product.remaining_qty
+                            }
+                          </span>
+                        </span>
 
-                    <span className="text-sm font-bold text-[#9B4BA8] dark:text-[#C084CC]">
+                        <span className="shrink-0 text-sm font-bold text-[#9B4BA8] dark:text-[#C084CC]">
+                          {fmtMoney(
+                            displayPrice,
+                            lang,
+                          )}
+                        </span>
+                      </button>
+                    );
+                  },
+                )}
+              </div>
+            )}
 
-                      {fmtMoney(
-                        product.price,
-                        lang,
-                      )}
+            {manual.trim() &&
+              matches.length === 0 && (
+                <div className="mt-4 rounded-2xl border border-dashed border-slate-200 bg-slate-50 p-6 text-center dark:border-slate-800 dark:bg-slate-900/50">
+                  <Package className="mx-auto h-8 w-8 text-slate-400" />
 
-                    </span>
+                  <p className="mt-2 text-sm font-semibold text-slate-700 dark:text-slate-200">
+                    لا توجد منتجات مطابقة
+                  </p>
 
-                  </button>
-
-                ),
+                  <p className="mt-1 text-xs text-slate-500">
+                    جرّب البحث باسم مختلف أو باستخدام SKU أو الباركود.
+                  </p>
+                </div>
               )}
-
-            </div>
-
           </Card>
-
         </div>
-
 
         {/* CART */}
 
         <Card className="border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-[#0B080D]">
-
           <div className="mb-5 flex items-center justify-between">
-
             <div>
-
               <h2 className="text-lg font-bold text-slate-900 dark:text-white">
                 {t("cart")}
               </h2>
@@ -1778,21 +1572,15 @@ function SellingSection({
               <p className="text-xs text-slate-500 dark:text-slate-400">
                 المنتجات التي سيتم تسجيل بيعها.
               </p>
-
             </div>
-
 
             <span className="rounded-full bg-[#9B4BA8]/10 px-3 py-1 text-xs font-bold text-[#7B2C8E] dark:bg-[#9B4BA8]/20 dark:text-[#C084CC]">
               {cart.length} منتجات
             </span>
-
           </div>
 
-
           {cart.length === 0 ? (
-
             <div className="rounded-2xl border border-dashed border-[#9B4BA8]/30 bg-[#9B4BA8]/5 p-10 text-center dark:border-slate-700 dark:bg-slate-900/50">
-
               <ShoppingCart className="mx-auto h-10 w-10 text-[#9B4BA8]/50" />
 
               <p className="mt-3 text-sm font-semibold text-slate-900 dark:text-white">
@@ -1802,15 +1590,10 @@ function SellingSection({
               <p className="mt-1 text-xs text-slate-500">
                 امسح باركود أو اختر منتجًا من البحث.
               </p>
-
             </div>
-
           ) : (
-
             <div className="space-y-3">
-
               {cart.map((line) => (
-
                 <div
                   key={
                     line.product
@@ -1818,7 +1601,6 @@ function SellingSection({
                   }
                   className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-[#9B4BA8]/5 p-3 dark:border-slate-800 dark:bg-slate-900/50"
                 >
-
                   <ProductImage
                     url={
                       line.product
@@ -1831,9 +1613,7 @@ function SellingSection({
                     className="h-14 w-14 shrink-0 rounded-xl object-cover"
                   />
 
-
                   <div className="min-w-0 flex-1">
-
                     <p className="truncate text-sm font-semibold text-slate-900 dark:text-white">
                       {
                         line.product
@@ -1842,28 +1622,30 @@ function SellingSection({
                     </p>
 
                     <p className="text-xs text-slate-500">
-
                       {fmtMoney(
                         line.product
-                          .price,
+                          .selling_price !=
+                          null
+                          ? Number(
+                              line.product
+                                .selling_price,
+                            )
+                          : Number(
+                              line.product
+                                .price,
+                            ),
                         lang,
                       )}
-
                       {" • "}
-
                       {warehouseName(
                         warehouses,
                         line.product
                           .warehouse,
                       )}
-
                     </p>
-
                   </div>
 
-
                   <div className="flex items-center gap-1">
-
                     <Button
                       size="icon"
                       variant="outline"
@@ -1879,11 +1661,9 @@ function SellingSection({
                       <Minus className="h-4 w-4" />
                     </Button>
 
-
                     <span className="w-8 text-center text-sm font-bold">
                       {line.qty}
                     </span>
-
 
                     <Button
                       size="icon"
@@ -1900,7 +1680,6 @@ function SellingSection({
                       <Plus className="h-4 w-4" />
                     </Button>
 
-
                     <Button
                       size="icon"
                       variant="ghost"
@@ -1915,18 +1694,12 @@ function SellingSection({
                     >
                       <Trash2 className="h-4 w-4 text-[#7B2C8E]" />
                     </Button>
-
                   </div>
-
                 </div>
-
               ))}
 
-
               <div className="mt-5 rounded-2xl bg-gradient-to-r from-[#050505] via-[#7B2C8E] to-[#9B4BA8] p-5 text-white shadow-lg shadow-[#9B4BA8]/20">
-
                 <div className="flex items-center justify-between">
-
                   <span className="font-semibold">
                     {t("total")}
                   </span>
@@ -1937,11 +1710,8 @@ function SellingSection({
                       lang,
                     )}
                   </span>
-
                 </div>
-
               </div>
-
 
               <Button
                 className="mt-2 h-12 w-full bg-[#9B4BA8] text-white shadow-lg shadow-[#9B4BA8]/20 hover:bg-[#7B2C8E]"
@@ -1953,27 +1723,19 @@ function SellingSection({
                   recordPending
                 }
               >
-
                 {recordPending
                   ? t("saving")
                   : t(
                       "complete_sale",
                     )}
-
               </Button>
-
             </div>
-
           )}
-
         </Card>
-
       </div>
-
     </section>
   );
 }
-
 
 /* ============================================================
    SALES HISTORY
@@ -1994,73 +1756,78 @@ function SalesHistory({
   lang: any;
   t: any;
 }) {
+  /*
+   * IMPORTANT:
+   * The history section now displays ONLY sales
+   * actually created through the SODFA application.
+   *
+   * New SODFA sales have IDs:
+   * SODFA-SAL-xxxxxxxx
+   *
+   * Old/imported/manual records:
+   * SAL-xxxxxxxx
+   *
+   * are excluded.
+   */
+
+  const sodfaSales = useMemo(() => {
+    return filteredSales.filter(
+      (sale) =>
+        typeof sale.sale_id ===
+          "string" &&
+        sale.sale_id.startsWith(
+          "SODFA-SAL-",
+        ),
+    );
+  }, [filteredSales]);
 
   return (
-
     <section className="space-y-4">
-
       <SectionTitle
         icon={Layers}
         title={t("sales_history")}
         description="سجل عمليات البيع المسجلة في النظام."
       />
 
-
       <Tabs defaultValue="history">
-
         <TabsList className="border border-[#9B4BA8]/20 bg-[#9B4BA8]/5 dark:border-slate-800 dark:bg-slate-900">
-
           <TabsTrigger
             value="history"
             className="data-[state=active]:bg-[#9B4BA8] data-[state=active]:text-white"
           >
             {t("sales_history")}
           </TabsTrigger>
-
         </TabsList>
-
 
         <TabsContent
           value="history"
           className="mt-4"
         >
-
           {sales.isLoading ? (
-
             <Blocks.Loading
               label={t(
                 "loading_sales",
               )}
             />
-
           ) : sales.isError ? (
-
             <Blocks.Error
               label={errorMessage(
                 sales.error,
                 lang,
               )}
             />
-
-          ) : filteredSales.length ===
+          ) : sodfaSales.length ===
             0 ? (
-
             <Blocks.Empty
               label={t(
                 "no_results",
               )}
             />
-
           ) : (
-
             <Card className="overflow-x-auto border-slate-200 p-0 shadow-sm dark:border-slate-800">
-
               <Table>
-
                 <TableHeader>
-
                   <TableRow className="bg-[#9B4BA8]/5 dark:bg-slate-900">
-
                     <TableHead>
                       {t("sale_id")}
                     </TableHead>
@@ -2088,39 +1855,28 @@ function SalesHistory({
                     <TableHead>
                       {t("date")}
                     </TableHead>
-
                   </TableRow>
-
                 </TableHeader>
 
-
                 <TableBody>
-
-                  {[
-                    ...filteredSales,
-                  ]
+                  {[...sodfaSales]
                     .reverse()
                     .map(
                       (sale) => (
-
                         <TableRow
                           key={
                             sale.sale_id
                           }
                           className="transition-colors hover:bg-[#9B4BA8]/5 dark:hover:bg-[#9B4BA8]/10"
                         >
-
                           <TableCell className="font-mono text-xs">
                             {
                               sale.sale_id
                             }
                           </TableCell>
 
-
                           <TableCell>
-
                             <div className="flex items-center gap-3">
-
                               <SaleHistoryImage
                                 productName={
                                   sale.product_name
@@ -2130,25 +1886,19 @@ function SalesHistory({
                                 }
                               />
 
-
                               <div className="min-w-0">
-
                                 <p className="font-medium text-slate-900 dark:text-white">
                                   {
                                     sale.product_name
                                   }
                                 </p>
 
-
                                 {findProductForSale(
                                   sale.product_name,
                                   inventory,
                                 ) && (
-
                                   <p className="text-xs text-slate-500">
-
                                     SKU:{" "}
-
                                     {
                                       findProductForSale(
                                         sale.product_name,
@@ -2156,55 +1906,38 @@ function SalesHistory({
                                       )!
                                         .product_id
                                     }
-
                                   </p>
-
                                 )}
-
                               </div>
-
                             </div>
-
                           </TableCell>
 
-
                           <TableCell>
-
                             {warehouseName(
                               warehouses,
                               sale.warehouse,
                             )}
-
                           </TableCell>
-
 
                           <TableCell>
                             {sale.qty}
                           </TableCell>
 
-
                           <TableCell>
-
                             {fmtMoney(
                               sale.price,
                               lang,
                             )}
-
                           </TableCell>
 
-
                           <TableCell className="font-bold text-[#9B4BA8] dark:text-[#C084CC]">
-
                             {fmtMoney(
                               sale.total,
                               lang,
                             )}
-
                           </TableCell>
 
-
                           <TableCell className="whitespace-nowrap text-xs">
-
                             {fmtDate(
                               sale.sale_date,
                               lang,
@@ -2218,30 +1951,19 @@ function SalesHistory({
                                   lang,
                                 )
                               : ""}
-
                           </TableCell>
-
                         </TableRow>
-
                       ),
                     )}
-
                 </TableBody>
-
               </Table>
-
             </Card>
-
           )}
-
         </TabsContent>
-
       </Tabs>
-
     </section>
   );
 }
-
 
 /* ============================================================
    SALES HISTORY IMAGE
@@ -2254,39 +1976,28 @@ function SaleHistoryImage({
   productName: string;
   inventory: Product[];
 }) {
-
   const product =
     findProductForSale(
       productName,
       inventory,
     );
 
-
   if (!product) {
-
     return (
-
       <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[#9B4BA8]/5 dark:bg-slate-800">
-
         <Package className="h-5 w-5 text-[#9B4BA8]/50" />
-
       </div>
-
     );
   }
 
-
   return (
-
     <ProductImage
       url={product.image_url}
       alt={product.product_name}
       className="h-12 w-12 shrink-0 rounded-xl border object-cover"
     />
-
   );
 }
-
 
 /* ============================================================
    SECTION TITLE
@@ -2301,35 +2012,24 @@ function SectionTitle({
   title: string;
   description: string;
 }) {
-
   return (
-
     <div>
-
       <div className="flex items-center gap-3">
-
         <div className="rounded-xl bg-[#9B4BA8]/10 p-2 dark:bg-[#9B4BA8]/20">
-
           <Icon className="h-5 w-5 text-[#9B4BA8] dark:text-[#C084CC]" />
-
         </div>
-
 
         <h2 className="text-xl font-bold text-slate-900 dark:text-white">
           {title}
         </h2>
-
       </div>
-
 
       <p className="mt-2 text-sm text-slate-500 dark:text-slate-400">
         {description}
       </p>
-
     </div>
   );
 }
-
 
 /* ============================================================
    EXPLANATION
@@ -2340,22 +2040,14 @@ function Explanation({
 }: {
   children: React.ReactNode;
 }) {
-
   return (
-
     <div className="mt-6 rounded-2xl border border-[#9B4BA8]/10 bg-[#9B4BA8]/5 p-4 dark:border-slate-800 dark:bg-slate-900">
-
       <p className="text-sm leading-6 text-slate-500 dark:text-slate-400">
-
         <span className="font-bold text-slate-900 dark:text-white">
           شرح:
         </span>{" "}
-
         {children}
-
       </p>
-
     </div>
-
   );
 }

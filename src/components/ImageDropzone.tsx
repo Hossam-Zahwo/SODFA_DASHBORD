@@ -5,56 +5,97 @@ import { supabase } from "@/lib/supabase";
 import { errorMessage, useI18n } from "@/lib/i18n";
 import { ProductImage } from "@/components/ProductImage";
 import { cn } from "@/lib/utils";
-import { ACCEPTED_IMAGE_TYPES } from "@/lib/images";
+import {
+  ACCEPTED_IMAGE_TYPES,
+  IMAGE_BUCKET,
+} from "@/lib/images";
 import { toast } from "sonner";
 
-interface Props {
-  label: string;
-  value: string;
-  onChange: (url: string) => void;
+interface CommonProps {
+  label?: string;
   className?: string;
 }
 
-const BUCKET = "product-images";
+/**
+ * Controlled mode:
+ * Used by returns/damaged-returns where the component owns one URL.
+ */
+interface ControlledProps extends CommonProps {
+  value: string;
+  onChange: (url: string) => void;
+  onUpload?: never;
+}
+
+/**
+ * Callback mode:
+ * Used by ProductFormDialog where every successful upload is appended
+ * to a list of product/variant images.
+ */
+interface CallbackProps extends CommonProps {
+  value?: never;
+  onChange?: never;
+  onUpload: (url: string) => void;
+}
+
+type Props = ControlledProps | CallbackProps;
 
 function createSafeFileName(file: File): string {
   const extension =
     file.name.split(".").pop()?.toLowerCase() ||
-    (file.type === "image/png" ? "png" : "jpg");
+    (file.type === "image/png"
+      ? "png"
+      : file.type === "image/webp"
+        ? "webp"
+        : "jpg");
 
   const random =
-    typeof crypto !== "undefined" && "randomUUID" in crypto
+    typeof crypto !== "undefined" &&
+    "randomUUID" in crypto
       ? crypto.randomUUID()
-      : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+      : `${Date.now()}-${Math.random()
+          .toString(36)
+          .slice(2)}`;
 
-  return `product-${random}.${extension}`;
+  return `products/product-${random}.${extension}`;
+}
+
+function isControlled(props: Props): props is ControlledProps {
+  return "onChange" in props && typeof props.onChange === "function";
 }
 
 /**
- * Product image uploader.
+ * Shared Supabase image uploader.
  *
- * Uploads directly to Supabase Storage:
+ * It intentionally supports both APIs already used by the application:
  *
- * Supabase Storage
- *      ↓
- * product-images
- *      ↓
- * public image URL
- *      ↓
- * inventory.image_url
+ * 1) value + onChange
+ *    <ImageDropzone value={url} onChange={setUrl} />
+ *
+ * 2) onUpload
+ *    <ImageDropzone onUpload={addImage} />
+ *
+ * Both modes upload to the same bucket.
  */
-export function ImageDropzone({
-  label,
-  value,
-  onChange,
-  className,
-}: Props) {
+export function ImageDropzone(props: Props) {
   const { t, lang } = useI18n();
 
   const [busy, setBusy] = useState(false);
   const [over, setOver] = useState(false);
-
   const inputRef = useRef<HTMLInputElement>(null);
+
+  const controlled = isControlled(props);
+  const value = controlled ? props.value : "";
+
+  const emitUrl = useCallback(
+    (url: string) => {
+      if (controlled) {
+        props.onChange(url);
+      } else {
+        props.onUpload(url);
+      }
+    },
+    [controlled, props],
+  );
 
   const upload = useCallback(
     async (file: File) => {
@@ -63,7 +104,6 @@ export function ImageDropzone({
         return;
       }
 
-      // Optional safety limit: 10 MB
       if (file.size > 10 * 1024 * 1024) {
         toast.error("Image must be smaller than 10 MB");
         return;
@@ -74,67 +114,77 @@ export function ImageDropzone({
       try {
         const fileName = createSafeFileName(file);
 
-        const { error: uploadError } = await supabase.storage
-          .from(BUCKET)
-          .upload(fileName, file, {
-            contentType: file.type,
-            cacheControl: "3600",
-            upsert: false,
-          });
+        const { error: uploadError } =
+          await supabase.storage
+            .from(IMAGE_BUCKET)
+            .upload(fileName, file, {
+              contentType: file.type,
+              cacheControl: "3600",
+              upsert: false,
+            });
 
         if (uploadError) {
           throw uploadError;
         }
 
         const { data } = supabase.storage
-          .from(BUCKET)
+          .from(IMAGE_BUCKET)
           .getPublicUrl(fileName);
 
-        if (!data?.publicUrl) {
+        const publicUrl =
+          data?.publicUrl?.trim() || "";
+
+        if (!publicUrl) {
           throw new Error("IMAGE_URL_ERROR");
         }
 
-        onChange(data.publicUrl);
-
+        emitUrl(publicUrl);
         toast.success(t("saved"));
       } catch (e) {
         console.error("Image upload error:", e);
-
         toast.error(
-          `${t("err_upload")} — ${errorMessage(e, lang)}`,
+          `${t("err_upload")} — ${errorMessage(
+            e,
+            lang,
+          )}`,
         );
       } finally {
         setBusy(false);
       }
     },
-    [lang, onChange, t],
+    [emitUrl, lang, t],
   );
 
-  const removeImage = async () => {
-    if (!value) {
-      onChange("");
-      return;
+  const openPicker = () => {
+    if (!busy) {
+      inputRef.current?.click();
     }
+  };
 
-    /*
-     * We intentionally clear the database value here.
-     *
-     * The actual Storage file can remain temporarily.
-     * This avoids accidentally deleting an image that might
-     * already be referenced somewhere else.
-     */
-    onChange("");
+  const removeImage = () => {
+    if (controlled) {
+      props.onChange("");
+    }
   };
 
   return (
-    <div className={cn("space-y-2", className)}>
-      <p className="text-sm font-medium">{label}</p>
+    <div
+      className={cn(
+        "space-y-2",
+        props.className,
+      )}
+    >
+      {props.label && (
+        <p className="text-sm font-medium">
+          {props.label}
+        </p>
+      )}
 
-      {value ? (
+      {controlled && value ? (
         <div className="space-y-2">
           <ProductImage
             url={value}
-            alt={label}
+            alt={props.label || "Product image"}
             className="h-56 w-full border border-border"
           />
 
@@ -143,7 +193,7 @@ export function ImageDropzone({
               type="button"
               variant="outline"
               size="sm"
-              onClick={() => inputRef.current?.click()}
+              onClick={openPicker}
               disabled={busy}
             >
               {busy ? (
@@ -160,7 +210,7 @@ export function ImageDropzone({
               type="button"
               variant="ghost"
               size="sm"
-              onClick={() => void removeImage()}
+              onClick={removeImage}
               disabled={busy}
             >
               <X className="me-1 h-4 w-4" />
@@ -172,18 +222,16 @@ export function ImageDropzone({
         <div
           role="button"
           tabIndex={0}
-          onClick={() => {
-            if (!busy) {
-              inputRef.current?.click();
-            }
-          }}
+          aria-disabled={busy}
+          onClick={openPicker}
           onKeyDown={(e) => {
             if (
-              (e.key === "Enter" || e.key === " ") &&
+              (e.key === "Enter" ||
+                e.key === " ") &&
               !busy
             ) {
               e.preventDefault();
-              inputRef.current?.click();
+              openPicker();
             }
           }}
           onDragOver={(e) => {
@@ -202,7 +250,8 @@ export function ImageDropzone({
 
             if (busy) return;
 
-            const file = e.dataTransfer.files?.[0];
+            const file =
+              e.dataTransfer.files?.[0];
 
             if (file) {
               void upload(file);
@@ -210,21 +259,25 @@ export function ImageDropzone({
           }}
           className={cn(
             "flex h-40 cursor-pointer flex-col items-center justify-center gap-2 rounded-lg border-2 border-dashed border-border bg-surface text-center text-sm text-muted-foreground transition-colors hover:border-primary/50",
-            over && "border-primary bg-accent",
-            busy && "cursor-wait opacity-70",
+            over &&
+              "border-primary bg-accent",
+            busy &&
+              "cursor-wait opacity-70",
           )}
         >
           {busy ? (
             <>
               <Loader2 className="h-6 w-6 animate-spin" />
-              <span>{t("uploading")}</span>
+              <span>
+                {t("uploading")}
+              </span>
             </>
           ) : (
             <>
               <Upload className="h-6 w-6" />
-
-              <span>{t("drop_image")}</span>
-
+              <span>
+                {t("drop_image")}
+              </span>
               <span className="text-xs">
                 {t("image_types")}
               </span>
@@ -246,7 +299,6 @@ export function ImageDropzone({
             void upload(file);
           }
 
-          // Allows selecting the same image again.
           e.target.value = "";
         }}
       />
