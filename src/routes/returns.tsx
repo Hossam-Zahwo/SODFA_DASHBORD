@@ -168,7 +168,10 @@ function ReturnsPage() {
           barcode.includes(term)
         );
       })
-      .slice(0, 6);
+      // Show EVERY matching product. Do not truncate the results to 6 items,
+      // because products with the same/similar name may be different variants,
+      // warehouses, barcodes, or images and the user must be able to identify
+      // the exact product before recording the return.
   }, [search, inventory.data]);
 
   /* ================= اختيار المنتج ================= */
@@ -1023,15 +1026,28 @@ function ReturnsPage() {
 
               {product ? (
                 <div className="mt-3 flex items-center gap-3 rounded-xl border p-3">
-                  <ProductImage
-                    url={product.image_url}
-                    alt={product.product_name}
-                    className="h-14 w-14 rounded-lg"
-                  />
+                  <div className="flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-lg border border-[#C084CC]/20 bg-[#7B2C8E]/5">
+                    {product.image_url || product.primary_image_url || product.image_urls?.[0] ? (
+                      <ProductImage
+                        url={product.image_url || product.primary_image_url || product.image_urls?.[0] || ""}
+                        alt={product.product_name}
+                        className="h-full w-full"
+                      />
+                    ) : (
+                      <Package className="h-5 w-5 text-[#9B4BA8]" />
+                    )}
+                  </div>
 
-                  <span className="flex-1 truncate text-sm font-semibold">
-                    {product.product_name}
-                  </span>
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-sm font-semibold">
+                      {product.product_name}
+                    </p>
+                    <div className="mt-1 flex flex-wrap gap-x-3 text-[11px] text-muted-foreground">
+                      <span>الكود: {product.product_id}</span>
+                      {product.barcode && <span>الباركود: {product.barcode}</span>}
+                      <span>المباع: {product.sold_qty}</span>
+                    </div>
+                  </div>
 
                   <Button
                     size="sm"
@@ -1097,7 +1113,13 @@ function ReturnsPage() {
                     placeholder="ابحث باسم المنتج أو الكود أو الباركود"
                   />
 
-                  <div className="mt-2 space-y-1">
+                  <div className="mt-2 max-h-[420px] space-y-2 overflow-y-auto rounded-xl pr-1">
+                    {matches.length > 0 && (
+                      <div className="px-1 py-1 text-xs text-muted-foreground">
+                        تم العثور على {matches.length} منتج مطابق — اختر المنتج الصحيح بالاسم والصورة والكود.
+                      </div>
+                    )}
+
                     {matches.map((p) => (
                       <button
                         key={p.product_id}
@@ -1105,19 +1127,43 @@ function ReturnsPage() {
                         onClick={() =>
                           pickProduct(p)
                         }
-                        className="flex w-full items-center gap-2 rounded-lg border p-3 text-right text-sm hover:bg-[#7B2C8E]/10"
+                        className="flex w-full items-center gap-3 rounded-xl border border-[#C084CC]/20 bg-white p-3 text-right text-sm shadow-sm transition hover:border-[#9B4BA8]/50 hover:bg-[#7B2C8E]/5"
                       >
-                        <Package className="h-4 w-4 text-[#9B4BA8]" />
+                        <div className="flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-lg border border-[#C084CC]/20 bg-[#7B2C8E]/5">
+                          {p.image_url || p.primary_image_url || p.image_urls?.[0] ? (
+                            <ProductImage
+                              url={p.image_url || p.primary_image_url || p.image_urls?.[0] || ""}
+                              alt={p.product_name}
+                              className="h-full w-full"
+                            />
+                          ) : (
+                            <Package className="h-5 w-5 text-[#9B4BA8]" />
+                          )}
+                        </div>
 
-                        <span className="flex-1 truncate">
-                          {p.product_name}
-                        </span>
+                        <div className="min-w-0 flex-1">
+                          <p className="truncate font-semibold text-slate-900">
+                            {p.product_name}
+                          </p>
+                          <div className="mt-1 flex flex-wrap gap-x-3 gap-y-1 text-[11px] text-muted-foreground">
+                            <span>كود: {p.product_id}</span>
+                            {p.barcode && <span>باركود: {p.barcode}</span>}
+                            <span>المباع: {p.sold_qty}</span>
+                          </div>
+                        </div>
 
-                        <span className="text-xs text-muted-foreground">
-                          {p.product_id}
-                        </span>
+                        <div className="shrink-0 text-left">
+                          <p className="text-xs text-muted-foreground">المتاح</p>
+                          <p className="font-bold text-[#7B2C8E]">{p.remaining_qty}</p>
+                        </div>
                       </button>
                     ))}
+
+                    {search.trim() && matches.length === 0 && (
+                      <div className="rounded-xl border border-dashed p-4 text-center text-sm text-muted-foreground">
+                        لا توجد منتجات مرتبطة ببحثك. جرّب كتابة جزء مختلف من اسم المنتج أو الكود أو الباركود.
+                      </div>
+                    )}
                   </div>
                 </>
               )}

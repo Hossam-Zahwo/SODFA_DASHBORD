@@ -73,6 +73,9 @@ const dict = {
   confirm_delete_product: { ar: "هل أنت متأكد من حذف هذا المنتج؟", en: "Are you sure you want to delete this product?" },
   confirm_delete_warehouse: { ar: "هل أنت متأكد من حذف هذا المخزن؟", en: "Are you sure you want to delete this warehouse?" },
   confirm_generic: { ar: "لا يمكن التراجع عن هذا الإجراء.", en: "This action cannot be undone." },
+  confirm_delete_sale: { ar: "هل أنت متأكد من حذف عملية البيع؟ سيتم إعادة الكمية للمخزون وخصم قيمة البيع من إجمالي المبيعات.", en: "Delete this sale? The quantity will be restored to inventory and the sale value removed from sales totals." },
+  sale_deleted: { ar: "تم حذف البيع وإعادة تحديث المخزون والبيانات.", en: "Sale deleted and inventory/data restored." },
+  delete_sale: { ar: "حذف البيع", en: "Delete sale" },
 
   add_warehouse: { ar: "إضافة مخزن", en: "Add Warehouse" },
   rename: { ar: "إعادة تسمية", en: "Rename" },

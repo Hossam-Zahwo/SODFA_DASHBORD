@@ -17,30 +17,23 @@
  * Google Sheets / Google Apps Script are NOT used.
  */
 
-import { createClient } from "@supabase/supabase-js";
 import { IMAGE_BUCKET } from "@/lib/images";
+import { supabase } from "@/lib/supabase";
 
 /* ============================================================
    SUPABASE
    ============================================================ */
 
+/*
+ * IMPORTANT:
+ * The application uses one shared Supabase client from lib/supabase.ts.
+ * Creating another client here caused multiple GoTrueClient instances in the
+ * same browser context and produced the warning shown in the console.
+ */
+
 const SUPABASE_URL =
   import.meta.env.VITE_SUPABASE_URL ||
   "https://fcwzxmslfltbvxputqec.supabase.co";
-
-const SUPABASE_PUBLISHABLE_KEY =
-  import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
-
-if (!SUPABASE_PUBLISHABLE_KEY) {
-  console.warn(
-    "[SODFA] VITE_SUPABASE_PUBLISHABLE_KEY is missing.",
-  );
-}
-
-export const supabase = createClient(
-  SUPABASE_URL,
-  SUPABASE_PUBLISHABLE_KEY || "",
-);
 
 /* ============================================================
    COMPATIBILITY
@@ -3658,11 +3651,7 @@ export const api = {
       qty: number;
       warehouse?: string;
     }) => {
-      const qty =
-        Math.max(
-          0,
-          n(p.qty),
-        );
+      const qty = Math.max(0, n(p.qty));
 
       if (qty <= 0) {
         throw new ApiError(
@@ -3670,184 +3659,87 @@ export const api = {
         );
       }
 
-      if (!p.product_id) {
+      const productId = s(p.product_id).trim();
+
+      if (!productId) {
         throw new ApiError(
           "PRODUCT_ID_REQUIRED",
         );
       }
 
-      const {
-        data: product,
-        error:
-          productError,
-      } = await supabase
-        .from("inventory")
-        .select("*")
-        .eq(
-          "product_id",
-          p.product_id,
-        )
-        .limit(1)
-        .maybeSingle();
+      // The database function performs the complete sale transaction
+      // atomically: validate stock, insert the sale and update inventory
+      // in one PostgreSQL transaction. This prevents a sale row from being
+      // created when inventory cannot be updated (and vice versa).
+      const sale_id = makeId("SODFA-SAL");
 
-      if (productError) {
-        throw supabaseError(
-          productError,
-        );
+      const { data, error } = await supabase.rpc(
+        "record_sale_and_update_inventory",
+        {
+          p_sale_id: sale_id,
+          p_product_id: productId,
+          p_qty: qty,
+          p_warehouse: s(p.warehouse).trim() || null,
+        },
+      );
+
+      if (error) {
+        throw supabaseError(error);
       }
 
-      if (!product) {
+      const result = Array.isArray(data)
+        ? data[0]
+        : data;
+
+      if (!result || result.success !== true) {
         throw new ApiError(
-          "PRODUCT_NOT_FOUND",
-        );
-      }
-
-      const remaining =
-        Math.max(
-          0,
-          n(
-            product.remaining_qty,
-          ),
-        );
-
-      if (qty > remaining) {
-        throw new ApiError(
-          "INSUFFICIENT_STOCK",
-        );
-      }
-
-      const unitPrice =
-        product.selling_price !==
-          null &&
-        product.selling_price !==
-          undefined &&
-        product.selling_price !==
-          ""
-          ? Math.max(
-              0,
-              n(
-                product.selling_price,
-              ),
-            )
-          : Math.max(
-              0,
-              n(
-                product.sale_price,
-              ),
-            );
-
-      const newSold =
-        n(product.sold_qty) +
-        qty;
-
-      const newRemaining =
-        Math.max(
-          0,
-          remaining - qty,
-        );
-
-      const total =
-        unitPrice * qty;
-
-      const sale_id =
-         makeId("SODFA-SAL");
-
-      const saleDate =
-        today();
-
-      const saleTime =
-        currentTime();
-
-      const warehouse =
-        p.warehouse?.trim() ||
-        s(product.warehouse);
-
-      if (!warehouse) {
-        throw new ApiError(
-          "WAREHOUSE_REQUIRED",
-        );
-      }
-
-      const {
-        error: saleError,
-      } = await supabase
-        .from("sales")
-        .insert({
-          sale_id,
-
-          product_id:
-            p.product_id,
-
-          product_name:
-            s(
-              product.product_name,
-            ),
-
-          barcode:
-            s(product.barcode),
-
-          warehouse,
-
-          qty,
-
-          unit_sale_price:
-            unitPrice,
-
-          total_sale_value:
-            total,
-
-          sale_date:
-            saleDate,
-
-          sale_time:
-            saleTime,
-
-          unit_price:
-            unitPrice,
-
-          total_value:
-            total,
-        });
-
-      if (saleError) {
-        throw supabaseError(
-          saleError,
-        );
-      }
-
-      const {
-        error:
-          inventoryError,
-      } = await supabase
-        .from("inventory")
-        .update({
-          sold_qty:
-            newSold,
-
-          remaining_qty:
-            newRemaining,
-
-          sales_value:
-            n(
-              product.sales_value,
-            ) + total,
-
-          last_sale_date:
-            new Date().toISOString(),
-        })
-        .eq(
-          "product_id",
-          p.product_id,
-        );
-
-      if (inventoryError) {
-        throw supabaseError(
-          inventoryError,
+          s(result?.error_code) ||
+            "SALE_RECORD_FAILED",
         );
       }
 
       return {
-        sale_id,
+        sale_id: s(result.sale_id) || sale_id,
+      };
+    },
+
+  /* ==========================================================
+     DELETE SALE
+     ========================================================== */
+
+  deleteSale:
+    async (sale_id: string) => {
+      const id = s(sale_id);
+
+      if (!id) {
+        throw new ApiError("SALE_ID_REQUIRED");
+      }
+
+      // The database function performs the delete + inventory restoration
+      // atomically, so a failed step cannot leave the system half-updated.
+      const { data, error } = await supabase.rpc(
+        "delete_sale_and_restore_inventory",
+        { p_sale_id: id },
+      );
+
+      if (error) {
+        throw supabaseError(error);
+      }
+
+      const result = Array.isArray(data) ? data[0] : data;
+
+      if (!result || result.success !== true) {
+        throw new ApiError(
+          s(result?.error_code) || "SALE_DELETE_FAILED",
+        );
+      }
+
+      return {
+        success: true,
+        sale_id: id,
+        product_id: s(result.product_id),
+        qty: n(result.qty),
+        restored_value: n(result.restored_value),
       };
     },
 

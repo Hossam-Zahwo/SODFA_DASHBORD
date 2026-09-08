@@ -9,6 +9,7 @@ import {
   Trash2,
   Wallet,
   AlertTriangle,
+  Package,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -2150,11 +2151,28 @@ function DamagedPage() {
                             "
                           >
 
-                            <span className="flex-1 truncate">
-                              {
-                                p.product_name
-                              }
-                            </span>
+                            <div className="flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-lg border border-[#9B4BA8]/20 bg-white">
+                              {p.image_url || p.primary_image_url || p.image_urls?.[0] ? (
+                                <ProductImage
+                                  url={p.image_url || p.primary_image_url || p.image_urls?.[0] || ""}
+                                  alt={p.product_name}
+                                  className="h-full w-full"
+                                />
+                              ) : (
+                                <Package className="h-4 w-4 text-[#9B4BA8]" />
+                              )}
+                            </div>
+
+                            <div className="min-w-0 flex-1">
+                              <p className="truncate font-semibold">
+                                {p.product_name}
+                              </p>
+                              <div className="mt-1 flex flex-wrap gap-x-3 text-[11px] text-muted-foreground">
+                                <span>{p.product_id}</span>
+                                {p.barcode && <span>{p.barcode}</span>}
+                                <span>المتاح: {p.remaining_qty}</span>
+                              </div>
+                            </div>
 
                             <span className="text-xs text-[#7B2C8E]/70 dark:text-[#C084CC]/70">
                               {

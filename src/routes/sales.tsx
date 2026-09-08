@@ -56,7 +56,7 @@ import {
 
 import { useUsbScanner } from "@/hooks/useUsbScanner";
 
-import { api, type Product } from "@/lib/api";
+import { api, type Product, type Sale } from "@/lib/api";
 
 import {
   errorMessage,
@@ -182,6 +182,9 @@ function SalesPage() {
   const [wh, setWh] =
     useState(ALL_WAREHOUSES);
 
+  const [activeDeleteSaleId, setActiveDeleteSaleId] =
+    useState<string | null>(null);
+
   /* ============================================================
      RECORD SALE
      ============================================================ */
@@ -192,6 +195,10 @@ function SalesPage() {
       qty: number;
       warehouse: string;
     }) => api.recordSale(p),
+  );
+
+  const deleteSale = useApiMutation(
+    (saleId: string) => api.deleteSale(saleId),
   );
 
   /* ============================================================
@@ -422,6 +429,30 @@ function SalesPage() {
   };
 
   /* ============================================================
+     DELETE SALE
+     ============================================================ */
+
+  const handleDeleteSale = async (sale: Sale) => {
+    const confirmed = window.confirm(
+      `${t("confirm_delete_sale")}\n\n${sale.product_name} × ${sale.qty}\n${sale.sale_id}`
+    );
+
+    if (!confirmed) return;
+
+    setActiveDeleteSaleId(sale.sale_id);
+
+    try {
+      await deleteSale.mutateAsync(sale.sale_id);
+      toast.success(t("sale_deleted"));
+      await Promise.all([sales.refetch(), inventory.refetch()]);
+    } catch (e) {
+      toast.error(errorMessage(e, lang));
+    } finally {
+      setActiveDeleteSaleId(null);
+    }
+  };
+
+  /* ============================================================
      FILTERED SALES
      ============================================================ */
 
@@ -528,21 +559,12 @@ function SalesPage() {
         >();
 
       for (const sale of filteredSales) {
-        if (
-          !sale.sale_id.startsWith(
-            "SODFA-SAL-",
-          )
-        ) {
-          continue;
-        }
-
         const name =
           sale.product_name ||
           "منتج غير معروف";
 
-        const key = name
-          .trim()
-          .toLowerCase();
+        const key = sale.product_id.trim() ||
+          `legacy:${name.trim().toLowerCase()}`;
 
         const existing =
           map.get(key);
@@ -560,7 +582,7 @@ function SalesPage() {
         } else {
           const product =
             findProductForSale(
-              name,
+              { product_id: sale.product_id, product_name: name },
               inventory.data ?? [],
             );
 
@@ -727,6 +749,8 @@ function SalesPage() {
           }
           lang={lang}
           t={t}
+          activeDeleteSaleId={activeDeleteSaleId}
+          onDeleteSale={handleDeleteSale}
         />
       </div>
     </AppShell>
@@ -738,23 +762,23 @@ function SalesPage() {
    ============================================================ */
 
 function findProductForSale(
-  productName: string,
+  sale: { product_id: string; product_name: string },
   inventory: Product[],
 ): Product | null {
-  const cleanName =
-    productName
-      .trim()
-      .toLowerCase();
+  // Never resolve a sale back to inventory by name. Product names are not
+  // unique and two products/variants can legitimately share the same name.
+  const productId = sale.product_id.trim();
+  if (productId) {
+    return (
+      inventory.find(
+        (product) => product.product_id === productId,
+      ) ?? null
+    );
+  }
 
-  return (
-    inventory.find(
-      (product) =>
-        product.product_name
-          .trim()
-          .toLowerCase() ===
-        cleanName,
-    ) ?? null
-  );
+  // If a historical row has no product_id, do not guess by name.
+  // Showing no linked product is safer than showing the wrong product/image.
+  return null;
 }
 
 /* ============================================================
@@ -1748,6 +1772,8 @@ function SalesHistory({
   inventory,
   lang,
   t,
+  activeDeleteSaleId,
+  onDeleteSale,
 }: {
   sales: any;
   filteredSales: any[];
@@ -1755,31 +1781,12 @@ function SalesHistory({
   inventory: Product[];
   lang: any;
   t: any;
+  activeDeleteSaleId: string | null;
+  onDeleteSale: (sale: Sale) => void | Promise<void>;
 }) {
-  /*
-   * IMPORTANT:
-   * The history section now displays ONLY sales
-   * actually created through the SODFA application.
-   *
-   * New SODFA sales have IDs:
-   * SODFA-SAL-xxxxxxxx
-   *
-   * Old/imported/manual records:
-   * SAL-xxxxxxxx
-   *
-   * are excluded.
-   */
-
-  const sodfaSales = useMemo(() => {
-    return filteredSales.filter(
-      (sale) =>
-        typeof sale.sale_id ===
-          "string" &&
-        sale.sale_id.startsWith(
-          "SODFA-SAL-",
-        ),
-    );
-  }, [filteredSales]);
+  // Every row returned from the Supabase `sales` table is a real sale.
+  // Do not hide historical/imported rows based on their ID prefix.
+  const sodfaSales = filteredSales;
 
   return (
     <section className="space-y-4">
@@ -1855,6 +1862,10 @@ function SalesHistory({
                     <TableHead>
                       {t("date")}
                     </TableHead>
+
+                    <TableHead className="text-center">
+                      {t("actions")}
+                    </TableHead>
                   </TableRow>
                 </TableHeader>
 
@@ -1878,12 +1889,9 @@ function SalesHistory({
                           <TableCell>
                             <div className="flex items-center gap-3">
                               <SaleHistoryImage
-                                productName={
-                                  sale.product_name
-                                }
-                                inventory={
-                                  inventory
-                                }
+                                productId={sale.product_id}
+                                productName={sale.product_name}
+                                inventory={inventory}
                               />
 
                               <div className="min-w-0">
@@ -1894,14 +1902,14 @@ function SalesHistory({
                                 </p>
 
                                 {findProductForSale(
-                                  sale.product_name,
+                                  { product_id: sale.product_id, product_name: sale.product_name },
                                   inventory,
                                 ) && (
                                   <p className="text-xs text-slate-500">
                                     SKU:{" "}
                                     {
                                       findProductForSale(
-                                        sale.product_name,
+                                        { product_id: sale.product_id, product_name: sale.product_name },
                                         inventory,
                                       )!
                                         .product_id
@@ -1952,6 +1960,24 @@ function SalesHistory({
                                 )
                               : ""}
                           </TableCell>
+
+                          <TableCell className="text-center">
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="icon"
+                              title={t("delete_sale")}
+                              disabled={activeDeleteSaleId === sale.sale_id}
+                              onClick={() => void onDeleteSale(sale)}
+                              className="hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-950/30"
+                            >
+                              {activeDeleteSaleId === sale.sale_id ? (
+                                <span className="text-xs">…</span>
+                              ) : (
+                                <Trash2 className="h-4 w-4" />
+                              )}
+                            </Button>
+                          </TableCell>
                         </TableRow>
                       ),
                     )}
@@ -1970,15 +1996,17 @@ function SalesHistory({
    ============================================================ */
 
 function SaleHistoryImage({
+  productId,
   productName,
   inventory,
 }: {
+  productId: string;
   productName: string;
   inventory: Product[];
 }) {
   const product =
     findProductForSale(
-      productName,
+      { product_id: productId, product_name: productName },
       inventory,
     );
 
