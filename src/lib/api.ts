@@ -276,8 +276,19 @@ export interface ProductCatalog {
 export interface ProductCategory {
   id: string;
   name: string;
+  name_en?: string;
+  keywords?: string[];
+  keywords_ar?: string[];
+  keywords_en?: string[];
+  slug?: string;
   created_at: string;
   updated_at: string;
+}
+
+export interface CategorySuggestion {
+  id: string;
+  name: string;
+  score: number;
 }
 
 export interface ProductVariant {
@@ -1491,6 +1502,11 @@ export const api = {
         (row) => ({
           id: s(row.id),
           name: s(row.name),
+          name_en: s(row.name_en),
+          slug: s(row.slug),
+          keywords: normalizeKeywords(row.keywords),
+          keywords_ar: normalizeKeywords(row.keywords_ar),
+          keywords_en: normalizeKeywords(row.keywords_en),
           created_at:
             s(row.created_at),
           updated_at:
@@ -1502,6 +1518,7 @@ export const api = {
   createCategory:
     async (
       name: string,
+      keywords: string[] = [],
     ): Promise<ProductCategory> => {
       const cleanName =
         name.trim();
@@ -1519,6 +1536,7 @@ export const api = {
         .from("product_categories")
         .insert({
           name: cleanName,
+          keywords: normalizeKeywords(keywords),
         })
         .select("*")
         .single();
@@ -1530,6 +1548,8 @@ export const api = {
       return {
         id: s(data?.id),
         name: s(data?.name),
+        slug: s(data?.slug),
+        keywords: normalizeKeywords(data?.keywords),
         created_at:
           s(data?.created_at),
         updated_at:
@@ -1537,10 +1557,52 @@ export const api = {
       };
     },
 
+  importCategories:
+    async (
+      rows: Array<{
+        name: string;
+        name_en?: string;
+        keywords_ar?: string[];
+        keywords_en?: string[];
+      }>,
+    ): Promise<{ inserted: number; updated: number; skipped: number }> => {
+      if (!rows.length) {
+        return { inserted: 0, updated: 0, skipped: 0 };
+      }
+
+      const cleanRows = rows
+        .map((row) => ({
+          name: row.name?.trim(),
+          name_en: row.name_en?.trim() || null,
+          keywords_ar: normalizeKeywords(row.keywords_ar),
+          keywords_en: normalizeKeywords(row.keywords_en),
+        }))
+        .filter((row) => Boolean(row.name));
+
+      if (!cleanRows.length) {
+        return { inserted: 0, updated: 0, skipped: rows.length };
+      }
+
+      const { data, error } = await supabase.rpc(
+        "import_product_categories",
+        { p_rows: cleanRows },
+      );
+
+      if (error) throw supabaseError(error);
+
+      const result = data?.[0] ?? data ?? {};
+      return {
+        inserted: Number(result.inserted ?? 0),
+        updated: Number(result.updated ?? 0),
+        skipped: Number(result.skipped ?? 0),
+      };
+    },
+
   updateCategory:
     async (
       id: string,
       name: string,
+      keywords?: string[],
     ) => {
       if (!id) {
         throw new ApiError(
@@ -1563,6 +1625,7 @@ export const api = {
         .from("product_categories")
         .update({
           name: cleanName,
+          ...(keywords === undefined ? {} : { keywords: normalizeKeywords(keywords) }),
           updated_at:
             new Date().toISOString(),
         })
@@ -1601,6 +1664,28 @@ export const api = {
       return {
         success: true,
       };
+    },
+
+  suggestCategories:
+    async (
+      query: string,
+      limit = 5,
+    ): Promise<CategorySuggestion[]> => {
+      const cleanQuery = query.trim();
+      if (cleanQuery.length < 2) return [];
+
+      const { data, error } = await supabase.rpc(
+        "suggest_product_categories",
+        { p_query: cleanQuery, p_limit: limit },
+      );
+
+      if (error) throw supabaseError(error);
+
+      return (data ?? []).map((row: Record<string, unknown>) => ({
+        id: s(row.id),
+        name: s(row.name),
+        score: n(row.score),
+      }));
     },
 
   /* ==========================================================

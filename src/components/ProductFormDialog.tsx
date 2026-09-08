@@ -451,6 +451,11 @@ export function ProductFormDialog({
   const [categories, setCategories] =
     useState<ProductCategory[]>([]);
 
+  const [categorySuggestions, setCategorySuggestions] =
+    useState<{ id: string; name: string; score: number }[]>([]);
+  const [categoryTouched, setCategoryTouched] =
+    useState(false);
+
   /* =======================================================
      PRICE / STOCK
   ======================================================= */
@@ -529,6 +534,50 @@ export function ProductFormDialog({
   };
 
   /* =======================================================
+     SMART CATEGORY SUGGESTIONS
+     Source of truth: product_categories + Supabase RPC.
+  ======================================================= */
+
+  useEffect(() => {
+    if (!open) return;
+
+    const title = `${nameAr} ${nameEn}`.trim();
+    if (title.length < 3) {
+      setCategorySuggestions([]);
+      return;
+    }
+
+    let cancelled = false;
+    const timer = window.setTimeout(() => {
+      void api
+        .suggestCategories(title, 5)
+        .then((suggestions) => {
+          if (cancelled) return;
+          setCategorySuggestions(suggestions);
+
+          // Auto-fill only a strong match and never overwrite a manual choice
+          // or an already saved category while editing.
+          if (
+            !categoryTouched &&
+            !categoryName.trim() &&
+            suggestions[0] &&
+            suggestions[0].score >= 4
+          ) {
+            setCategoryName(suggestions[0].name);
+          }
+        })
+        .catch(() => {
+          if (!cancelled) setCategorySuggestions([]);
+        });
+    }, 350);
+
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timer);
+    };
+  }, [open, nameAr, nameEn, categoryName, categoryTouched]);
+
+  /* =======================================================
      PARENT SNAPSHOT
   ======================================================= */
 
@@ -569,9 +618,23 @@ export function ProductFormDialog({
     if (!open) return;
 
     void loadCategories();
+    setCategorySuggestions([]);
+    setCategoryTouched(false);
 
-    setNameAr(product?.name_ar ?? "");
-    setNameEn(product?.name_en ?? "");
+    // عند تعديل منتج قد يكون العنوان الأساسي محفوظًا في product_name فقط.
+    // استخدمه تلقائيًا كعنوان احتياطي بدل إجبار المستخدم على كتابته مرة أخرى.
+    const existingProductTitle =
+      String(product?.product_name ?? "").trim();
+
+    setNameAr(
+      String(product?.name_ar ?? "").trim() ||
+        existingProductTitle,
+    );
+
+    setNameEn(
+      String(product?.name_en ?? "").trim() ||
+        existingProductTitle,
+    );
 
     setDescription(
       product?.description ?? "",
@@ -1233,9 +1296,12 @@ export function ProductFormDialog({
       }
 
       const data = {
+        // احتفظ بعنوان المنتج القديم عند التعديل إذا كانت حقول
+        // الاسم الجديدة فارغة، حتى لا يطلب النظام إعادة كتابة العنوان.
         product_name:
           nameAr.trim() ||
-          nameEn.trim(),
+          nameEn.trim() ||
+          String(product?.product_name ?? "").trim(),
 
         name_ar:
           nameAr.trim(),
@@ -1587,13 +1653,41 @@ export function ProductFormDialog({
 
               <Input
                 value={categoryName}
-                onChange={(e) =>
-                  setCategoryName(
-                    e.target.value,
-                  )
-                }
-                placeholder="اختر أو اكتب تصنيفاً"
+                list="product-category-options"
+                onChange={(e) => {
+                  setCategoryTouched(true);
+                  setCategoryName(e.target.value);
+                }}
+                placeholder="اكتب أو اختر تصنيفاً — سيتم اقتراحه من عنوان المنتج"
               />
+
+              <datalist id="product-category-options">
+                {categories.map((category) => (
+                  <option key={category.id} value={category.name} />
+                ))}
+              </datalist>
+
+              {categorySuggestions.length > 0 && (
+                <div className="flex flex-wrap gap-2 pt-1">
+                  {categorySuggestions.map((suggestion) => (
+                    <button
+                      key={suggestion.id}
+                      type="button"
+                      onClick={() => {
+                        setCategoryTouched(true);
+                        setCategoryName(suggestion.name);
+                      }}
+                      className={`rounded-full border px-3 py-1 text-xs font-medium transition ${
+                        categoryName.trim().toLowerCase() === suggestion.name.trim().toLowerCase()
+                          ? "border-[#823292] bg-[#823292] text-white"
+                          : "border-purple-200 bg-purple-50 text-[#823292] hover:border-[#823292]"
+                      }`}
+                    >
+                      {suggestion.name}
+                    </button>
+                  ))}
+                </div>
+              )}
             </div>
           </div>
 

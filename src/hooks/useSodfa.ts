@@ -17,6 +17,7 @@ export const keys = {
   returns: ["returns"] as const,
   damaged: ["damaged"] as const,
   products: ["products"] as const,
+  categories: ["categories"] as const,
   connection: ["connection"] as const,
 };
 
@@ -96,6 +97,17 @@ export const useProducts = () =>
   });
 
 /* ============================================================
+   CATEGORIES
+   ============================================================ */
+
+export const useCategories = () =>
+  useQuery({
+    queryKey: keys.categories,
+    queryFn: api.categories,
+    ...common,
+  });
+
+/* ============================================================
    REFRESH ALL
    ============================================================ */
 
@@ -134,6 +146,10 @@ export function useRefreshAll() {
 
       qc.invalidateQueries({
         queryKey: keys.products,
+      }),
+
+      qc.invalidateQueries({
+        queryKey: keys.categories,
       }),
     ]);
 }

@@ -15,6 +15,7 @@ const dict = {
   damaged_returns: { ar: "المرتجعات التالفة", en: "Damaged Returns" },
   warehouses: { ar: "المخازن", en: "Warehouses" },
   scanner: { ar: "الماسح الضوئي", en: "Scanner" },
+  categories: { ar: "التصنيفات", en: "Categories" },
   settings: { ar: "الإعدادات", en: "Settings" },
 
   language: { ar: "اللغة", en: "Language" },

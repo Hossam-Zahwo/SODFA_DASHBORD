@@ -4,6 +4,7 @@ import {
   ArrowLeftRight,
   BarChart3,
   Boxes,
+  Tags,
   Menu,
   PackageX,
   RotateCcw,
@@ -113,6 +114,11 @@ const NAV: {
     to: "/scanner",
     key: "scanner",
     icon: ScanLine,
+  },
+  {
+    to: "/categories",
+    key: "categories",
+    icon: Tags,
   },
   {
     to: "/settings",
