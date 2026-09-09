@@ -1260,6 +1260,23 @@ export function ProductFormDialog({
   };
 
   /* =======================================================
+     KEEP VARIANTS INHERITING THE LATEST PARENT DATA
+  ======================================================= */
+
+  const getCurrentInheritedSnapshot = (variant: VariantDraft): ProductSnapshot => {
+    if (variant.base_variant_id || variant.base_variant_name) {
+      const base = variants.find((item) => item.variant_id === variant.base_variant_id || item.variant_name === variant.base_variant_name);
+      if (base && base !== variant) return getVariantBaseSnapshot(base);
+    }
+
+    return {
+      ...parentSnapshot,
+      keywords: [...parentSnapshot.keywords],
+      attributes: { ...parentSnapshot.attributes },
+    };
+  };
+
+  /* =======================================================
      SAVE
   ======================================================= */
 
@@ -1408,6 +1425,13 @@ export function ProductFormDialog({
          */
 
         for (const variant of variants) {
+          // The parent is the source of truth for inherited data. Overrides stay local.
+          const inheritedSnapshot = getCurrentInheritedSnapshot(variant);
+          const effectiveVariant = getVariantEffectiveData({
+            ...variant,
+            inherited: inheritedSnapshot,
+          });
+
           const primaryImage =
             variant.image_urls[
               variant.primary_image_index
@@ -1418,6 +1442,9 @@ export function ProductFormDialog({
           const payload = {
             product_id:
               productId,
+
+            // saveVariant requires a warehouse; variants use the selected parent warehouse.
+            warehouse,
 
             variant_name:
               variant.variant_name,
@@ -1484,8 +1511,11 @@ export function ProductFormDialog({
                   variant.pack_quantity,
               },
 
+              // Persist the latest parent/base snapshot, while overrides remain separate.
               inherited_from_product:
-                variant.inherited,
+                inheritedSnapshot,
+
+              effective_product_data: effectiveVariant,
 
               overrides:
                 variant.overrides,

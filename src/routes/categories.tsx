@@ -264,7 +264,9 @@ function CategoriesPage() {
                     <span className="truncate">{excelFileName}</span>
                   </div>
                   <p className="text-xs text-zinc-500">
-                    {lang === "ar" ? `${excelRows.length} صف جاهز للمراجعة` : `${excelRows.length} rows ready for review`}
+                    {lang === "ar"
+                      ? `${excelRows.length} صف جاهز للاستيراد — سيتم استيراد كل الصفوف`
+                      : `${excelRows.length} rows ready — all rows will be imported`}
                   </p>
                 </div>
                 <Button variant="ghost" size="icon" onClick={clearExcel} aria-label={lang === "ar" ? "إلغاء الملف" : "Clear file"}>
@@ -283,7 +285,7 @@ function CategoriesPage() {
                     </tr>
                   </thead>
                   <tbody>
-                    {excelRows.slice(0, 100).map((row, index) => (
+                    {excelRows.map((row, index) => (
                       <tr key={`${row.name}-${index}`} className="border-t border-zinc-100 dark:border-zinc-800">
                         <td className="px-3 py-2 text-zinc-400">{index + 1}</td>
                         <td className="px-3 py-2 font-semibold">{row.name}</td>
@@ -295,11 +297,6 @@ function CategoriesPage() {
                   </tbody>
                 </table>
               </div>
-              {excelRows.length > 100 && (
-                <p className="border-t border-zinc-200 px-4 py-2 text-xs text-zinc-500 dark:border-zinc-800">
-                  {lang === "ar" ? "تم عرض أول 100 صف فقط للمعاينة، وسيتم استيراد الملف بالكامل." : "Only the first 100 rows are shown in preview; the full file will be imported."}
-                </p>
-              )}
             </div>
           )}
 

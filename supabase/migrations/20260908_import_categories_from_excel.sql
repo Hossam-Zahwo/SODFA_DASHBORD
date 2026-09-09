@@ -46,9 +46,6 @@ begin
     raise exception 'CATEGORY_IMPORT_ROWS_MUST_BE_ARRAY';
   end if;
 
-  if jsonb_array_length(p_rows) > 5000 then
-    raise exception 'CATEGORY_IMPORT_TOO_LARGE';
-  end if;
 
   for v_row in
     select value from jsonb_array_elements(p_rows)

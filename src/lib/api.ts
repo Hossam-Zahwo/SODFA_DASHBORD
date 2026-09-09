@@ -1583,19 +1583,29 @@ export const api = {
         return { inserted: 0, updated: 0, skipped: rows.length };
       }
 
-      const { data, error } = await supabase.rpc(
-        "import_product_categories",
-        { p_rows: cleanRows },
-      );
+      // Send the workbook in transport-safe batches. There is no artificial
+      // row-count limit: every parsed Excel row is imported.
+      const BATCH_SIZE = 1000;
+      let inserted = 0;
+      let updated = 0;
+      let skipped = 0;
 
-      if (error) throw supabaseError(error);
+      for (let start = 0; start < cleanRows.length; start += BATCH_SIZE) {
+        const batch = cleanRows.slice(start, start + BATCH_SIZE);
+        const { data, error } = await supabase.rpc(
+          "import_product_categories",
+          { p_rows: batch },
+        );
 
-      const result = data?.[0] ?? data ?? {};
-      return {
-        inserted: Number(result.inserted ?? 0),
-        updated: Number(result.updated ?? 0),
-        skipped: Number(result.skipped ?? 0),
-      };
+        if (error) throw supabaseError(error);
+
+        const result = data?.[0] ?? data ?? {};
+        inserted += Number(result.inserted ?? 0);
+        updated += Number(result.updated ?? 0);
+        skipped += Number(result.skipped ?? 0);
+      }
+
+      return { inserted, updated, skipped };
     },
 
   updateCategory:
