@@ -13,6 +13,7 @@ import { useEffect, useState, type ReactNode } from "react";
 import appCss from "../styles.css?url";
 import { reportLovableError } from "../lib/lovable-error-reporting";
 import { LanguageProvider } from "@/lib/i18n";
+import { CompanyProvider } from "@/lib/company";
 import { Toaster } from "@/components/ui/sonner";
 import { supabase } from "../lib/supabase";
 
@@ -306,7 +307,9 @@ function RootComponent() {
   return (
     <QueryClientProvider client={queryClient}>
       <LanguageProvider>
-        <AuthGate />
+        <CompanyProvider>
+          <AuthGate />
+        </CompanyProvider>
 
         <Toaster
           position="top-center"

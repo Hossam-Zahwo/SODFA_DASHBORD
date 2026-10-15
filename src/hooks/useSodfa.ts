@@ -5,6 +5,7 @@ import {
 } from "@tanstack/react-query";
 
 import { api } from "@/lib/api";
+import type { CompanyId } from "@/lib/company";
 
 /* ============================================================
    QUERY KEYS
@@ -34,10 +35,12 @@ const common = {
    INVENTORY
    ============================================================ */
 
-export const useInventory = () =>
+export const useInventory = (
+  companyId?: CompanyId,
+) =>
   useQuery({
-    queryKey: keys.inventory,
-    queryFn: api.inventory,
+    queryKey: [...keys.inventory, companyId ?? "all"],
+    queryFn: () => api.inventory(companyId),
     ...common,
   });
 
@@ -45,10 +48,12 @@ export const useInventory = () =>
    WAREHOUSES
    ============================================================ */
 
-export const useWarehouses = () =>
+export const useWarehouses = (
+  companyId?: CompanyId,
+) =>
   useQuery({
-    queryKey: keys.warehouses,
-    queryFn: api.warehouses,
+    queryKey: [...keys.warehouses, companyId ?? "all"],
+    queryFn: () => api.warehouses(companyId),
     ...common,
   });
 

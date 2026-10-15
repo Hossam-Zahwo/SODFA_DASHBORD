@@ -16,6 +16,7 @@ import {
   Search,
   Trash2,
   Wallet,
+  AlertTriangle,
   X,
 } from 'lucide-react'
 
@@ -53,15 +54,19 @@ type Transaction = {
   updated_at: string | null
   currency: string | null
   status: string | null
+  shortage_status: 'unsettled' | 'settled' | null
+  expense_owner?: 'MEME' | 'Meme Stor' | null
   to_financial_account_id: string | null
 }
 
 type TransactionForm = {
-  transaction_type: 'transfer' | 'expense'
+  transaction_type: 'transfer' | 'expense' | 'shortage'
   transaction_date: string
   amount: string
   account_id: string
   description: string
+  shortage_status: 'unsettled' | 'settled'
+  expense_owner: 'MEME' | 'Meme Stor' | ''
 }
 
 type AccountForm = {
@@ -157,13 +162,15 @@ const dbDate = (v: string) =>
 
 const blankTx = (
   accountId = '',
-  type: 'transfer' | 'expense' = 'transfer',
+  type: 'transfer' | 'expense' | 'shortage' = 'transfer',
 ): TransactionForm => ({
   transaction_type: type,
   transaction_date: today(),
   amount: '',
   account_id: accountId,
   description: '',
+  shortage_status: 'unsettled',
+  expense_owner: '',
 })
 
 const blankAccount = (): AccountForm => ({
@@ -248,7 +255,7 @@ function TransactionsPage() {
         supabase
           .from('transactions')
           .select(
-            'id,business_id,amount,transaction_date,transaction_type,account_id,description,created_at,updated_at,currency,status,to_financial_account_id',
+            'id,business_id,amount,transaction_date,transaction_type,account_id,description,created_at,updated_at,currency,status,shortage_status,expense_owner,to_financial_account_id',
           )
           .order('transaction_date', {
             ascending: false,
@@ -632,6 +639,18 @@ function TransactionsPage() {
       0,
     )
 
+  const totalShortages = filtered
+    .filter(
+      (t) =>
+        t.transaction_type ===
+        'shortage',
+    )
+    .reduce(
+      (s, t) =>
+        s + Number(t.amount || 0),
+      0,
+    )
+
   const companyTransfers = transactions
     .filter(
       (t) =>
@@ -660,9 +679,56 @@ function TransactionsPage() {
       0,
     )
 
+  const companyShortages = transactions
+    .filter(
+      (t) =>
+        t.business_id ===
+          businessFilter &&
+        t.transaction_type ===
+          'shortage',
+    )
+    .reduce(
+      (s, t) =>
+        s + Number(t.amount || 0),
+      0,
+    )
+
+  const unsettledCompanyShortages = transactions
+    .filter(
+      (t) =>
+        t.business_id === businessFilter &&
+        t.transaction_type === 'shortage' &&
+        t.shortage_status !== 'settled',
+    )
+    .reduce(
+      (s, t) => s + Number(t.amount || 0),
+      0,
+    )
+
+  const shortages = useMemo(
+    () =>
+      filtered
+        .filter(
+          (t) =>
+            t.transaction_type ===
+            'shortage',
+        )
+        .sort(
+          (a, b) =>
+            dateOnly(b.transaction_date).localeCompare(
+              dateOnly(a.transaction_date),
+            ) ||
+            (b.created_at ?? '').localeCompare(
+              a.created_at ?? '',
+            ),
+        ),
+    [filtered],
+  )
+
   const currentBalance =
     companyTransfers -
-    companyExpenses
+    companyExpenses -
+    unsettledCompanyShortages
 
   const changeBusiness = (
     v: string,
@@ -683,7 +749,7 @@ function TransactionsPage() {
   }
 
   const openTransaction = (
-    type: 'transfer' | 'expense',
+    type: 'transfer' | 'expense' | 'shortage',
     accountId = '',
     item?: Transaction,
   ) => {
@@ -696,7 +762,10 @@ function TransactionsPage() {
           item.transaction_type ===
           'expense'
             ? 'expense'
-            : 'transfer',
+            : item.transaction_type ===
+                'shortage'
+              ? 'shortage'
+              : 'transfer',
 
         transaction_date: dateOnly(
           item.transaction_date,
@@ -709,6 +778,12 @@ function TransactionsPage() {
 
         description:
           item.description ?? '',
+
+        shortage_status:
+          item.shortage_status === 'settled'
+            ? 'settled'
+            : 'unsettled',
+        expense_owner: item.expense_owner ?? '',
       })
     } else {
       setEditingTransaction(null)
@@ -802,6 +877,11 @@ function TransactionsPage() {
         return
       }
 
+      if (transactionForm.transaction_type === 'expense' && !transactionForm.expense_owner) {
+        setError('اختر الجهة التابعة لها الدفعة: MEME أو Meme Stor');
+        return;
+      }
+
       let account: Account | null =
         null
 
@@ -843,7 +923,9 @@ function TransactionsPage() {
 
       const businessId =
         transactionForm.transaction_type ===
-        'expense'
+          'expense' ||
+        transactionForm.transaction_type ===
+          'shortage'
           ? businessFilter
           : account?.business_id
 
@@ -860,7 +942,9 @@ function TransactionsPage() {
 
         account_id:
           transactionForm.transaction_type ===
-          'expense'
+              'expense' ||
+          transactionForm.transaction_type ===
+              'shortage'
             ? null
             : transactionForm.account_id,
 
@@ -879,6 +963,16 @@ function TransactionsPage() {
 
         currency: 'EGP',
         status: 'completed',
+
+        shortage_status:
+          transactionForm.transaction_type === 'shortage'
+            ? transactionForm.shortage_status
+            : null,
+
+        expense_owner:
+          transactionForm.transaction_type === 'expense'
+            ? transactionForm.expense_owner || null
+            : null,
 
         to_financial_account_id:
           transactionForm.transaction_type ===
@@ -929,7 +1023,9 @@ function TransactionsPage() {
             ? 'تم تعديل الحركة بنجاح'
             : savedType === 'expense'
               ? 'تمت إضافة المصروف للشركة بنجاح'
-              : 'تمت إضافة التحويل بنجاح',
+              : savedType === 'shortage'
+                ? 'تمت إضافة العجز المالي للشركة بنجاح'
+                : 'تمت إضافة التحويل بنجاح',
         )
 
         await fetchData()
@@ -945,6 +1041,56 @@ function TransactionsPage() {
         setSaving(false)
       }
     }
+
+  const toggleShortageSettlement = async (t: Transaction) => {
+    if (t.transaction_type !== 'shortage') return
+
+    const isSettled = t.shortage_status === 'settled'
+    const nextStatus = isSettled ? 'unsettled' : 'settled'
+
+    if (
+      !window.confirm(
+        isSettled
+          ? 'هل تريد إعادة العجز إلى حالة غير مُسوّى؟ سيعود للخصم من صافي قيمة الشركة.'
+          : 'هل تم تسوية هذا العجز بالفعل؟ عند التأكيد سيُرفع مبلغ العجز من الخصم على صافي قيمة الشركة.'
+      )
+    ) {
+      return
+    }
+
+    setSaving(true)
+    setError('')
+
+    try {
+      const r = await supabase
+        .from('transactions')
+        .update({
+          shortage_status: nextStatus,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', t.id)
+        .eq('transaction_type', 'shortage')
+
+      if (r.error) throw r.error
+
+      setNotice(
+        nextStatus === 'settled'
+          ? 'تمت تسوية العجز، ولم يعد يُخصم من صافي قيمة الشركة.'
+          : 'عاد العجز كغير مُسوّى، وسيتم خصمه من صافي قيمة الشركة.'
+      )
+
+      await fetchData()
+    } catch (e) {
+      console.error(e)
+      setError(
+        e instanceof Error
+          ? e.message
+          : 'تعذر تحديث حالة تسوية العجز',
+      )
+    } finally {
+      setSaving(false)
+    }
+  }
 
   const deleteTransaction =
     async (
@@ -979,7 +1125,10 @@ function TransactionsPage() {
           t.transaction_type ===
             'expense'
             ? 'تم حذف المصروف بنجاح'
-            : 'تم حذف التحويل بنجاح',
+            : t.transaction_type ===
+                'shortage'
+              ? 'تم حذف العجز المالي بنجاح'
+              : 'تم حذف التحويل بنجاح',
         )
 
         await fetchData()
@@ -1252,6 +1401,16 @@ function TransactionsPage() {
             </button>
 
             <button
+              onClick={() =>
+                openTransaction('shortage')
+              }
+              className="action-button"
+            >
+              <AlertTriangle className="h-4 w-4" />
+              عجز مالي
+            </button>
+
+            <button
               onClick={() => void fetchData()}
               disabled={refreshing}
               className="action-button"
@@ -1428,6 +1587,26 @@ function TransactionsPage() {
           />
 
           <Summary
+            label="إجمالي العجز المالي"
+            value={`${money(
+              totalShortages,
+            )} ج.م`}
+            icon={
+              <AlertTriangle className="h-5 w-5" />
+            }
+          />
+
+          <Summary
+            label="العجز غير المُسوّى"
+            value={`${money(
+              unsettledCompanyShortages,
+            )} ج.م`}
+            icon={
+              <AlertTriangle className="h-5 w-5" />
+            }
+          />
+
+          <Summary
             label="عدد الحركات"
             value={String(
               filtered.length,
@@ -1483,6 +1662,10 @@ function TransactionsPage() {
                     id: 'expense',
                     name: 'مصروف',
                   },
+                  {
+                    id: 'shortage',
+                    name: 'عجز مالي',
+                  },
                 ]}
               />
 
@@ -1507,6 +1690,38 @@ function TransactionsPage() {
             </div>
           )}
         </section>
+
+        {shortages.length > 0 && (
+          <section className="rounded-2xl border border-amber-500/20 bg-amber-500/5 p-4">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <p className="text-sm font-black text-amber-300">العجز المالي — {businessMap.get(businessFilter) ?? 'الشركة الحالية'}</p>
+                <p className="mt-1 text-xs text-zinc-500">إجمالي العجز المسجل لهذه الشركة فقط</p>
+              </div>
+              <p className="text-xl font-black text-amber-300">{money(companyShortages)} ج.م</p>
+            </div>
+            <div className="mt-3 space-y-2">
+              {shortages.map((t) => (
+                <CompanyShortageRow
+                  key={t.id}
+                  shortage={t}
+                  selected={selectedTransactionId === t.id}
+                  saving={saving}
+                  onSelect={() =>
+                    setSelectedTransactionId(
+                      selectedTransactionId === t.id ? null : t.id,
+                    )
+                  }
+                  onEdit={() =>
+                    openTransaction('shortage', '', t)
+                  }
+                  onDelete={() => void deleteTransaction(t)}
+                  onToggleSettlement={() => void toggleShortageSettlement(t)}
+                />
+              ))}
+            </div>
+          </section>
+        )}
 
         {loading ? (
           <div className="rounded-2xl border border-white/10 p-12 text-center">
@@ -1685,7 +1900,10 @@ function TransactionsPage() {
               : transactionForm.transaction_type ===
                   'expense'
                 ? 'إضافة مصروف للشركة'
-                : 'إضافة تحويل'
+                : transactionForm.transaction_type ===
+                    'shortage'
+                  ? 'إضافة عجز مالي للشركة'
+                  : 'إضافة تحويل'
           }
           form={transactionForm}
           account={
@@ -1842,6 +2060,7 @@ function CompanyExpenseDivider({
   onSelect,
   onEdit,
   onDelete,
+  onToggleSettlement,
 }: {
   expense: Transaction
   selected: boolean
@@ -1849,6 +2068,7 @@ function CompanyExpenseDivider({
   onSelect: () => void
   onEdit: () => void
   onDelete: () => void
+  onToggleSettlement: () => void
 }) {
   return (
     <div className="company-expense-divider">
@@ -1870,6 +2090,9 @@ function CompanyExpenseDivider({
                   'مصروف الشركة'}
               </p>
 
+              {expense.expense_owner && (
+                <span className={`mt-1 inline-flex rounded-full border border-white/30 bg-white/15 px-2 py-0.5 text-[10px] font-black`}>تابع لـ {expense.expense_owner}</span>
+              )}
               <div className="mt-0.5 flex items-center gap-1.5 text-sm font-semibold text-white">
                 <CalendarDays className="h-3 w-3" />
 
@@ -1920,6 +2143,112 @@ function CompanyExpenseDivider({
           </div>
         )}
       </div>
+    </div>
+  )
+}
+
+function CompanyShortageRow({
+  shortage,
+  selected,
+  saving,
+  onSelect,
+  onEdit,
+  onDelete,
+  onToggleSettlement,
+}: {
+  shortage: Transaction
+  selected: boolean
+  saving: boolean
+  onSelect: () => void
+  onEdit: () => void
+  onDelete: () => void
+  onToggleSettlement: () => void
+}) {
+  return (
+    <div
+      onClick={onSelect}
+      className={`cursor-pointer rounded-xl border p-3 transition ${
+        selected
+          ? 'border-white/70 bg-amber-500/20'
+          : 'border-amber-500/20 bg-black/10 hover:bg-amber-500/10'
+      }`}
+    >
+      <div className="flex items-center justify-between gap-3">
+        <div className="min-w-0">
+          <div className="flex items-center gap-2">
+            <AlertTriangle className="h-4 w-4 shrink-0 text-amber-300" />
+            <p className="truncate text-sm font-black text-white">
+              {shortage.description || 'عجز مالي'}
+            </p>
+          </div>
+          <div className="mt-1 flex flex-wrap items-center gap-2 text-xs">
+            <span className="text-zinc-500">
+              {dateText(shortage.transaction_date)} — عجز مسجل على الشركة
+            </span>
+            <span
+              className={`rounded-full px-2 py-0.5 font-black ${
+                shortage.shortage_status === 'settled'
+                  ? 'bg-green-500/10 text-green-300'
+                  : 'bg-amber-500/10 text-amber-300'
+              }`}
+            >
+              {shortage.shortage_status === 'settled'
+                ? 'تمت التسوية'
+                : 'غير مُسوّى — يُخصم من صافي الشركة'}
+            </span>
+          </div>
+        </div>
+        <p className="shrink-0 text-lg font-black text-amber-300">
+          {money(Number(shortage.amount || 0))} ج.م
+        </p>
+      </div>
+
+      {selected && (
+        <div className="mt-3 grid grid-cols-1 gap-2 border-t border-white/10 pt-2 sm:grid-cols-3">
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation()
+              onEdit()
+            }}
+            className="flex items-center justify-center gap-1.5 rounded-lg bg-white/10 py-2 text-[11px] font-black text-white hover:bg-white/15"
+          >
+            <Pencil className="h-3.5 w-3.5" />
+            تعديل
+          </button>
+          <button
+            type="button"
+            disabled={saving}
+            onClick={(e) => {
+              e.stopPropagation()
+              onToggleSettlement()
+            }}
+            className={`flex items-center justify-center gap-1.5 rounded-lg py-2 text-[11px] font-black disabled:opacity-50 ${
+              shortage.shortage_status === 'settled'
+                ? 'bg-amber-500/15 text-amber-300 hover:bg-amber-500/25'
+                : 'bg-green-500/15 text-green-300 hover:bg-green-500/25'
+            }`}
+          >
+            <AlertTriangle className="h-3.5 w-3.5" />
+            {shortage.shortage_status === 'settled'
+              ? 'إلغاء التسوية'
+              : 'تسوية العجز'}
+          </button>
+
+          <button
+            type="button"
+            disabled={saving}
+            onClick={(e) => {
+              e.stopPropagation()
+              onDelete()
+            }}
+            className="flex items-center justify-center gap-1.5 rounded-lg bg-red-500/15 py-2 text-[11px] font-black text-red-300 hover:bg-red-500/25 disabled:opacity-50"
+          >
+            <Trash2 className="h-3.5 w-3.5" />
+            حذف
+          </button>
+        </div>
+      )}
     </div>
   )
 }
@@ -2019,6 +2348,7 @@ function AccountTransactionCell({
   onSelect,
   onEdit,
   onDelete,
+  onToggleSettlement,
 }: {
   transactions: Transaction[]
   selectedId: string | null
@@ -2065,6 +2395,9 @@ function AccountTransactionCell({
                       </div>
                     </div>
 
+                    {t.transaction_type === 'expense' && t.expense_owner && (
+                      <span className={`mt-2 inline-flex rounded-full border px-2.5 py-1 text-[10px] font-black ${t.expense_owner === 'MEME' ? 'border-emerald-400/30 bg-emerald-400/10 text-emerald-300' : 'border-sky-400/30 bg-sky-400/10 text-sky-300'}`}>تابع لـ {t.expense_owner}</span>
+                    )}
                     {t.description && (
                       <p className="mt-2 break-words text-xs font-semibold leading-5 text-zinc-300">
                         {t.description}
@@ -2084,7 +2417,7 @@ function AccountTransactionCell({
                 </div>
 
                 {selected && (
-                  <div className="mt-3 grid grid-cols-2 gap-2 border-t border-white/10 pt-2">
+                  <div className="mt-3 grid grid-cols-1 gap-2 border-t border-white/10 pt-2 sm:grid-cols-3">
                     <button
                       type="button"
                       onClick={(e) => {
@@ -2156,7 +2489,7 @@ function TransactionModal({
             نوع الحركة
           </p>
 
-          <div className="mt-2 grid grid-cols-2 gap-2">
+          <div className="mt-2 grid grid-cols-1 gap-2 sm:grid-cols-3">
             <button
               type="button"
               onClick={() =>
@@ -2167,7 +2500,7 @@ function TransactionModal({
                 })
               }
               className={`rounded-xl border px-3 py-3 text-sm font-black ${
-                !expense
+                form.transaction_type === 'transfer'
                   ? 'border-purple-500 bg-purple-500/10 text-purple-300'
                   : 'border-white/10 text-zinc-500 hover:bg-white/5'
               }`}
@@ -2195,11 +2528,84 @@ function TransactionModal({
               <ArrowUpRight className="mx-auto mb-1 h-5 w-5" />
               مصروف الشركة
             </button>
+
+            <button
+              type="button"
+              onClick={() =>
+                onChange({
+                  ...form,
+                  transaction_type: 'shortage',
+                  account_id: '',
+                })
+              }
+              className={`rounded-xl border px-3 py-3 text-sm font-black ${
+                form.transaction_type === 'shortage'
+                  ? 'border-amber-500 bg-amber-500/10 text-amber-300'
+                  : 'border-white/10 text-zinc-500 hover:bg-white/5'
+              }`}
+            >
+              <AlertTriangle className="mx-auto mb-1 h-5 w-5" />
+              عجز مالي
+            </button>
           </div>
         </div>
       )}
 
-      {expense ? (
+      {form.transaction_type === 'shortage' ? (
+        <>
+        <div className="rounded-xl border border-amber-500/20 bg-amber-500/5 p-3">
+          <p className="text-[10px] text-zinc-500">
+            نطاق العجز المالي
+          </p>
+          <p className="mt-1 text-sm font-black text-amber-300">
+            الشركة بالكامل
+          </p>
+          <p className="mt-1 text-[10px] leading-5 text-zinc-500">
+            العجز المالي يسجل المبلغ المفقود أو غير المعروف مكانه على الشركة الحالية فقط، ولا يرتبط بحساب منفرد.
+          </p>
+        </div>
+        <div className="rounded-xl border border-white/10 bg-white/[0.03] p-3">
+          <p className="text-[10px] text-zinc-500">حالة التسوية</p>
+          <div className="mt-2 grid grid-cols-2 gap-2">
+            <button
+              type="button"
+              onClick={() =>
+                onChange({
+                  ...form,
+                  shortage_status: 'unsettled',
+                })
+              }
+              className={`rounded-lg border px-3 py-2 text-xs font-black ${
+                form.shortage_status === 'unsettled'
+                  ? 'border-amber-500/40 bg-amber-500/10 text-amber-300'
+                  : 'border-white/10 text-zinc-500 hover:bg-white/5'
+              }`}
+            >
+              غير مُسوّى
+            </button>
+            <button
+              type="button"
+              onClick={() =>
+                onChange({
+                  ...form,
+                  shortage_status: 'settled',
+                })
+              }
+              className={`rounded-lg border px-3 py-2 text-xs font-black ${
+                form.shortage_status === 'settled'
+                  ? 'border-green-500/40 bg-green-500/10 text-green-300'
+                  : 'border-white/10 text-zinc-500 hover:bg-white/5'
+              }`}
+            >
+              تمت التسوية
+            </button>
+          </div>
+          <p className="mt-2 text-[10px] leading-5 text-zinc-500">
+            العجز غير المُسوّى يُخصم من صافي قيمة الشركة. عند اختيار تمت التسوية، يُرفع هذا المبلغ من الخصم.
+          </p>
+        </div>
+        </>
+      ) : expense ? (
         <div className="rounded-xl border border-green-500/20 bg-green-500/5 p-3">
           <p className="text-[10px] text-zinc-500">
             نطاق المصروف
@@ -2222,6 +2628,21 @@ function TransactionModal({
             readOnly
             className="field"
           />
+        </FormField>
+      )}
+
+      {expense && (
+        <FormField label="الدفعة تابعة لمين؟">
+          <select
+            value={form.expense_owner}
+            onChange={(e) => onChange({ ...form, expense_owner: e.target.value as TransactionForm['expense_owner'] })}
+            className="field"
+          >
+            <option value="">اختر الجهة</option>
+            <option value="MEME">MEME</option>
+            <option value="Meme Stor">Meme Stor</option>
+          </select>
+          <p className="mt-1 text-[10px] leading-5 text-zinc-500">يُستخدم هذا الاختيار لتجميع الدفعات مع المستودع المطابق لها في ملخص المخزون.</p>
         </FormField>
       )}
 
@@ -2277,7 +2698,9 @@ function TransactionModal({
           placeholder={
             expense
               ? 'مثال: إيجار - رواتب - شحن - تسويق'
-              : 'مثال: دفعة كريم - بضاعة'
+              : form.transaction_type === 'shortage'
+                ? 'مثال: عجز جرد - مبلغ غير معلوم مكانه'
+                : 'مثال: دفعة كريم - بضاعة'
           }
         />
       </FormField>
@@ -2286,12 +2709,16 @@ function TransactionModal({
         className={`rounded-xl border p-3 text-xs ${
           expense
             ? 'border-green-500/20 bg-green-500/5 text-green-300'
-            : 'border-purple-500/20 bg-purple-500/5 text-purple-300'
+            : form.transaction_type === 'shortage'
+              ? 'border-amber-500/20 bg-amber-500/5 text-amber-300'
+              : 'border-purple-500/20 bg-purple-500/5 text-purple-300'
         }`}
       >
         {expense
           ? 'المصروف سيتم خصمه من إجمالي قيمة الشركة ولن يتم خصمه من Account منفرد.'
-          : 'التحويل سيضاف إلى رصيد الحساب المحدد والبنك المرتبط بالحساب يتم أخذه تلقائيًا.'}
+          : form.transaction_type === 'shortage'
+            ? 'العجز المالي يسجل على الشركة الحالية فقط ولا يُضاف إلى رصيد أي Account منفرد.'
+            : 'التحويل سيضاف إلى رصيد الحساب المحدد والبنك المرتبط بالحساب يتم أخذه تلقائيًا.'}
       </div>
 
       <Actions

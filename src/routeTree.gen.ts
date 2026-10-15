@@ -13,6 +13,7 @@ import { Route as IndexRouteImport } from './routes/index'
 import { Route as CategoriesRouteImport } from './routes/categories'
 import { Route as DamagedReturnsRouteImport } from './routes/damaged-returns'
 import { Route as InventoryRouteImport } from './routes/inventory'
+import { Route as InvoicesRouteImport } from './routes/invoices'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as McpRouteImport } from './routes/mcp'
 import { Route as ReturnsRouteImport } from './routes/returns'
@@ -43,6 +44,11 @@ const DamagedReturnsRoute = DamagedReturnsRouteImport.update({
 const InventoryRoute = InventoryRouteImport.update({
   id: '/inventory',
   path: '/inventory',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const InvoicesRoute = InvoicesRouteImport.update({
+  id: '/invoices',
+  path: '/invoices',
   getParentRoute: () => rootRouteImport,
 } as any)
 const LoginRoute = LoginRouteImport.update({
@@ -109,6 +115,7 @@ export interface FileRoutesByFullPath {
   '/categories': typeof CategoriesRoute
   '/damaged-returns': typeof DamagedReturnsRoute
   '/inventory': typeof InventoryRoute
+  '/invoices': typeof InvoicesRoute
   '/login': typeof LoginRoute
   '/mcp': typeof McpRoute
   '/returns': typeof ReturnsRoute
@@ -126,6 +133,7 @@ export interface FileRoutesByTo {
   '/categories': typeof CategoriesRoute
   '/damaged-returns': typeof DamagedReturnsRoute
   '/inventory': typeof InventoryRoute
+  '/invoices': typeof InvoicesRoute
   '/login': typeof LoginRoute
   '/mcp': typeof McpRoute
   '/returns': typeof ReturnsRoute
@@ -144,6 +152,7 @@ export interface FileRoutesById {
   '/categories': typeof CategoriesRoute
   '/damaged-returns': typeof DamagedReturnsRoute
   '/inventory': typeof InventoryRoute
+  '/invoices': typeof InvoicesRoute
   '/login': typeof LoginRoute
   '/mcp': typeof McpRoute
   '/returns': typeof ReturnsRoute
@@ -163,6 +172,7 @@ export interface FileRouteTypes {
     | '/categories'
     | '/damaged-returns'
     | '/inventory'
+    | '/invoices'
     | '/login'
     | '/mcp'
     | '/returns'
@@ -180,6 +190,7 @@ export interface FileRouteTypes {
     | '/categories'
     | '/damaged-returns'
     | '/inventory'
+    | '/invoices'
     | '/login'
     | '/mcp'
     | '/returns'
@@ -197,6 +208,7 @@ export interface FileRouteTypes {
     | '/categories'
     | '/damaged-returns'
     | '/inventory'
+    | '/invoices'
     | '/login'
     | '/mcp'
     | '/returns'
@@ -215,6 +227,7 @@ export interface RootRouteChildren {
   CategoriesRoute: typeof CategoriesRoute
   DamagedReturnsRoute: typeof DamagedReturnsRoute
   InventoryRoute: typeof InventoryRoute
+  InvoicesRoute: typeof InvoicesRoute
   LoginRoute: typeof LoginRoute
   McpRoute: typeof McpRoute
   ReturnsRoute: typeof ReturnsRoute
@@ -256,6 +269,13 @@ declare module '@tanstack/react-router' {
       path: '/inventory'
       fullPath: '/inventory'
       preLoaderRoute: typeof InventoryRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/invoices': {
+      id: '/invoices'
+      path: '/invoices'
+      fullPath: '/invoices'
+      preLoaderRoute: typeof InvoicesRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/login': {
@@ -343,6 +363,7 @@ const rootRouteChildren: RootRouteChildren = {
   CategoriesRoute: CategoriesRoute,
   DamagedReturnsRoute: DamagedReturnsRoute,
   InventoryRoute: InventoryRoute,
+  InvoicesRoute: InvoicesRoute,
   LoginRoute: LoginRoute,
   McpRoute: McpRoute,
   ReturnsRoute: ReturnsRoute,

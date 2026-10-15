@@ -465,6 +465,60 @@ function Dashboard() {
           0,
         );
 
+      const damagedValue =
+        filteredDamaged.reduce(
+          (sum, item) =>
+            sum +
+            Number(
+              item.total_value ||
+                Number(item.unit_price || 0) *
+                  Number(item.qty || 0),
+            ),
+          0,
+        );
+
+      const damagedAcceptedValue =
+        filteredDamaged
+          .filter((item) => item.status === "Accepted")
+          .reduce(
+            (sum, item) =>
+              sum +
+              Number(
+                item.total_value ||
+                  Number(item.unit_price || 0) *
+                    Number(item.qty || 0),
+              ),
+            0,
+          );
+
+      const damagedPendingValue =
+        filteredDamaged
+          .filter((item) => item.status === "Pending")
+          .reduce(
+            (sum, item) =>
+              sum +
+              Number(
+                item.total_value ||
+                  Number(item.unit_price || 0) *
+                    Number(item.qty || 0),
+              ),
+            0,
+          );
+
+      const damagedRejectedValue =
+        filteredDamaged
+          .filter((item) => item.status === "Rejected")
+          .reduce(
+            (sum, item) =>
+              sum +
+              Number(
+                item.total_value ||
+                  Number(item.unit_price || 0) *
+                    Number(item.qty || 0),
+              ),
+            0,
+          );
+
       /* PRODUCTS */
 
       const availableProducts =
@@ -522,6 +576,14 @@ function Dashboard() {
         returnsValue,
 
         damagedCount,
+
+        damagedValue,
+
+        damagedAcceptedValue,
+
+        damagedPendingValue,
+
+        damagedRejectedValue,
 
         availableProducts,
 
@@ -1994,6 +2056,50 @@ function DamagedDetails({
               stats.damagedCount,
             )}
           />
+
+        </div>
+
+        {/* FINANCIAL VALUE */}
+
+        <div className="mt-2 rounded-lg border border-red-200 bg-red-50/60 p-2.5">
+
+          <div className="flex items-center justify-between gap-3">
+
+            <div>
+              <p className="text-[10px] font-semibold text-red-700">
+                القيمة المالية للتالف
+              </p>
+              <p className="mt-0.5 text-[9px] text-muted-foreground">
+                سعر الوحدة × الكمية التالفة
+              </p>
+            </div>
+
+            <p dir="ltr" className="text-sm font-bold text-red-700">
+              {moneyEn(stats.damagedValue, "ar")}
+            </p>
+
+          </div>
+
+          <div className="mt-2 grid grid-cols-3 gap-1.5 text-center">
+            <div className="rounded-md bg-white px-1.5 py-1.5">
+              <p className="text-[8px] text-muted-foreground">مقبول</p>
+              <p dir="ltr" className="text-[10px] font-bold text-green-600">
+                {moneyEn(stats.damagedAcceptedValue, "ar")}
+              </p>
+            </div>
+            <div className="rounded-md bg-white px-1.5 py-1.5">
+              <p className="text-[8px] text-muted-foreground">معلق</p>
+              <p dir="ltr" className="text-[10px] font-bold text-amber-600">
+                {moneyEn(stats.damagedPendingValue, "ar")}
+              </p>
+            </div>
+            <div className="rounded-md bg-white px-1.5 py-1.5">
+              <p className="text-[8px] text-muted-foreground">مرفوض</p>
+              <p dir="ltr" className="text-[10px] font-bold text-red-600">
+                {moneyEn(stats.damagedRejectedValue, "ar")}
+              </p>
+            </div>
+          </div>
 
         </div>
 

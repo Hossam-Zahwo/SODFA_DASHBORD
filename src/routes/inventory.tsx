@@ -17,6 +17,7 @@ import {
   BarChart3,
   TrendingUp,
   Warehouse,
+  Wallet,
   CheckSquare,
   Square,
 } from "lucide-react";
@@ -47,6 +48,8 @@ import { api, type Product } from "@/lib/api";
 import { errorMessage, useI18n } from "@/lib/i18n";
 import { fmtMoney } from "@/lib/dates";
 import { warehouseName } from "@/lib/warehouse";
+import { useCompany } from "@/lib/company";
+import { supabase } from "@/lib/supabase";
 
 /* ============================================================
 *   SODFA BRAND COLORS*
@@ -115,19 +118,108 @@ type StockFilter = "all" | "full" | "low" | "out";
 
 function InventoryPage() {
   const { t, lang } = useI18n();
-  const inventory = useInventory();
-  const warehouses = useWarehouses();
+  const { selectedCompanyId } = useCompany();
+  const inventory = useInventory(selectedCompanyId);
+  const warehouses = useWarehouses(selectedCompanyId);
+
   const [q, setQ] = useState("");
   const [wh, setWh] = useState<string[]>([ALL_WAREHOUSES]);
+  const [ownerPayments, setOwnerPayments] = useState<Array<{ expense_owner: string; amount: number | string }>>([]);
+
+  // دفعات الموردين تخص شركة MEME فقط، ولا تظهر في ملخص صدفة.
+  const isMemeCompany = selectedCompanyId === "57bade9c-6b21-486a-a0d5-9e5a07b5a32e";
+
   const [stockFilter, setStockFilter] = useState<StockFilter>("all");
 
+
+
   // المستودعات المحددة حاليًا.
+  useEffect(() => {
+    let active = true;
+    const loadOwnerPayments = async () => {
+      if (!isMemeCompany) {
+        setOwnerPayments([]);
+        return;
+      }
+      let query = supabase
+        .from("transactions")
+        .select("expense_owner,amount")
+        .eq("transaction_type", "expense")
+        .in("expense_owner", ["MEME", "Meme Stor"])
+        .eq("status", "completed");
+      if (selectedCompanyId) query = query.eq("business_id", selectedCompanyId);
+      try {
+        const { data, error } = await query;
+        if (!active) return;
+        if (error) {
+          console.error("تعذر تحميل إجمالي دفعات المستودعات:", error);
+          setOwnerPayments([]);
+          return;
+        }
+        setOwnerPayments((data ?? []) as Array<{ expense_owner: string; amount: number | string }>);
+      } catch (error) {
+        if (!active) return;
+        console.error("تعذر تحميل إجمالي دفعات المستودعات:", error);
+        setOwnerPayments([]);
+      }
+    };
+    void loadOwnerPayments();
+    return () => { active = false; };
+  }, [selectedCompanyId, isMemeCompany]);
+
   const selectedWarehouseIds = useMemo(() => {
     if (wh.includes(ALL_WAREHOUSES)) {
       return Array.from(new Set((inventory.data ?? []).map((product) => product.warehouse).filter(Boolean)));
     }
     return wh.filter(Boolean);
   }, [wh, inventory.data]);
+
+  const selectedWarehouseNames = selectedWarehouseIds.map((id) => {
+    try {
+      return String(warehouseName(warehouses.data ?? [], String(id ?? "")) ?? "")
+        .trim()
+        .toLowerCase();
+    } catch (error) {
+      console.error("تعذر تحديد اسم المستودع:", error);
+      return "";
+    }
+  });
+  const showMemePayments = selectedWarehouseNames.some((name) => name === "mimi" || name === "ميمي" || name === "meme");
+  const showMemeStorePayments = selectedWarehouseNames.some((name) => name === "mimi store" || name === "meme stor" || name === "ميمي ستور");
+  const memePaymentsTotal = showMemePayments
+    ? ownerPayments.filter((payment) => payment?.expense_owner === "MEME").reduce((sum, payment) => sum + (Number.isFinite(Number(payment?.amount)) ? Number(payment.amount) : 0), 0)
+    : 0;
+  const memeStorePaymentsTotal = showMemeStorePayments
+    ? ownerPayments.filter((payment) => payment?.expense_owner === "Meme Stor").reduce((sum, payment) => sum + (Number.isFinite(Number(payment?.amount)) ? Number(payment.amount) : 0), 0)
+    : 0;
+  const selectedOwnerPaymentsTotal = memePaymentsTotal + memeStorePaymentsTotal;
+  const hasSelectedOwnerPayments = isMemeCompany && (showMemePayments || showMemeStorePayments);
+  // Keep the all-products flag for features that require complete pricing.
+  const hasCompleteSellingPrices = useMemo(() => {
+    const products = inventory.data ?? [];
+    return (
+      products.length > 0 &&
+      products.every(
+        (product) =>
+          product.selling_price !== null &&
+          product.selling_price !== undefined &&
+          Number.isFinite(Number(product.selling_price)) &&
+          Number(product.selling_price) > 0
+      )
+    );
+  }, [inventory.data]);
+
+  // The financial summary should show sale-price fields when at least one
+  // inventory product has both a valid cost price and a valid selling price.
+  const hasAnyCostAndSellingPrice = useMemo(
+    () => (inventory.data ?? []).some((product) =>
+      Number.isFinite(Number(product.price)) && Number(product.price) > 0 &&
+      product.selling_price !== null && product.selling_price !== undefined &&
+      Number.isFinite(Number(product.selling_price)) && Number(product.selling_price) > 0
+    ),
+    [inventory.data]
+  );
+
   const [editing, setEditing] =
     useState<Product | null>(null);
   const [formOpen, setFormOpen] =
@@ -140,6 +232,16 @@ function InventoryPage() {
     useState<Product | null>(null);
   const [selectedProducts, setSelectedProducts] =
     useState<string[]>([]);
+
+  // When the company changes, clear warehouse/search selections that belong
+  // to the previous company before the new inventory query is shown.
+  useEffect(() => {
+    setWh([ALL_WAREHOUSES]);
+    setQ("");
+    setStockFilter("all");
+    setSelectedProducts([]);
+  }, [selectedCompanyId]);
+
   const [bulkDeleteOpen, setBulkDeleteOpen] =
     useState(false);
   const [bulkDeleting, setBulkDeleting] =
@@ -166,17 +268,17 @@ function InventoryPage() {
           remainingQty > 0 &&
           remainingQty <= 5) ||
         (stockFilter === "out" && remainingQty <= 0);
+      // Database rows can contain null/missing text fields (especially after
+      // imports). Normalize them before searching so one malformed row cannot
+      // crash the entire route and trigger the root "This page didn't load" screen.
+      const productName = String(p.product_name ?? "").toLowerCase();
+      const productId = String(p.product_id ?? "").toLowerCase();
+      const barcode = String(p.barcode ?? "").toLowerCase();
       const okQ =
         !term ||
-        p.product_name
-          .toLowerCase()
-          .includes(term) ||
-        p.product_id
-          .toLowerCase()
-          .includes(term) ||
-        p.barcode
-          .toLowerCase()
-          .includes(term);
+        productName.includes(term) ||
+        productId.includes(term) ||
+        barcode.includes(term);
       return okWh && okStock && okQ;
     });
   }, [inventory.data, q, wh, stockFilter]);
@@ -231,7 +333,7 @@ function InventoryPage() {
 *  ========================================================= */
 
   const selectedWarehouseSellingPrice = useMemo(() => {
-    if (selectedWarehouseIds.length === 0) {
+    if (selectedWarehouseIds.length === 0 || !hasCompleteSellingPrices) {
       return { visible: false, total: 0, productCount: 0, warehouseCount: 0 };
     }
 
@@ -261,7 +363,7 @@ function InventoryPage() {
     );
 
     return { visible: true, total, productCount: selectedProducts.length, warehouseCount: selectedWarehouseIds.length };
-  }, [inventory.data, selectedWarehouseIds]);
+  }, [inventory.data, selectedWarehouseIds, hasCompleteSellingPrices]);
 
   /* =========================================================
 *     INVENTORY STATISTICS*
@@ -332,24 +434,28 @@ function InventoryPage() {
       0
     );
 
-    const productsWithSellingPrice = list.filter(
-      (product) =>
-        product.selling_price !== null &&
-        product.selling_price !== undefined &&
-        Number(product.selling_price) > 0
+    // Sale-price totals include only products that actually have a valid
+    // selling price; never substitute cost price for a missing selling price.
+    const totalCurrentInventorySellingPriceValue = list.reduce(
+      (sum, product) => {
+        const sellingPrice = Number(product.selling_price);
+        if (!Number.isFinite(sellingPrice) || sellingPrice <= 0) return sum;
+        return sum + Number(product.remaining_qty || 0) * sellingPrice;
+      },
+      0
     );
 
-    const totalSoldSellingPriceValue =
-      productsWithSellingPrice.reduce(
-        (sum, product) =>
-          sum +
-          Number(product.sold_qty || 0) *
-            Number(product.selling_price || 0),
-        0
-      );
+    const totalSoldSellingPriceValue = list.reduce(
+      (sum, product) => {
+        const sellingPrice = Number(product.selling_price);
+        if (!Number.isFinite(sellingPrice) || sellingPrice <= 0) return sum;
+        return sum + Number(product.sold_qty || 0) * sellingPrice;
+      },
+      0
+    );
 
-    const hasSellingPrices =
-      productsWithSellingPrice.length > 0;
+    // This flag controls visibility of sale-price summary fields.
+    const hasSellingPrices = hasAnyCostAndSellingPrice;
 
     const warehouseValues = new Map<
       string,
@@ -389,6 +495,7 @@ function InventoryPage() {
       totalOriginalInventoryValue,
       totalSoldValue,
       totalCurrentInventoryValue,
+      totalCurrentInventorySellingPriceValue,
       totalSoldSellingPriceValue,
       hasSellingPrices,
       warehouseValues:
@@ -401,7 +508,7 @@ function InventoryPage() {
           })
         ),
     };
-  }, [list]);
+  }, [list, hasAnyCostAndSellingPrice]);
 
   /* =========================================================
 *     CHART PERCENTAGES*
@@ -532,6 +639,13 @@ function InventoryPage() {
               lang={lang}
               selectedWarehouseIds={selectedWarehouseIds}
               selectedWarehouseSellingPrice={selectedWarehouseSellingPrice}
+              hasCompleteSellingPrices={hasCompleteSellingPrices}
+              hasSelectedOwnerPayments={hasSelectedOwnerPayments}
+              selectedOwnerPaymentsTotal={selectedOwnerPaymentsTotal}
+              showMemePayments={showMemePayments}
+              showMemeStorePayments={showMemeStorePayments}
+              memePaymentsTotal={memePaymentsTotal}
+              memeStorePaymentsTotal={memeStorePaymentsTotal}
             />
             <InventoryCharts
               statistics={statistics}
@@ -552,6 +666,7 @@ function InventoryPage() {
                 setFormOpen(true);
               }}
               onDelete={setToDelete}
+              hasCompleteSellingPrices={hasCompleteSellingPrices}
               selectedProducts={selectedProducts}
               allVisibleSelected={
                 allVisibleSelected
@@ -1070,6 +1185,13 @@ function InventoryStatistics({
   lang,
   selectedWarehouseIds,
   selectedWarehouseSellingPrice,
+  hasCompleteSellingPrices,
+  hasSelectedOwnerPayments,
+  selectedOwnerPaymentsTotal,
+  showMemePayments,
+  showMemeStorePayments,
+  memePaymentsTotal,
+  memeStorePaymentsTotal,
 }: {
   statistics: {
     totalProducts: number;
@@ -1081,6 +1203,7 @@ function InventoryStatistics({
     totalOriginalInventoryValue: number;
     totalSoldValue: number;
     totalCurrentInventoryValue: number;
+    totalCurrentInventorySellingPriceValue: number;
     totalSoldSellingPriceValue: number;
     hasSellingPrices: boolean;
     warehouseValues: Array<{
@@ -1099,6 +1222,13 @@ function InventoryStatistics({
     productCount: number;
     warehouseCount: number;
   };
+  hasCompleteSellingPrices: boolean;
+  hasSelectedOwnerPayments: boolean;
+  selectedOwnerPaymentsTotal: number;
+  showMemePayments: boolean;
+  showMemeStorePayments: boolean;
+  memePaymentsTotal: number;
+  memeStorePaymentsTotal: number;
 }) {
   const cards = [
     {
@@ -1242,7 +1372,7 @@ function InventoryStatistics({
       {/* FINANCIAL VALUES */}
       <div
         className={`grid gap-4 ${
-          selectedWarehouseSellingPrice.visible
+          statistics.hasSellingPrices || hasSelectedOwnerPayments
             ? "md:grid-cols-2 xl:grid-cols-4"
             : "md:grid-cols-3"
         }`}
@@ -1283,6 +1413,43 @@ function InventoryStatistics({
             </div>
           </div>
         </Card>
+        {hasSelectedOwnerPayments && (
+          <>
+            <Card className="border p-5 shadow-sm transition-all duration-300 hover:-translate-y-0.5 hover:shadow-md" style={{ background: "linear-gradient(135deg, #ECFDF5 0%, #D1FAE5 100%)", borderColor: "#6EE7B7" }}>
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <p className="text-sm font-bold text-emerald-800">إجمالي الدفعات</p>
+                  <p className="mt-2 text-2xl font-black text-emerald-700">{fmtMoney(selectedOwnerPaymentsTotal, lang)}</p>
+                  <div className="mt-2 flex flex-wrap gap-2 text-xs font-semibold text-emerald-800">
+                    {showMemePayments && <span className="rounded-full bg-white/70 px-2 py-1">MEME: {fmtMoney(memePaymentsTotal, lang)}</span>}
+                    {showMemeStorePayments && <span className="rounded-full bg-white/70 px-2 py-1">Meme Stor: {fmtMoney(memeStorePaymentsTotal, lang)}</span>}
+                  </div>
+                </div>
+                <div className="rounded-xl bg-emerald-200/70 p-2.5"><TrendingUp className="h-5 w-5 text-emerald-700" /></div>
+              </div>
+            </Card>
+            <Card className="border p-5 shadow-sm transition-all duration-300 hover:-translate-y-0.5 hover:shadow-md" style={{ background: "linear-gradient(135deg, #FEF2F2 0%, #FEE2E2 100%)", borderColor: "#FCA5A5" }}>
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <p className="text-sm font-bold text-red-800">المتبقي من إجمالي البضاعة</p>
+                  <p className="mt-2 text-2xl font-black text-red-700">{fmtMoney(statistics.totalOriginalInventoryValue - selectedOwnerPaymentsTotal, lang)}</p>
+                  <p className="mt-1 text-xs text-red-800/80">قيمة أصل البضاعة بالكامل بسعر التكلفة − إجمالي الدفعات</p>
+                </div>
+                <div className="rounded-xl bg-red-200/70 p-2.5"><Wallet className="h-5 w-5 text-red-700" /></div>
+              </div>
+            </Card>
+            <Card className="border p-5 shadow-sm transition-all duration-300 hover:-translate-y-0.5 hover:shadow-md" style={{ background: "linear-gradient(135deg, #FEF2F2 0%, #FEE2E2 100%)", borderColor: "#FCA5A5" }}>
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <p className="text-sm font-bold text-red-800">المتبقي من البضاعة المباعة</p>
+                  <p className="mt-2 text-2xl font-black text-red-700">{fmtMoney(statistics.totalSoldValue - selectedOwnerPaymentsTotal, lang)}</p>
+                  <p className="mt-1 text-xs text-red-800/80">قيمة البضاعة المباعة بسعر التكلفة − إجمالي الدفعات</p>
+                </div>
+                <div className="rounded-xl bg-red-200/70 p-2.5"><Wallet className="h-5 w-5 text-red-700" /></div>
+              </div>
+            </Card>
+          </>
+        )}
         <Card
           className="border p-5 shadow-sm transition-all duration-300 hover:-translate-y-0.5 hover:shadow-md"
           style={{
@@ -1359,7 +1526,7 @@ function InventoryStatistics({
           </Card>
         )}
 
-        {selectedWarehouseSellingPrice.visible && (
+        {statistics.hasSellingPrices && selectedWarehouseSellingPrice.visible && (
             <Card
               className="border p-5 shadow-sm transition-all duration-300 hover:-translate-y-0.5 hover:shadow-md"
               style={{
@@ -1408,7 +1575,7 @@ function InventoryStatistics({
           <div className="flex items-start justify-between gap-3">
             <div>
               <p className="text-sm font-medium text-[#6B5A70]">
-                قيمة المخزون الحالي
+                قيمة المخزون الحالي بسعر التكلفة
               </p>
               <p className="mt-2 text-2xl font-black text-[#7B2C8E]">
                 {fmtMoney(
@@ -1417,7 +1584,7 @@ function InventoryStatistics({
                 )}
               </p>
               <p className="mt-1 text-xs text-[#8A7890]">
-                قيمة البضاعة المتبقية الموجودة فعليًا
+                القيمة الكاملة للكمية المتوفرة حاليًا محسوبة بسعر التكلفة
               </p>
             </div>
             <div
@@ -1434,6 +1601,45 @@ function InventoryStatistics({
             </div>
           </div>
         </Card>
+
+        {statistics.hasSellingPrices && (
+          <Card
+            className="border p-5 shadow-sm transition-all duration-300 hover:-translate-y-0.5 hover:shadow-md"
+            style={{
+              background: BRAND.cardGradient,
+              borderColor: BRAND.borderPurple,
+            }}
+          >
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <p className="text-sm font-medium text-[#6B5A70]">
+                  قيمة المخزون الحالي بسعر البيع
+              </p>
+              <p className="mt-2 text-2xl font-black text-[#7B2C8E]">
+                {fmtMoney(
+                  statistics.totalCurrentInventorySellingPriceValue,
+                  lang
+                )}
+              </p>
+              <p className="mt-1 text-xs text-[#8A7890]">
+                القيمة الكاملة للكمية الموجودة حاليًا محسوبة بسعر البيع
+              </p>
+            </div>
+            <div
+              className="rounded-xl p-2.5"
+              style={{
+                background:
+                  "linear-gradient(135deg, #F3E5F5, #E8CBEA)",
+              }}
+            >
+                <TrendingUp
+                  className="h-5 w-5"
+                  style={{ color: BRAND.purpleDark }}
+                />
+              </div>
+            </div>
+          </Card>
+        )}
       </div>
 
       {/* WAREHOUSE VALUES */}
@@ -1912,6 +2118,7 @@ function ProductsSection({
   onPrint,
   onEdit,
   onDelete,
+  hasCompleteSellingPrices,
   selectedProducts,
   allVisibleSelected,
   onToggleSelectAll,
@@ -1926,6 +2133,7 @@ function ProductsSection({
   onPrint: (product: Product) => void;
   onEdit: (product: Product) => void;
   onDelete: (product: Product) => void;
+  hasCompleteSellingPrices: boolean;
   selectedProducts: string[];
   allVisibleSelected: boolean;
   onToggleSelectAll: () => void;
@@ -2044,6 +2252,7 @@ function ProductsSection({
             onPrint={onPrint}
             onEdit={onEdit}
             onDelete={onDelete}
+            hasCompleteSellingPrices={hasCompleteSellingPrices}
             selected={selectedProducts.includes(
               product.product_id
             )}
@@ -2072,6 +2281,7 @@ function ProductCard({
   onPrint,
   onEdit,
   onDelete,
+  hasCompleteSellingPrices,
   selected,
   onToggleSelect,
 }: {
@@ -2083,6 +2293,7 @@ function ProductCard({
   onPrint: (product: Product) => void;
   onEdit: (product: Product) => void;
   onDelete: (product: Product) => void;
+  hasCompleteSellingPrices: boolean;
   selected: boolean;
   onToggleSelect: () => void;
 }) {
@@ -2228,23 +2439,27 @@ function ProductCard({
         </div>
 
         {/* PRICES */}
-        <div className="grid grid-cols-2 gap-2 rounded-xl border p-2.5" style={{ borderColor: BRAND.borderPurple, background: "linear-gradient(135deg, #FFFFFF, #FAF5FC)" }}>
+        <div
+          className={`${hasCompleteSellingPrices ? "grid grid-cols-2" : "block"} gap-2 rounded-xl border p-2.5`}
+          style={{
+            borderColor: BRAND.borderPurple,
+            background: "linear-gradient(135deg, #FFFFFF, #FAF5FC)",
+          }}
+        >
           <div className="min-w-0">
-            <p className="text-[10px] text-[#8A7890]">السعر العادي</p>
+            <p className="text-[10px] text-[#8A7890]">سعر التكلفة</p>
             <p className="mt-1 truncate text-base font-bold text-[#6B5A70]">
               {fmtMoney(product.price, lang)}
             </p>
           </div>
-          <div className="min-w-0 border-r border-[#EADCF0] pr-2 text-right">
-            <p className="text-[10px] text-[#8A7890]">سعر البيع</p>
-            {product.selling_price !== null && product.selling_price !== undefined ? (
+          {hasCompleteSellingPrices && (
+            <div className="min-w-0 border-r border-[#EADCF0] pr-2 text-right">
+              <p className="text-[10px] text-[#8A7890]">سعر البيع</p>
               <p className="mt-1 truncate text-base font-black text-[#7B2C8E]">
                 {fmtMoney(product.selling_price, lang)}
               </p>
-            ) : (
-              <p className="mt-1 text-xs font-medium text-[#A99AAE]">غير محدد</p>
-            )}
-          </div>
+            </div>
+          )}
         </div>
 
         {/* STOCK NUMBERS */}

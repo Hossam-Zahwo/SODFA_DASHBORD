@@ -10,6 +10,7 @@ const dict = {
   inventory: { ar: "المخزون", en: "Inventory" },
   sales: { ar: "المبيعات", en: "Sales" },
   transactions: { ar: "المعاملات", en: "Transactions" },
+  invoices: { ar: "إصدار الفواتير", en: "Invoices" },
   returns: { ar: "المرتجعات", en: "Returns" },
   normal_returns: { ar: "المرتجعات العادية", en: "Normal Returns" },
   damaged_returns: { ar: "المرتجعات التالفة", en: "Damaged Returns" },

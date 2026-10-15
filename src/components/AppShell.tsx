@@ -2,7 +2,10 @@ import { useEffect, useState } from "react";
 import { Link, useRouterState } from "@tanstack/react-router";
 import {
   ArrowLeftRight,
+  FileText,
   BarChart3,
+  Building2,
+  ChevronDown,
   Boxes,
   Tags,
   Menu,
@@ -27,6 +30,7 @@ import {
 
 import { useI18n, type TKey } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
+import { useCompany, type CompanyId } from "@/lib/company";
 
 import { supabase } from "@/lib/supabase";
 
@@ -90,6 +94,12 @@ const NAV: {
     to: "/transactions",
     key: "transactions",
     icon: ArrowLeftRight,
+  },
+
+  {
+    to: "/invoices",
+    key: "invoices",
+    icon: FileText,
   },
 
   {
@@ -360,6 +370,68 @@ function LanguageToggle() {
           {l === "ar" ? "العربية" : "English"}
         </button>
       ))}
+    </div>
+  );
+}
+
+/* ============================================================
+   COMPANY SWITCHER
+   ============================================================ */
+
+function CompanySwitcher() {
+  const { selectedCompanyId, selectedCompany, companies, setSelectedCompanyId } =
+    useCompany();
+
+  const handleChange = (companyId: CompanyId) => {
+    setSelectedCompanyId(companyId);
+  };
+
+  return (
+    <div
+      className="flex min-w-0 items-center gap-2 rounded-xl border px-2 py-1.5 sm:px-3"
+      style={{
+        backgroundColor: BRAND.card,
+        borderColor: BRAND.border,
+      }}
+    >
+      <Building2
+        className="hidden h-4 w-4 shrink-0 sm:block"
+        style={{ color: BRAND.purpleLight }}
+      />
+
+      <span
+        className="hidden text-[11px] font-semibold text-zinc-500 sm:inline"
+        style={{ fontFamily: '"Cairo", sans-serif' }}
+      >
+        الشركة
+      </span>
+
+      <div className="relative min-w-0">
+        <select
+          value={selectedCompanyId}
+          onChange={(event) => handleChange(event.target.value as CompanyId)}
+          aria-label="اختيار الشركة"
+          className="h-8 min-w-[92px] cursor-pointer appearance-none rounded-lg border-0 bg-transparent py-1 pe-7 ps-2 text-sm font-bold text-white outline-none focus:ring-0 sm:min-w-[112px]"
+          style={{ fontFamily: '"Cairo", sans-serif' }}
+        >
+          {companies.map((company) => (
+            <option
+              key={company.id}
+              value={company.id}
+              className="bg-[#111114] text-white"
+            >
+              {company.name}
+            </option>
+          ))}
+        </select>
+
+        <ChevronDown
+          aria-hidden="true"
+          className="pointer-events-none absolute end-1 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-500"
+        />
+      </div>
+
+      <span className="sr-only">الشركة الحالية: {selectedCompany.name}</span>
     </div>
   );
 }
@@ -761,6 +833,10 @@ export function AppShell({
             >
               {title}
             </h1>
+
+            {/* Company */}
+
+            <CompanySwitcher />
 
             {/* Language */}
 

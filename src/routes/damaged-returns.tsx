@@ -7,6 +7,7 @@ import {
   XCircle,
   Clock3,
   Trash2,
+  Pencil,
   Wallet,
   AlertTriangle,
   Package,
@@ -52,6 +53,8 @@ import {
 import {
   api,
   type DamagedStatus,
+  type DamagedCompensationStatus,
+  type DamagedReturn,
   type Product,
 } from "@/lib/api";
 
@@ -100,6 +103,8 @@ function DamagedPage() {
 
   const [open, setOpen] = useState(false);
 
+  const [editingId, setEditingId] = useState<string | null>(null);
+
   const [filter, setFilter] = useState<string>("all");
 
   const [search, setSearch] = useState("");
@@ -117,9 +122,17 @@ function DamagedPage() {
 
   const [qty, setQty] = useState("1");
 
+  const [unitPrice, setUnitPrice] = useState("0");
+
   const [reason, setReason] = useState("");
 
   const [details, setDetails] = useState("");
+
+  const [compensationStatus, setCompensationStatus] =
+    useState<DamagedCompensationStatus>("Pending");
+
+  const [compensationAmount, setCompensationAmount] =
+    useState("");
 
   const [destination, setDestination] =
     useState("");
@@ -164,16 +177,7 @@ function DamagedPage() {
        * لو الـ Product type الحالي عندك لا يحتوي
        * price بشكل صريح.
        */
-      unit_price: Number(
-        (product as Product & {
-          price?: number;
-          unit_price?: number;
-        })?.unit_price ??
-          (product as Product & {
-            price?: number;
-          })?.price ??
-          0,
-      ),
+      unit_price: Math.max(0, Number(unitPrice || 0)),
 
       warehouse: destination,
 
@@ -193,6 +197,41 @@ function DamagedPage() {
 
   /*
    * =========================================================
+   * UPDATE DAMAGED RETURN
+   * =========================================================
+   */
+
+  const updateDamaged = useApiMutation(
+    (p: {
+      id: string;
+      product_id: string;
+      shipment_code: string;
+      qty: number;
+      unit_price: number;
+      warehouse: string;
+      reason: string;
+      details: string;
+      img1: string;
+      img2: string;
+      img3: string;
+    }) =>
+      api.updateDamagedReturn({
+        damaged_return_id: p.id,
+        product_id: p.product_id,
+        shipment_code: p.shipment_code,
+        qty: p.qty,
+        unit_price: p.unit_price,
+        warehouse: p.warehouse,
+        damage_reason: p.reason,
+        damage_details: p.details,
+        policy_image: p.img1,
+        product_image: p.img2,
+        policy_product_image: p.img3,
+      }),
+  );
+
+  /*
+   * =========================================================
    * UPDATE STATUS
    * =========================================================
    */
@@ -206,6 +245,19 @@ function DamagedPage() {
         p.id,
         p.status,
       ),
+  );
+
+  const saveCompensation = useApiMutation(
+    (p: {
+      id: string;
+      status: DamagedCompensationStatus;
+      amount: number;
+    }) =>
+      api.updateDamagedCompensation({
+        damaged_return_id: p.id,
+        compensation_status: p.status,
+        compensation_amount: p.amount,
+      }),
   );
 
   /*
@@ -249,6 +301,15 @@ function DamagedPage() {
   const pickProduct = useCallback(
     (p: Product) => {
       setProduct(p);
+      setUnitPrice(
+        String(
+          Number(
+            (p as Product & {
+              price?: number;
+            })?.price ?? 0,
+          ),
+        ),
+      );
 
       setDestination(
         (currentWarehouse) => {
@@ -368,19 +429,51 @@ function DamagedPage() {
 
   const getDamagedValue = useCallback(
     (item: any) => {
+      const storedTotal = Number(
+        item?.total_value ?? 0,
+      );
+
+      if (storedTotal !== 0) {
+        return storedTotal;
+      }
+
       const unitPrice = Number(
-        item?.unit_price ?? 0,
+        item?.unit_price ??
+          item?.price ??
+          item?.unit_sale_price ??
+          0,
       );
 
       const quantity = Number(
-        item?.qty ?? 0,
+        item?.qty ??
+          item?.quantity ??
+          0,
       );
 
-      return (
-        unitPrice * quantity
-      );
+      return unitPrice * quantity;
     },
     [],
+  );
+
+  const getCompensationValue = useCallback(
+    (item: any) => {
+      const status =
+        item?.compensation_status ??
+        "Pending";
+
+      if (status === "Full") {
+        return getDamagedValue(item);
+      }
+
+      if (status === "Partial") {
+        return Number(
+          item?.compensation_amount ?? 0,
+        );
+      }
+
+      return 0;
+    },
+    [getDamagedValue],
   );
 
   const financialStats = useMemo(() => {
@@ -388,52 +481,43 @@ function DamagedPage() {
 
     const total = data.reduce(
       (sum, item) =>
-        sum +
-        getDamagedValue(item),
+        sum + getDamagedValue(item),
+      0,
+    );
+
+    const compensation = data.reduce(
+      (sum, item) =>
+        sum + getCompensationValue(item),
       0,
     );
 
     const accepted = data
-      .filter(
-        (item) =>
-          item.status ===
-          "Accepted",
-      )
+      .filter((item) => item.status === "Accepted")
       .reduce(
         (sum, item) =>
-          sum +
-          getDamagedValue(item),
+          sum + getDamagedValue(item),
         0,
       );
 
     const rejected = data
-      .filter(
-        (item) =>
-          item.status ===
-          "Rejected",
-      )
+      .filter((item) => item.status === "Rejected")
       .reduce(
         (sum, item) =>
-          sum +
-          getDamagedValue(item),
+          sum + getDamagedValue(item),
         0,
       );
 
     const pending = data
-      .filter(
-        (item) =>
-          item.status ===
-          "Pending",
-      )
+      .filter((item) => item.status === "Pending")
       .reduce(
         (sum, item) =>
-          sum +
-          getDamagedValue(item),
+          sum + getDamagedValue(item),
         0,
       );
 
     return {
       total,
+      compensation,
       accepted,
       rejected,
       pending,
@@ -441,6 +525,7 @@ function DamagedPage() {
   }, [
     damaged.data,
     getDamagedValue,
+    getCompensationValue,
   ]);
 
   /*
@@ -529,6 +614,7 @@ function DamagedPage() {
    */
 
   const reset = () => {
+    setEditingId(null);
     setProduct(null);
 
     setSearch("");
@@ -537,9 +623,14 @@ function DamagedPage() {
 
     setQty("1");
 
+    setUnitPrice("0");
+
     setReason("");
 
     setDetails("");
+
+    setCompensationStatus("Pending");
+    setCompensationAmount("");
 
     setDestination("");
 
@@ -564,6 +655,19 @@ function DamagedPage() {
       : s === "Rejected"
         ? t("rejected")
         : t("pending");
+
+  const compensationStatusLabel = (
+    s: DamagedCompensationStatus,
+  ) => {
+    const labels: Record<DamagedCompensationStatus, string> = {
+      Pending: "قيد تحديد التعويض",
+      None: "بدون تعويض",
+      Rejected: "التعويض مرفوض",
+      Partial: "تعويض جزئي",
+      Full: "تعويض كامل",
+    };
+    return labels[s];
+  };
 
   /*
    * =========================================================
@@ -604,32 +708,72 @@ function DamagedPage() {
       return;
     }
 
-    save.mutate(
-      undefined as never,
-      {
-        onSuccess: () => {
-          toast.success(
-            t(
-              "damaged_recorded",
-            ),
-          );
+    const correctedUnitPrice = Math.max(0, Number(unitPrice || 0));
 
-          setOpen(false);
+    const onSuccess = () => {
+      toast.success(
+        editingId
+          ? "تم تعديل المرتجع التالف بنجاح"
+          : t("damaged_recorded"),
+      );
 
-          reset();
+      setOpen(false);
+      reset();
+      damaged.refetch();
+    };
 
-          damaged.refetch();
+    const onError = (e: unknown) =>
+      toast.error(errorMessage(e, lang));
+
+    if (editingId) {
+      updateDamaged.mutate(
+        {
+          id: editingId,
+          product_id: product.product_id,
+          shipment_code: shipment,
+          qty: quantity,
+          unit_price: correctedUnitPrice,
+          warehouse: destination,
+          reason,
+          details,
+          img1,
+          img2,
+          img3,
         },
+        { onSuccess, onError },
+      );
+    } else {
+      save.mutate(undefined as never, {
+        onSuccess,
+        onError,
+      });
+    }
+  };
 
-        onError: (e) =>
-          toast.error(
-            errorMessage(
-              e,
-              lang,
-            ),
-          ),
-      },
+  /*
+   * =========================================================
+   * EDIT HANDLER
+   * =========================================================
+   */
+
+  const openEditDamaged = (row: DamagedReturn) => {
+    const selectedProduct = (inventory.data ?? []).find(
+      (item) => item.product_id === row.product_id,
     );
+
+    setEditingId(row.damaged_return_id);
+    setProduct(selectedProduct ?? null);
+    setSearch("");
+    setShipment(row.shipment_code ?? "");
+    setQty(String(row.qty ?? 1));
+    setUnitPrice(String(row.unit_price ?? 0));
+    setReason(row.damage_reason ?? "");
+    setDetails(row.damage_details ?? "");
+    setDestination(row.warehouse ?? "");
+    setImg1(row.policy_image ?? "");
+    setImg2(row.product_image ?? "");
+    setImg3(row.policy_product_image ?? "");
+    setOpen(true);
   };
 
   /*
@@ -898,9 +1042,10 @@ function DamagedPage() {
               {/* ADD */}
 
               <Button
-                onClick={() =>
-                  setOpen(true)
-                }
+                onClick={() => {
+                  reset();
+                  setOpen(true);
+                }}
                 className="
                   border-0
                   bg-white
@@ -1607,7 +1752,123 @@ function DamagedPage() {
 
                   <div className="space-y-4 p-4">
 
-                    {/* IMAGES */}
+                    {/* COMPENSATION */}
+
+                <div
+                  className="rounded-xl border border-[#C084CC]/25 bg-[#9B4BA8]/5 p-4"
+                >
+                  <div className="mb-3">
+                    <p className="text-sm font-semibold text-[#7B2C8E] dark:text-[#C084CC]">
+                      حالة وقيمة التعويض
+                    </p>
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      قيمة التالف الأصلية: {formatMoney(getDamagedValue(detailRow))}
+                    </p>
+                  </div>
+
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    <div>
+                      <Label>حالة التعويض</Label>
+                      <Select
+                        value={compensationStatus}
+                        onValueChange={(value) => {
+                          const next = value as DamagedCompensationStatus;
+                          setCompensationStatus(next);
+                          if (next !== "Partial") {
+                            setCompensationAmount(
+                              next === "Full"
+                                ? String(getDamagedValue(detailRow))
+                                : "0",
+                            );
+                          }
+                        }}
+                      >
+                        <SelectTrigger className="mt-1">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {(["Pending", "None", "Rejected", "Partial", "Full"] as DamagedCompensationStatus[]).map((value) => (
+                            <SelectItem key={value} value={value}>
+                              {compensationStatusLabel(value)}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    <div>
+                      <Label>قيمة التعويض</Label>
+                      <Input
+                        className="mt-1"
+                        type="number"
+                        step="0.01"
+                        value={compensationAmount}
+                        disabled={compensationStatus !== "Partial"}
+                        onChange={(e) =>
+                          setCompensationAmount(e.target.value)
+                        }
+                        placeholder="مثال: 150 أو -150"
+                      />
+                      <p className="mt-1 text-[11px] text-muted-foreground">
+                        الموجب = مبلغ دخل لنا، والسالب = مبلغ اتخصم منا.
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="mt-3 flex items-center justify-between gap-3">
+                    <p className="text-sm font-semibold">
+                      التأثير على المبيعات: {formatMoney(
+                        compensationStatus === "Full"
+                          ? getDamagedValue(detailRow)
+                          : compensationStatus === "Partial"
+                            ? Number(compensationAmount || 0)
+                            : 0,
+                      )}
+                    </p>
+
+                    <Button
+                      disabled={saveCompensation.isPending}
+                      onClick={() => {
+                        const amount =
+                          compensationStatus === "Full"
+                            ? getDamagedValue(detailRow)
+                            : compensationStatus === "Partial"
+                              ? Number(compensationAmount || 0)
+                              : 0;
+
+                        if (
+                          compensationStatus === "Partial" &&
+                          !Number.isFinite(amount)
+                        ) {
+                          toast.error("قيمة التعويض غير صحيحة");
+                          return;
+                        }
+
+                        saveCompensation.mutate(
+                          {
+                            id: detailRow.damaged_return_id,
+                            status: compensationStatus,
+                            amount,
+                          },
+                          {
+                            onSuccess: () => {
+                              toast.success("تم حفظ التعويض وتحديث المبيعات");
+                              damaged.refetch();
+                            },
+                            onError: (e) =>
+                              toast.error(errorMessage(e, lang)),
+                          },
+                        );
+                      }}
+                    >
+                      {saveCompensation.isPending
+                        ? t("saving")
+                        : "حفظ التعويض"}
+                    </Button>
+                  </div>
+                </div>
+
+                {/* IMAGES */}
 
                     <div className="grid grid-cols-3 gap-2">
 
@@ -1832,6 +2093,10 @@ function DamagedPage() {
                             {d.qty}
                           </p>
 
+                          <p className="mt-1 text-xs text-muted-foreground">
+                            التعويض: {formatMoney(getCompensationValue(d))}
+                          </p>
+
                         </div>
 
                       </div>
@@ -1872,11 +2137,34 @@ function DamagedPage() {
 
                       <Button
                         size="sm"
-                        onClick={() =>
+                        variant="outline"
+                        onClick={() => openEditDamaged(d)}
+                        className="
+                          border-[#9B4BA8]/30
+                          bg-[#9B4BA8]/5
+                          text-[#7B2C8E]
+                          hover:border-[#9B4BA8]
+                          hover:bg-[#9B4BA8]/15
+                          dark:text-[#C084CC]
+                        "
+                      >
+                        <Pencil className="me-1 h-4 w-4" />
+                        تعديل
+                      </Button>
+
+                      <Button
+                        size="sm"
+                        onClick={() => {
                           setDetail(
                             d.damaged_return_id,
-                          )
-                        }
+                          );
+                          setCompensationStatus(
+                            d.compensation_status ?? "Pending",
+                          );
+                          setCompensationAmount(
+                            String(d.compensation_amount ?? ""),
+                          );
+                        }}
                         className="
                           bg-[#7B2C8E]
                           text-white
@@ -2025,9 +2313,9 @@ function DamagedPage() {
             >
 
               <DialogTitle>
-                {t(
-                  "add_damaged_return",
-                )}
+                {editingId
+                  ? "تعديل المرتجع التالف"
+                  : t("add_damaged_return")}
               </DialogTitle>
 
             </DialogHeader>
@@ -2301,27 +2589,14 @@ function DamagedPage() {
                       سعر الوحدة
                     </span>
 
-                    <strong className="text-[#7B2C8E] dark:text-[#C084CC]">
-                      {formatMoney(
-                        Number(
-                          (
-                            product as Product &
-                              {
-                                price?: number;
-                                unit_price?: number;
-                              }
-                          )
-                            ?.unit_price ??
-                            (
-                              product as Product &
-                                {
-                                  price?: number;
-                                }
-                            )?.price ??
-                            0,
-                        ),
-                      )}
-                    </strong>
+                    <Input
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      value={unitPrice}
+                      onChange={(e) => setUnitPrice(e.target.value)}
+                      className="h-9 w-36 border-[#9B4BA8]/30 bg-white/70 text-end font-bold text-[#7B2C8E]"
+                    />
 
                   </div>
 
@@ -2333,26 +2608,8 @@ function DamagedPage() {
 
                     <strong className="text-lg text-[#7B2C8E] dark:text-[#C084CC]">
                       {formatMoney(
-                        Number(
-                          (
-                            product as Product &
-                              {
-                                price?: number;
-                                unit_price?: number;
-                              }
-                          )
-                            ?.unit_price ??
-                            (
-                              product as Product &
-                                {
-                                  price?: number;
-                                }
-                            )?.price ??
-                            0,
-                        ) *
-                          Number(
-                            qty || 0,
-                          ),
+                        Number(unitPrice || 0) *
+                          Number(qty || 0),
                       )}
                     </strong>
 
@@ -2464,7 +2721,8 @@ function DamagedPage() {
                   setOpen(false)
                 }
                 disabled={
-                  save.isPending
+                  save.isPending ||
+                  updateDamaged.isPending
                 }
                 className="
                   border-[#9B4BA8]/30
@@ -2480,7 +2738,8 @@ function DamagedPage() {
 
               <Button
                 disabled={
-                  save.isPending
+                  save.isPending ||
+                  updateDamaged.isPending
                 }
                 onClick={
                   submitDamagedReturn
@@ -2496,9 +2755,11 @@ function DamagedPage() {
                   hover:opacity-90
                 "
               >
-                {save.isPending
+                {save.isPending || updateDamaged.isPending
                   ? t("saving")
-                  : t("save")}
+                  : editingId
+                    ? "حفظ التعديل"
+                    : t("save")}
               </Button>
 
             </DialogFooter>

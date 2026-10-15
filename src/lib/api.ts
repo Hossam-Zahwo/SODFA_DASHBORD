@@ -307,6 +307,7 @@ export interface ProductVariant {
 export interface Warehouse {
   warehouse_id: string;
   warehouse_name: string;
+  business_id?: string | null;
   active?: boolean;
   created_at?: string;
   updated_at?: string;
@@ -348,6 +349,13 @@ export type DamagedStatus =
   | "Accepted"
   | "Rejected";
 
+export type DamagedCompensationStatus =
+  | "Pending"
+  | "None"
+  | "Rejected"
+  | "Partial"
+  | "Full";
+
 export interface DamagedReturn {
   damaged_return_id: string;
   shipment_code: string;
@@ -356,6 +364,10 @@ export interface DamagedReturn {
   barcode: string;
   warehouse: string;
   qty: number;
+  unit_price: number;
+  total_value: number;
+  compensation_status: DamagedCompensationStatus;
+  compensation_amount: number;
   damage_reason: string;
   damage_details: string;
   status: DamagedStatus;
@@ -823,6 +835,47 @@ export function normalizeDamaged(
       pick(raw, [
         "quantity",
         "qty",
+      ]),
+    ),
+
+    unit_price: n(
+      pick(raw, [
+        "unit_price",
+        "price",
+        "unit_sale_price",
+      ]),
+    ),
+
+    total_value: n(
+      pick(raw, [
+        "total_value",
+        "damaged_total",
+        "return_total",
+      ]),
+    ) ||
+      n(pick(raw, [
+        "unit_price",
+        "price",
+        "unit_sale_price",
+      ])) *
+        n(pick(raw, [
+          "quantity",
+          "qty",
+        ])),
+
+    compensation_status: (() => {
+      const value = s(raw.compensation_status).toLowerCase();
+      if (value === "none") return "None" as const;
+      if (value === "rejected") return "Rejected" as const;
+      if (value === "partial") return "Partial" as const;
+      if (value === "full") return "Full" as const;
+      return "Pending" as const;
+    })(),
+
+    compensation_amount: n(
+      pick(raw, [
+        "compensation_amount",
+        "compensation_value",
       ]),
     ),
 
@@ -2272,11 +2325,35 @@ export const api = {
      ========================================================== */
 
   inventory:
-    async (): Promise<Product[]> => {
-      const {
-        data,
-        error,
-      } = await supabase
+    async (
+      companyId?: string,
+    ): Promise<Product[]> => {
+      let warehouseIds: string[] | null = null;
+
+      if (companyId) {
+        const {
+          data: companyWarehouses,
+          error: warehouseError,
+        } = await supabase
+          .from("warehouses")
+          .select("warehouse_id")
+          .eq("business_id", companyId);
+
+        if (warehouseError) {
+          throw supabaseError(warehouseError);
+        }
+
+        warehouseIds = (companyWarehouses ?? [])
+          .map((warehouse) => s(warehouse.warehouse_id))
+          .filter(Boolean);
+
+        // A company with no warehouses has no inventory to display.
+        if (warehouseIds.length === 0) {
+          return [];
+        }
+      }
+
+      let inventoryQuery = supabase
         .from("inventory")
         .select("*")
         .order(
@@ -2285,6 +2362,18 @@ export const api = {
             ascending: false,
           },
         );
+
+      if (warehouseIds) {
+        inventoryQuery = inventoryQuery.in(
+          "warehouse",
+          warehouseIds,
+        );
+      }
+
+      const {
+        data,
+        error,
+      } = await inventoryQuery;
 
       if (error) {
         throw supabaseError(error);
@@ -3490,13 +3579,12 @@ export const api = {
      ========================================================== */
 
   warehouses:
-    async (): Promise<
+    async (
+      companyId?: string,
+    ): Promise<
       Warehouse[]
     > => {
-      const {
-        data,
-        error,
-      } = await supabase
+      let warehouseQuery = supabase
         .from("warehouses")
         .select("*")
         .order(
@@ -3505,6 +3593,18 @@ export const api = {
             ascending: true,
           },
         );
+
+      if (companyId) {
+        warehouseQuery = warehouseQuery.eq(
+          "business_id",
+          companyId,
+        );
+      }
+
+      const {
+        data,
+        error,
+      } = await warehouseQuery;
 
       if (error) {
         throw supabaseError(
@@ -3533,6 +3633,12 @@ export const api = {
               s(
                 w.warehouse_id,
               ),
+
+            business_id:
+              w.business_id === null ||
+              w.business_id === undefined
+                ? null
+                : s(w.business_id),
 
             active:
               w.active !== false,
@@ -4322,6 +4428,7 @@ export const api = {
       product_id: string;
       shipment_code: string;
       qty: number;
+      unit_price?: number;
       warehouse?: string;
       damage_reason?: string;
       damage_details?: string;
@@ -4374,6 +4481,18 @@ export const api = {
           "PRODUCT_NOT_FOUND",
         );
       }
+
+      const unitPrice = Math.max(
+        0,
+        n(
+          p.unit_price ??
+            (product as Record<string, unknown>).price ??
+            (product as Record<string, unknown>).selling_price ??
+            0,
+        ),
+      );
+
+      const totalValue = unitPrice * qty;
 
       const damaged_return_id =
         makeId("DMG");
@@ -4449,6 +4568,18 @@ export const api = {
           quantity:
             qty,
 
+          unit_price:
+            unitPrice,
+
+          total_value:
+            totalValue,
+
+          compensation_status:
+            "pending",
+
+          compensation_amount:
+            0,
+
           return_date:
             date,
 
@@ -4515,6 +4646,116 @@ export const api = {
     },
 
   /* ==========================================================
+     UPDATE DAMAGED RETURN RECORD
+     ========================================================== */
+
+  updateDamagedReturn:
+    async (p: {
+      damaged_return_id: string;
+      product_id: string;
+      shipment_code?: string;
+      qty: number;
+      unit_price?: number;
+      warehouse?: string;
+      damage_reason?: string;
+      damage_details?: string;
+      policy_image?: string;
+      product_image?: string;
+      policy_product_image?: string;
+    }) => {
+      if (!p.damaged_return_id) {
+        throw new ApiError(
+          "DAMAGED_RETURN_ID_REQUIRED",
+        );
+      }
+
+      if (!p.product_id) {
+        throw new ApiError(
+          "PRODUCT_ID_REQUIRED",
+        );
+      }
+
+      const qty = Math.max(0, n(p.qty));
+      if (qty <= 0) {
+        throw new ApiError(
+          "INVALID_QUANTITY",
+        );
+      }
+
+      const {
+        data: product,
+        error: productError,
+      } = await supabase
+        .from("inventory")
+        .select("*")
+        .eq("product_id", p.product_id)
+        .limit(1)
+        .maybeSingle();
+
+      if (productError) {
+        throw supabaseError(productError);
+      }
+
+      if (!product) {
+        throw new ApiError(
+          "PRODUCT_NOT_FOUND",
+        );
+      }
+
+      const unitPrice = Math.max(
+        0,
+        n(
+          p.unit_price ??
+            (product as Record<string, unknown>).price ??
+            (product as Record<string, unknown>).selling_price ??
+            0,
+        ),
+      );
+
+      const warehouse =
+        p.warehouse?.trim() ||
+        s(product.warehouse);
+
+      const { data, error } = await supabase.rpc(
+        "update_damaged_return_record",
+        {
+          p_damaged_return_id: p.damaged_return_id,
+          p_product_id: p.product_id,
+          p_product_name: s(product.product_name),
+          p_barcode: s(product.barcode),
+          p_shipment_code: p.shipment_code ?? "",
+          p_warehouse: warehouse,
+          p_quantity: qty,
+          p_unit_price: unitPrice,
+          p_damage_reason: p.damage_reason ?? "",
+          p_damage_details: p.damage_details ?? "",
+          p_policy_image: p.policy_image ?? "",
+          p_product_image: p.product_image ?? "",
+          p_policy_product_image: p.policy_product_image ?? "",
+        },
+      );
+
+      if (error) {
+        throw supabaseError(error);
+      }
+
+      const result = Array.isArray(data) ? data[0] : data;
+
+      if (!result?.success) {
+        throw new ApiError(
+          s(result?.error_code) ||
+            "DAMAGED_RETURN_UPDATE_FAILED",
+        );
+      }
+
+      return {
+        success: true,
+        damaged_return_id: p.damaged_return_id,
+        total_value: n(result.total_value),
+      };
+    },
+
+  /* ==========================================================
      UPDATE DAMAGED STATUS
      ========================================================== */
 
@@ -4569,8 +4810,129 @@ export const api = {
         );
       }
 
+      /* Keep the financial side synchronized with the legacy status buttons.
+       * Accepted = full compensation, Rejected = no compensation,
+       * Pending = no realized compensation yet. */
+      const compensationStatus =
+        normalized === "accepted"
+          ? "full"
+          : normalized === "rejected"
+            ? "rejected"
+            : "pending";
+
+      const {
+        data: compensationData,
+        error: compensationError,
+      } = await supabase.rpc(
+        "update_damaged_return_compensation",
+        {
+          p_damaged_return_id:
+            damaged_return_id,
+          p_compensation_status:
+            compensationStatus,
+          p_compensation_amount: 0,
+        },
+      );
+
+      if (compensationError) {
+        throw supabaseError(
+          compensationError,
+        );
+      }
+
+      const compensationResult =
+        Array.isArray(compensationData)
+          ? compensationData[0]
+          : compensationData;
+
+      if (
+        !compensationResult?.success
+      ) {
+        throw new ApiError(
+          s(
+            compensationResult?.error_code,
+          ) ||
+            "DAMAGED_COMPENSATION_UPDATE_FAILED",
+        );
+      }
+
       return {
         success: true,
+      };
+    },
+
+  /* ==========================================================
+     UPDATE DAMAGED COMPENSATION
+     ========================================================== */
+
+  updateDamagedCompensation:
+    async (p: {
+      damaged_return_id: string;
+      compensation_status: DamagedCompensationStatus;
+      compensation_amount?: number;
+    }) => {
+      if (!p.damaged_return_id) {
+        throw new ApiError(
+          "DAMAGED_RETURN_ID_REQUIRED",
+        );
+      }
+
+      const normalized =
+        s(p.compensation_status).toLowerCase();
+
+      if (
+        ![
+          "pending",
+          "none",
+          "rejected",
+          "partial",
+          "full",
+        ].includes(normalized)
+      ) {
+        throw new ApiError(
+          "INVALID_COMPENSATION_STATUS",
+        );
+      }
+
+      const requestedAmount =
+        Number.isFinite(
+          Number(p.compensation_amount),
+        )
+          ? Number(p.compensation_amount)
+          : 0;
+
+      const { data, error } =
+        await supabase.rpc(
+          "update_damaged_return_compensation",
+          {
+            p_damaged_return_id:
+              p.damaged_return_id,
+            p_compensation_status:
+              normalized,
+            p_compensation_amount:
+              requestedAmount,
+          },
+        );
+
+      if (error) {
+        throw supabaseError(error);
+      }
+
+      const result =
+        Array.isArray(data) ? data[0] : data;
+
+      if (!result?.success) {
+        throw new ApiError(
+          s(result?.error_code) ||
+            "DAMAGED_COMPENSATION_UPDATE_FAILED",
+        );
+      }
+
+      return {
+        success: true,
+        compensation_amount: n(
+          result.compensation_amount,
+        ),
       };
     },
 
