@@ -1,3 +1,4 @@
+import { useCompany } from "@/lib/company";
 import { useCallback, useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
 import {
@@ -50,7 +51,8 @@ export const Route = createFileRoute("/scanner")({
 function ScannerPage() {
   const { t, lang } = useI18n();
 
-  const inventory = useInventory();
+  const { selectedCompanyId } = useCompany();
+  const inventory = useInventory(selectedCompanyId);
 
   const [found, setFound] =
     useState<Product | null>(null);

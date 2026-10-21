@@ -1,3 +1,4 @@
+import { useCompany } from "@/lib/company";
 import { useCallback, useMemo, useState } from "react";
 
 import { createFileRoute } from "@tanstack/react-router";
@@ -88,8 +89,9 @@ function ReturnsPage() {
   const { t, lang } = useI18n();
 
   const returns = useReturns();
-  const inventory = useInventory();
-  const warehouses = useWarehouses();
+  const { selectedCompanyId } = useCompany();
+  const inventory = useInventory(selectedCompanyId);
+  const warehouses = useWarehouses(selectedCompanyId);
 
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState("");

@@ -35,7 +35,16 @@ const CompanyContext = createContext<CompanyContextValue | null>(null);
 
 export function CompanyProvider({ children }: { children: ReactNode }) {
   const [selectedCompanyId, setSelectedCompanyId] =
-    useState<CompanyId>(DEFAULT_COMPANY_ID);
+    useState<CompanyId>(() => {
+      if (typeof window === "undefined") return DEFAULT_COMPANY_ID;
+      const saved = window.localStorage.getItem("sodfa-company");
+      return COMPANIES.find(c => c.id === saved)?.id ?? DEFAULT_COMPANY_ID;
+    });
+
+  const changeCompany = (id: CompanyId) => {
+    setSelectedCompanyId(id);
+    if (typeof window !== "undefined") window.localStorage.setItem("sodfa-company", id);
+  };
 
   const selectedCompany = useMemo(
     () =>
@@ -48,7 +57,7 @@ export function CompanyProvider({ children }: { children: ReactNode }) {
     () => ({
       selectedCompanyId,
       selectedCompany,
-      setSelectedCompanyId,
+      setSelectedCompanyId: changeCompany,
       companies: COMPANIES,
     }),
     [selectedCompanyId, selectedCompany],

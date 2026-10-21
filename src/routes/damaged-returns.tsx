@@ -1,3 +1,4 @@
+import { useCompany } from "@/lib/company";
 import { useCallback, useMemo, useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
 import {
@@ -98,8 +99,9 @@ function DamagedPage() {
   const { t, lang } = useI18n();
 
   const damaged = useDamagedReturns();
-  const inventory = useInventory();
-  const warehouses = useWarehouses();
+  const { selectedCompanyId } = useCompany();
+  const inventory = useInventory(selectedCompanyId);
+  const warehouses = useWarehouses(selectedCompanyId);
 
   const [open, setOpen] = useState(false);
 

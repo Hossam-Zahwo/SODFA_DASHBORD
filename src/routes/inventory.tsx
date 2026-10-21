@@ -20,6 +20,7 @@ import {
   Wallet,
   CheckSquare,
   Square,
+  Download,
 } from "lucide-react";
 
 import { toast } from "sonner";
@@ -50,6 +51,7 @@ import { fmtMoney } from "@/lib/dates";
 import { warehouseName } from "@/lib/warehouse";
 import { useCompany } from "@/lib/company";
 import { supabase } from "@/lib/supabase";
+import { exportHomyWorkbook } from "@/lib/homyExport";
 
 /* ============================================================
 *   SODFA BRAND COLORS*
@@ -123,6 +125,22 @@ function InventoryPage() {
   const warehouses = useWarehouses(selectedCompanyId);
 
   const [q, setQ] = useState("");
+  const [exportOpen, setExportOpen] = useState(false);
+  const [exportWarehouse, setExportWarehouse] = useState("");
+  const [exportBusy, setExportBusy] = useState(false);
+  const handleExport = async () => {
+    if (!exportWarehouse) { toast.error("اختر المستودع أولاً"); return; }
+    setExportBusy(true);
+    try {
+      const selected = (inventory.data ?? []).filter(p => p.warehouse === exportWarehouse);
+      if (!selected.length) { toast.error("لا توجد منتجات في المستودع المختار"); return; }
+      const [catalogs, variants] = await Promise.all([api.productCatalog(), api.productVariants()]);
+      const result = exportHomyWorkbook(selected, catalogs, variants, `SODFA-HOMY-${exportWarehouse}-${new Date().toISOString().slice(0,10)}.xlsx`);
+      toast.success(`تم تصدير ${result.rows} سجل و${result.images} صورة`);
+      setExportOpen(false);
+    } catch(e) { toast.error(`فشل التصدير: ${errorMessage(e)}`); }
+    finally { setExportBusy(false); }
+  };
   const [wh, setWh] = useState<string[]>([ALL_WAREHOUSES]);
   const [ownerPayments, setOwnerPayments] = useState<Array<{ expense_owner: string; amount: number | string }>>([]);
 
@@ -566,6 +584,10 @@ function InventoryPage() {
               المخزون والمنتجات
             </h1>
           </div>
+          <div className="flex flex-wrap items-center gap-2">
+            <Button variant="outline" onClick={() => { setExportWarehouse(""); setExportOpen(true); }} className="h-11 border-[#C084CC] bg-white text-[#7B2C8E] hover:bg-[#FAF5FC]">
+              <Download className="me-2 h-4 w-4" /> تحميل المخزون (Excel)
+            </Button>
           <Button
             onClick={() => {
               setEditing(null);
@@ -579,7 +601,23 @@ function InventoryPage() {
             <Plus className="me-1 h-4 w-4" />
             {t("add_product")}
           </Button>
+          </div>
         </div>
+        {exportOpen && <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/40 p-4" role="presentation" onMouseDown={e=>{if(e.target===e.currentTarget&&!exportBusy)setExportOpen(false)}}>
+          <div className="w-full max-w-lg rounded-2xl border border-[#D8B4E2] bg-white p-6 shadow-2xl" role="dialog" aria-modal="true" aria-label="تحميل المخزون إلى Excel" dir="rtl">
+            <h2 className="text-xl font-bold text-[#7B2C8E]">تحميل المخزون إلى Excel</h2>
+            <p className="mt-2 text-sm text-[#6B5A70]">اختر مستودعًا من الشركة الحالية لتصدير منتجاته وصوره وتفريعاته بصيغة HOMY.</p>
+            <label className="mb-2 mt-5 block text-sm font-semibold">المستودع</label>
+            <WarehouseSelect value={exportWarehouse} onChange={setExportWarehouse} warehouses={warehouses.data ?? []} className="w-full border-[#C084CC]" />
+            <p className="mt-3 text-xs text-[#6B5A70]">سيتم تصدير جميع منتجات المستودع المحدد، بغض النظر عن البحث والفلاتر المعروضة.</p>
+            <div className="mt-6 flex justify-end gap-2">
+              <Button variant="outline" disabled={exportBusy} onClick={()=>setExportOpen(false)}>إلغاء</Button>
+              <Button disabled={exportBusy || !exportWarehouse} onClick={()=>void handleExport()} className="bg-[#9B4BA8] text-white hover:bg-[#7B2C8E]">
+                <Download className="me-2 h-4 w-4" /> {exportBusy?'جاري تجهيز الملف...':'تحميل Excel'}
+              </Button>
+            </div>
+          </div>
+        </div>}
 
         {/* SEARCH & CONTROLS */}
         <InventoryControls

@@ -21,6 +21,7 @@ import {
   useWarehouses,
 } from "@/hooks/useSodfa";
 
+import { useCompany, COMPANIES, type CompanyId } from "@/lib/company";
 import { api, type Warehouse } from "@/lib/api";
 import { errorMessage, useI18n } from "@/lib/i18n";
 
@@ -51,6 +52,8 @@ export const Route = createFileRoute("/warehouses")({
 
 function WarehousesPage() {
   const { t, lang } = useI18n();
+  const { selectedCompanyId } = useCompany();
+  const [newCompanyId, setNewCompanyId] = useState<CompanyId>(selectedCompanyId);
 
   const warehouses = useWarehouses();
   const inventory = useInventory();
@@ -60,7 +63,10 @@ function WarehousesPage() {
     useState<Warehouse | null>(null);
 
   const create = useApiMutation(
-    (n: string) => api.saveWarehouse(n),
+    (p: { name: string; companyId: CompanyId }) => api.saveWarehouse(p.name, p.companyId),
+  );
+  const assign = useApiMutation(
+    (p: { id: string; companyId: CompanyId }) => api.setWarehouseCompany(p.id, p.companyId),
   );
 
   const rename = useApiMutation(
@@ -129,7 +135,7 @@ function WarehousesPage() {
       return;
     }
 
-    create.mutate(trimmed, {
+    create.mutate({ name: trimmed, companyId: newCompanyId }, {
       onSuccess: () => {
         toast.success(t("saved"));
         setName("");
@@ -310,6 +316,11 @@ function WarehousesPage() {
                 "
               />
 
+              <select aria-label="الشركة التابعة للمستودع" value={newCompanyId}
+                onChange={(e) => setNewCompanyId(e.target.value as CompanyId)}
+                className="h-11 rounded-lg border border-white/30 bg-white px-3 text-gray-900">
+                {COMPANIES.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+              </select>
               <Button
                 disabled={create.isPending}
                 onClick={handleCreate}
@@ -471,6 +482,20 @@ function WarehousesPage() {
 
                       </div>
 
+                      <div className="space-y-2">
+                        <label className="text-xs font-semibold text-gray-700">الشركة التابعة للمستودع</label>
+                        <select aria-label={`الشركة التابعة لـ ${warehouse.warehouse_name}`}
+                          value={warehouse.business_id ?? ""}
+                          disabled={assign.isPending}
+                          onChange={(e) => assign.mutate({ id: warehouse.warehouse_id, companyId: e.target.value as CompanyId }, {
+                            onSuccess: () => toast.success("تم تحديث الشركة التابعة للمستودع"),
+                            onError: (error) => toast.error(errorMessage(error, lang)),
+                          })}
+                          className="h-10 w-full rounded-lg border border-[#C084CC]/40 bg-white px-3 text-gray-900">
+                          <option value="" disabled>غير محدد — اختر الشركة</option>
+                          {COMPANIES.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                        </select>
+                      </div>
                       {/* RENAME */}
 
                       <div className="space-y-2">

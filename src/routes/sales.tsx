@@ -1,3 +1,4 @@
+import { useCompany } from "@/lib/company";
 import { useCallback, useMemo, useState } from "react";
 
 import { createFileRoute } from "@tanstack/react-router";
@@ -165,8 +166,9 @@ const RANGES: SalesRange[] = [
 function SalesPage() {
   const { t, lang } = useI18n();
 
-  const inventory = useInventory();
-  const warehouses = useWarehouses();
+  const { selectedCompanyId } = useCompany();
+  const inventory = useInventory(selectedCompanyId);
+  const warehouses = useWarehouses(selectedCompanyId);
   const sales = useSales();
 
   const [cart, setCart] = useState<CartLine[]>([]);

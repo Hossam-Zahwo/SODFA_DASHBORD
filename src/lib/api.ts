@@ -3674,6 +3674,7 @@ export const api = {
   saveWarehouse:
     async (
       warehouse_name: string,
+      business_id: string,
     ) => {
       const name =
         warehouse_name.trim();
@@ -3696,6 +3697,7 @@ export const api = {
           warehouse_id,
           warehouse_name:
             name,
+          business_id,
           active: true,
         })
         .select(
@@ -3765,6 +3767,13 @@ export const api = {
         success: true,
       };
     },
+
+  setWarehouseCompany: async (warehouse_id: string, business_id: string) => {
+    const { error } = await supabase.from("warehouses")
+      .update({ business_id }).eq("warehouse_id", warehouse_id);
+    if (error) throw supabaseError(error);
+    return { success: true };
+  },
 
   /* ==========================================================
      DELETE WAREHOUSE
