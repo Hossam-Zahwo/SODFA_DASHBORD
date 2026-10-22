@@ -351,7 +351,7 @@ function InventoryPage() {
 *  ========================================================= */
 
   const selectedWarehouseSellingPrice = useMemo(() => {
-    if (selectedWarehouseIds.length === 0 || !hasCompleteSellingPrices) {
+    if (selectedWarehouseIds.length === 0) {
       return { visible: false, total: 0, productCount: 0, warehouseCount: 0 };
     }
 
@@ -359,29 +359,23 @@ function InventoryPage() {
       selectedWarehouseIds.includes(product.warehouse)
     );
 
-    const everySelectedWarehouseHasProducts = selectedWarehouseIds.every((warehouseId) =>
-      selectedProducts.some((product) => product.warehouse === warehouseId)
-    );
-
-    const everyProductHasSellingPrice = selectedProducts.every((product) =>
+    const pricedProducts = selectedProducts.filter((product) =>
       product.selling_price !== null &&
       product.selling_price !== undefined &&
       Number.isFinite(Number(product.selling_price)) &&
       Number(product.selling_price) > 0
     );
 
-    const visible = selectedProducts.length > 0 && everySelectedWarehouseHasProducts && everyProductHasSellingPrice;
-
-    if (!visible) {
-      return { visible: false, total: 0, productCount: selectedProducts.length, warehouseCount: selectedWarehouseIds.length };
+    if (pricedProducts.length === 0) {
+      return { visible: false, total: 0, productCount: 0, warehouseCount: selectedWarehouseIds.length };
     }
 
-    const total = selectedProducts.reduce((sum, product) =>
+    const total = pricedProducts.reduce((sum, product) =>
       sum + Number(product.stock_qty || 0) * Number(product.selling_price || 0), 0
     );
 
-    return { visible: true, total, productCount: selectedProducts.length, warehouseCount: selectedWarehouseIds.length };
-  }, [inventory.data, selectedWarehouseIds, hasCompleteSellingPrices]);
+    return { visible: true, total, productCount: pricedProducts.length, warehouseCount: selectedWarehouseIds.length };
+  }, [inventory.data, selectedWarehouseIds]);
 
   /* =========================================================
 *     INVENTORY STATISTICS*
@@ -2478,7 +2472,7 @@ function ProductCard({
 
         {/* PRICES */}
         <div
-          className={`${hasCompleteSellingPrices ? "grid grid-cols-2" : "block"} gap-2 rounded-xl border p-2.5`}
+          className={`${product.selling_price != null && Number.isFinite(Number(product.selling_price)) && Number(product.selling_price) > 0 ? "grid grid-cols-2" : "block"} gap-2 rounded-xl border p-2.5`}
           style={{
             borderColor: BRAND.borderPurple,
             background: "linear-gradient(135deg, #FFFFFF, #FAF5FC)",
@@ -2490,7 +2484,7 @@ function ProductCard({
               {fmtMoney(product.price, lang)}
             </p>
           </div>
-          {hasCompleteSellingPrices && (
+          {product.selling_price != null && Number.isFinite(Number(product.selling_price)) && Number(product.selling_price) > 0 && (
             <div className="min-w-0 border-r border-[#EADCF0] pr-2 text-right">
               <p className="text-[10px] text-[#8A7890]">سعر البيع</p>
               <p className="mt-1 truncate text-base font-black text-[#7B2C8E]">
