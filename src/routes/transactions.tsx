@@ -877,11 +877,6 @@ function TransactionsPage() {
         return
       }
 
-      if (transactionForm.transaction_type === 'expense' && !transactionForm.expense_owner) {
-        setError('اختر الجهة التابعة لها الدفعة: MEME أو Meme Stor');
-        return;
-      }
-
       let account: Account | null =
         null
 
@@ -2638,11 +2633,11 @@ function TransactionModal({
             onChange={(e) => onChange({ ...form, expense_owner: e.target.value as TransactionForm['expense_owner'] })}
             className="field"
           >
-            <option value="">اختر الجهة</option>
+            <option value="">بدون تحديد شركة (اختياري)</option>
             <option value="MEME">MEME</option>
             <option value="Meme Stor">Meme Stor</option>
           </select>
-          <p className="mt-1 text-[10px] leading-5 text-zinc-500">يُستخدم هذا الاختيار لتجميع الدفعات مع المستودع المطابق لها في ملخص المخزون.</p>
+          <p className="mt-1 text-[10px] leading-5 text-zinc-500">اختياري: يمكن حفظ المصروف بدون تحديد شركة، أو اختيار جهة لتجميع الدفعات في ملخص المخزون.</p>
         </FormField>
       )}
 
