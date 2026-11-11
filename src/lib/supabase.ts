@@ -26,8 +26,18 @@ const original = createClient(
   },
 );
 
-const neonAuthUrl = import.meta.env["VITE_NEON_AUTH_URL"];
-const neonDataApiUrl = import.meta.env["VITE_NEON_DATA_API_URL"];
+// The dashboard loads its session in the browser. Limit the recovery switch
+// to the existing production hostname because this repo has other deployments.
+const isSodfaProduction =
+  typeof window !== "undefined" &&
+  window.location.hostname === "sodfa-dashbord-y1wn.vercel.app";
+
+const neonAuthUrl = isSodfaProduction
+  ? "https://ep-bold-heart-b9ktjsoe.neonauth.c-7.eu-central-1.aws.neon.tech/neondb/auth"
+  : import.meta.env["VITE_NEON_AUTH_URL"];
+const neonDataApiUrl = isSodfaProduction
+  ? "https://ep-bold-heart-b9ktjsoe.apirest.c-7.eu-central-1.aws.neon.tech/neondb/rest/v1"
+  : import.meta.env["VITE_NEON_DATA_API_URL"];
 
 export const neonPreview = Boolean(neonAuthUrl && neonDataApiUrl);
 
