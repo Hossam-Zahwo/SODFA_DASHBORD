@@ -1,10 +1,10 @@
 import { createClient } from "@supabase/supabase-js";
 import { createClient as createNeonClient } from "@neon/neon-js/supabase";
 
-const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+const supabaseUrl = import.meta.env["VITE_SUPABASE_URL"];
 
 const supabasePublishableKey =
-  import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
+  import.meta.env["VITE_SUPABASE_PUBLISHABLE_KEY"];
 
 if (!supabaseUrl) {
   throw new Error("Missing VITE_SUPABASE_URL");
@@ -26,8 +26,8 @@ const original = createClient(
   },
 );
 
-const neonAuthUrl = import.meta.env.VITE_NEON_AUTH_URL;
-const neonDataApiUrl = import.meta.env.VITE_NEON_DATA_API_URL;
+const neonAuthUrl = import.meta.env["VITE_NEON_AUTH_URL"];
+const neonDataApiUrl = import.meta.env["VITE_NEON_DATA_API_URL"];
 
 export const neonPreview = Boolean(neonAuthUrl && neonDataApiUrl);
 
@@ -39,8 +39,9 @@ function createPreviewClient() {
 
   return {
     auth: client.auth,
-    from: client.from.bind(client),
-    rpc: client.rpc.bind(client),
+    // Both clients return PostgREST query builders. Keep the app's existing overloads.
+    from: client.from.bind(client) as unknown as typeof original.from,
+    rpc: client.rpc.bind(client) as unknown as typeof original.rpc,
     storage: {
       from(bucket: string) {
         const originalBucket = original.storage.from(bucket);
