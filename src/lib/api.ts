@@ -2324,6 +2324,26 @@ export const api = {
      INVENTORY
      ========================================================== */
 
+  inventorySummary: async () => {
+    const products: Pick<Product, "warehouse" | "price" | "stock_qty" | "sold_qty" | "remaining_qty">[] = [];
+    const pageSize = 500;
+
+    for (let offset = 0; ; offset += pageSize) {
+      const { data, error } = await supabase
+        .from("inventory")
+        .select("product_id,warehouse,selling_price,sale_price,stock_qty,sold_qty,remaining_qty")
+        .order("product_id")
+        .order("warehouse")
+        .range(offset, offset + pageSize - 1);
+
+      if (error) throw supabaseError(error);
+      for (const row of data ?? []) {
+        if (s(row.product_id)) products.push(normalizeProduct(row));
+      }
+      if (!data || data.length < pageSize) return products;
+    }
+  },
+
   inventory:
     async (
       companyId?: string,

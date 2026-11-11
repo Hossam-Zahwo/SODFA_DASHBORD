@@ -28,7 +28,7 @@ import {
 
 import {
   useDamagedReturns,
-  useInventory,
+  useInventorySummary,
   useReturns,
   useSales,
   useWarehouses,
@@ -190,7 +190,7 @@ function Dashboard() {
   const { t, lang } = useI18n();
 
   const inventory =
-    useInventory();
+    useInventorySummary();
 
   const sales =
     useSales();

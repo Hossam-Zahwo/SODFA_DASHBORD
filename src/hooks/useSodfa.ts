@@ -44,6 +44,13 @@ export const useInventory = (
     ...common,
   });
 
+export const useInventorySummary = () =>
+  useQuery({
+    queryKey: [...keys.inventory, "dashboard-summary"],
+    queryFn: api.inventorySummary,
+    ...common,
+  });
+
 /* ============================================================
    WAREHOUSES
    ============================================================ */
@@ -55,6 +62,7 @@ export const useWarehouses = (
     queryKey: [...keys.warehouses, companyId ?? "all"],
     queryFn: () => api.warehouses(companyId),
     ...common,
+    staleTime: 60_000,
   });
 
 /* ============================================================
@@ -110,6 +118,7 @@ export const useCategories = () =>
     queryKey: keys.categories,
     queryFn: api.categories,
     ...common,
+    staleTime: 60_000,
   });
 
 /* ============================================================
