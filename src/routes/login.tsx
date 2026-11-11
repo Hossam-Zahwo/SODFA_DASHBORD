@@ -1,4 +1,4 @@
-import { FormEvent, useState } from "react";
+import { FormEvent, useEffect, useState } from "react";
 
 import { useNavigate, createFileRoute } from "@tanstack/react-router";
 
@@ -11,7 +11,7 @@ import {
   LogIn,
 } from "lucide-react";
 
-import { supabase } from "@/lib/supabase";
+import { neonPreview, resetPreviewPassword, supabase } from "@/lib/supabase";
 import { useI18n } from "@/lib/i18n";
 
 export const Route = createFileRoute("/login")({
@@ -39,14 +39,49 @@ function LoginPage() {
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [notice, setNotice] = useState("");
+  const [resetToken, setResetToken] = useState("");
+
+  useEffect(() => {
+    if (!neonPreview) return;
+    const url = new URL(window.location.href);
+    const token = url.searchParams.get("token");
+    if (!token) return;
+    setResetToken(token);
+    url.searchParams.delete("token");
+    window.history.replaceState(window.history.state, "", url);
+  }, []);
+
+  async function requestPasswordReset() {
+    const emailInput = document.querySelector<HTMLInputElement>("#email");
+    if (!email.trim() || !emailInput?.reportValidity()) {
+      setError(lang === "ar" ? "اكتب البريد الإلكتروني أولًا" : "Enter your email first.");
+      return;
+    }
+    setError("");
+    setNotice("");
+    setLoading(true);
+    try {
+      const { error } = await supabase.auth.resetPasswordForEmail(email.trim(), {
+        redirectTo: new URL("/login", window.location.origin).href,
+      });
+      if (error) throw error;
+      setNotice(lang === "ar" ? "لو الحساب مسجّل، راجع بريدك لإعداد كلمة المرور." : "If the account exists, check your email to set your password.");
+    } catch {
+      setError(lang === "ar" ? "تعذر إرسال رابط إعداد كلمة المرور." : "Could not request a password setup link.");
+    } finally {
+      setLoading(false);
+    }
+  }
 
   const handleLogin = async (
     e: FormEvent<HTMLFormElement>,
   ) => {
     e.preventDefault();
     setError("");
+    setNotice("");
 
-    if (!email.trim() || !password.trim()) {
+    if ((!resetToken && !email.trim()) || !password.trim()) {
       setError(
         lang === "ar"
           ? "يرجى إدخال البريد الإلكتروني وكلمة المرور"
@@ -58,6 +93,13 @@ function LoginPage() {
     setLoading(true);
 
     try {
+      if (resetToken) {
+        await resetPreviewPassword(resetToken, password);
+        setResetToken("");
+        setPassword("");
+        setNotice(lang === "ar" ? "تم حفظ كلمة المرور. سجّل الدخول." : "Password saved. Sign in to continue.");
+        return;
+      }
       const { error } =
         await supabase.auth.signInWithPassword({
           email: email.trim(),
@@ -276,13 +318,14 @@ function LoginPage() {
 
           {/* Form */}
 
+          {notice && <p role="status" className="mb-5 text-center text-sm text-zinc-300">{notice}</p>}
           <form
             onSubmit={handleLogin}
             className="space-y-5"
           >
             {/* Email */}
 
-            <div>
+            {!resetToken && <div>
               <label
                 htmlFor="email"
                 className="
@@ -346,7 +389,7 @@ function LoginPage() {
                   }}
                 />
               </div>
-            </div>
+            </div>}
 
             {/* Password */}
 
@@ -388,7 +431,8 @@ function LoginPage() {
                   }
                   value={password}
                   disabled={loading}
-                  autoComplete="current-password"
+                  autoComplete={resetToken ? "new-password" : "current-password"}
+                  minLength={resetToken ? 8 : undefined}
                   dir="ltr"
                   onChange={(e) =>
                     setPassword(e.target.value)
@@ -489,13 +533,18 @@ function LoginPage() {
                   <LogIn className="h-5 w-5" />
 
                   <span>
-                    {lang === "ar"
+                    {resetToken ? (lang === "ar" ? "حفظ كلمة المرور" : "Save password") : lang === "ar"
                       ? "تسجيل الدخول"
                       : "Sign in"}
                   </span>
                 </>
               )}
             </button>
+            {neonPreview && !resetToken && (
+              <button type="button" disabled={loading} onClick={requestPasswordReset} className="w-full text-sm text-zinc-300 hover:text-white">
+                {lang === "ar" ? "إعداد أو إعادة تعيين كلمة المرور" : "Set or reset your password"}
+              </button>
+            )}
           </form>
 
           {/* Footer */}
