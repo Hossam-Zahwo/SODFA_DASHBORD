@@ -17,7 +17,7 @@
  * Google Sheets / Google Apps Script are NOT used.
  */
 
-import { IMAGE_BUCKET } from "@/lib/images";
+import { uploadSodfaImage } from "@/lib/imageUpload";
 import { supabase } from "@/lib/supabase";
 
 /* ============================================================
@@ -5052,60 +5052,6 @@ export const api = {
           binary.charCodeAt(i);
       }
 
-      const safeName =
-        file_name.replace(
-          /[^a-zA-Z0-9._-]/g,
-          "_",
-        );
-
-      const path =
-        `${Date.now()}-${makeId(
-          "IMG",
-        )}-${safeName}`;
-
-      const {
-        error,
-      } = await supabase.storage
-        .from(
-          IMAGE_BUCKET,
-        )
-        .upload(
-          path,
-          bytes,
-          {
-            contentType:
-              mime_type ||
-              "application/octet-stream",
-
-            upsert: false,
-          },
-        );
-
-      if (error) {
-        throw supabaseError(
-          error,
-        );
-      }
-
-      const {
-        data:
-          publicUrlData,
-      } =
-        supabase.storage
-          .from(
-            IMAGE_BUCKET,
-          )
-          .getPublicUrl(
-            path,
-          );
-
-      return {
-        image_url:
-          publicUrlData
-            .publicUrl,
-
-        file_id:
-          path,
-      };
+      return uploadSodfaImage(new File([bytes], file_name, { type: mime_type }));
     },
 };

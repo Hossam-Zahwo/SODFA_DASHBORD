@@ -1,13 +1,13 @@
 import { useCallback, useRef, useState } from "react";
 import { Loader2, Upload, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { supabase } from "@/lib/supabase";
+import { uploadSodfaImage } from "@/lib/imageUpload";
 import { errorMessage, useI18n } from "@/lib/i18n";
 import { ProductImage } from "@/components/ProductImage";
 import { cn } from "@/lib/utils";
 import {
   ACCEPTED_IMAGE_TYPES,
-  IMAGE_BUCKET,
+  MAX_IMAGE_INPUT_BYTES,
 } from "@/lib/images";
 import { toast } from "sonner";
 
@@ -39,32 +39,12 @@ interface CallbackProps extends CommonProps {
 
 type Props = ControlledProps | CallbackProps;
 
-function createSafeFileName(file: File): string {
-  const extension =
-    file.name.split(".").pop()?.toLowerCase() ||
-    (file.type === "image/png"
-      ? "png"
-      : file.type === "image/webp"
-        ? "webp"
-        : "jpg");
-
-  const random =
-    typeof crypto !== "undefined" &&
-    "randomUUID" in crypto
-      ? crypto.randomUUID()
-      : `${Date.now()}-${Math.random()
-          .toString(36)
-          .slice(2)}`;
-
-  return `products/product-${random}.${extension}`;
-}
-
 function isControlled(props: Props): props is ControlledProps {
   return "onChange" in props && typeof props.onChange === "function";
 }
 
 /**
- * Shared Supabase image uploader.
+ * Shared image uploader.
  *
  * It intentionally supports both APIs already used by the application:
  *
@@ -74,7 +54,7 @@ function isControlled(props: Props): props is ControlledProps {
  * 2) onUpload
  *    <ImageDropzone onUpload={addImage} />
  *
- * Both modes upload to the same bucket.
+ * Both modes compress the image before upload.
  */
 export function ImageDropzone(props: Props) {
   const { t, lang } = useI18n();
@@ -104,41 +84,16 @@ export function ImageDropzone(props: Props) {
         return;
       }
 
-      if (file.size > 10 * 1024 * 1024) {
-        toast.error("Image must be smaller than 10 MB");
+      if (file.size > MAX_IMAGE_INPUT_BYTES) {
+        toast.error("Image must be 20 MB or smaller");
         return;
       }
 
       setBusy(true);
 
       try {
-        const fileName = createSafeFileName(file);
-
-        const { error: uploadError } =
-          await supabase.storage
-            .from(IMAGE_BUCKET)
-            .upload(fileName, file, {
-              contentType: file.type,
-              cacheControl: "3600",
-              upsert: false,
-            });
-
-        if (uploadError) {
-          throw uploadError;
-        }
-
-        const { data } = supabase.storage
-          .from(IMAGE_BUCKET)
-          .getPublicUrl(fileName);
-
-        const publicUrl =
-          data?.publicUrl?.trim() || "";
-
-        if (!publicUrl) {
-          throw new Error("IMAGE_URL_ERROR");
-        }
-
-        emitUrl(publicUrl);
+        const { image_url } = await uploadSodfaImage(file);
+        emitUrl(image_url);
         toast.success(t("saved"));
       } catch (e) {
         console.error("Image upload error:", e);
