@@ -29,9 +29,11 @@
 - [x] Preview deployment through Git integration.
 - [x] Standalone central metadata database.
 - [x] Read-only catalog metadata import; no customer data.
-- [ ] Verify secure runtime server-to-server connectors (credentials via Vercel encrypted env only).
+- [x] Configure server-to-server *read-only* connection roles on Neon SODFA, Orders Manager, and CRM catalog; preview-branch-only encrypted Vercel environment variables. Vercel build verified; an authenticated end-to-end browser smoke test is still required.
 - [ ] Design and test row-level brand/channel permissions and private admin endpoints.
-- [ ] Run staging read-only comparison against source data and reconcile duplicates.
+- [x] Direct read-only checks: 117 HOMEY catalog references, 337 SODFA references, and 56 HOMEY orders in Orders Manager; no SODFA orders appeared in the sampled group query.
+- [x] Embedded per-project overview, products, orders, shipping, customers, finance and permissions tabs with live read-only server bridge. CSV exports are metadata-only.
+- [ ] Run full end-to-end browser tests under an authorized employee session and reconcile missing SODFA Web order source.
 - [ ] Build controlled write adapters for creation, stock reservation, Tala updates and payment settlement with idempotency.
 - [ ] Test automatic restore using external backup exports (database schema + data + image manifests).
 - [ ] Enable scoped AI tools with explicit approvals and audit logs.
@@ -50,3 +52,12 @@ Required before any write integration:
 
 ## Implementation warning
 This branch is on an existing **public GitHub repository**. Do not commit any secret or unredacted customer data. A private GitHub repository is still recommended if future sensitive integration code or business algorithms require confidentiality. A branch in a public repo is **not** private.
+
+## Second implementation pass: live internal project workspaces
+- `src/routes/control-center.tsx`: project switcher for four workspaces (SODFA Dashboard, HOMEY Web, SODFA Web, Orders Manager) plus company overview. Internal tab switching; no customer storefront iframes or redirects.
+- `src/lib/company-workspace.functions.ts`: authenticated POST server function. Every call validates the employee's Supabase session via `auth.getUser`, then reads three Neon sources through scoped SELECT-only roles. No orders' names, phone numbers, addresses, notes or other customer PII leave this endpoint.
+- The frontend displays true status counts by brand, order identifiers/status/carrier, source-tagged product references, and SODFA Neon website_inventory/sales view figures. Missing integrations show as unavailable, not zero sales.
+- Product count and warehouse view rows are distinct measures. The `website_inventory` view is not proof of all SODFA inventory across all warehouses. Purchase-price inventory valuation may be zero if source values are missing.
+- The SODFA Web storefront DB `ciuztlmzflyzpwijyoky` is currently inactive; its live published products are **not** currently verified by the CRM. Do not conflate SODFA stock catalog with SODFA storefront listings.
+- Source-specific mutation, order creation and shipping actions are deliberately disabled. Connecting these requires authorization mapping, staging migrations, idempotent write adapters and a restore-tested off-platform backup.
+- SODFA's original core navigation is preserved. A new `مركز التحكم بالمشاريع` entry was added on the feature branch only.
