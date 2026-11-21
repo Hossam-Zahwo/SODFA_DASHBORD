@@ -7,7 +7,7 @@ import { z } from "zod";
 // products or modify the HOMEY or SODFA storefront databases.
 const Request = z.object({
   token: z.string().min(16).max(8192),
-  source: z.enum(["homey_store","sodfa_dashboard"]),
+  source: z.enum(["homey_store","sodfa_dashboard","crm_manual"]),
   sourceProductId: z.string().min(1).max(180),
   channel: z.enum(["homey_web","sodfa_web"]),
   intendedVisibility: z.boolean(),
@@ -16,10 +16,8 @@ const Request = z.object({
 export const saveChannelDraft = createServerFn({method:"POST"})
   .validator(Request)
   .handler(async({data})=>{
-    if ((data.source === "homey_store" && data.channel !== "homey_web") ||
-        (data.source === "sodfa_dashboard" && data.channel !== "sodfa_web")) {
-      throw new Error("CHANNEL_BRAND_MISMATCH");
-    }
+    // A draft may target either storefront. Publication is separately controlled
+    // and never triggered here. This permits explicit cross-brand proposals.
     const url = process.env.VITE_SUPABASE_URL;
     const publishableKey = process.env.VITE_SUPABASE_PUBLISHABLE_KEY;
     if (!url || !publishableKey) throw new Error("AUTH_NOT_CONFIGURED");
@@ -34,15 +32,18 @@ export const saveChannelDraft = createServerFn({method:"POST"})
       AND p.source_product_id=${data.sourceProductId} LIMIT 1`;
     if(!row.length)throw new Error("PRODUCT_NOT_IN_CRM_INDEX");
     const id=Number(row[0].product_ref);
+    const cross = (data.source==="homey_store" && data.channel==="sodfa_web")
+      || (data.source==="sodfa_dashboard" && data.channel==="homey_web");
     const before=await sql`SELECT intended_visibility,proposed_price_egp
       FROM channel_listing_drafts WHERE product_reference_id=${id}
       AND channel_id=${data.channel}`;
     await sql`INSERT INTO channel_listing_drafts(
-      product_reference_id,channel_id,intended_visibility,proposed_price_egp,updated_by)
-      VALUES (${id},${data.channel},${data.intendedVisibility},${data.price},${result.user.id})
+      product_reference_id,channel_id,intended_visibility,proposed_price_egp,updated_by,brand_cross_listing)
+      VALUES (${id},${data.channel},${data.intendedVisibility},${data.price},${result.user.id},${cross})
       ON CONFLICT(product_reference_id,channel_id) DO UPDATE
       SET intended_visibility=EXCLUDED.intended_visibility,
       proposed_price_egp=EXCLUDED.proposed_price_egp,
+      brand_cross_listing=EXCLUDED.brand_cross_listing,
       updated_by=EXCLUDED.updated_by,updated_at=now()`;
     // Audit is deliberately non-PII, and records who made the proposed edit.
     await sql`INSERT INTO audit_events(actor_id,system_id,event_type,target_table,target_key,
