@@ -73,7 +73,7 @@ export const getCompanyWorkspaceData = createServerFn({ method: "POST" })
       try {
         const db = neon(catalogUrl);
         // 454 reference records were imported from the source catalogs.
-        const [counts, products] = await Promise.all([
+        const [countResult, productResult] = await Promise.allSettled([
           db`SELECT brand_id AS brand, count(*)::integer AS count FROM product_references GROUP BY brand_id ORDER BY brand_id`,
           db`SELECT p.source_product_id AS id, p.title, p.brand_id AS brand,
              p.source_system_id AS source, native.intended_visibility AS draft_visibility,
@@ -97,7 +97,13 @@ export const getCompanyWorkspaceData = createServerFn({ method: "POST" })
                AND (${search} = '' OR lower(p.title) LIKE '%' || ${search} || '%')
              ORDER BY p.title LIMIT 500`,
         ]);
-        response.catalog = {connected: true, counts: counts as Count[], products: products as Product[]};
+        response.catalog = {
+          connected: countResult.status === "fulfilled" || productResult.status === "fulfilled",
+          counts: countResult.status === "fulfilled" ? countResult.value as Count[] : [],
+          products: productResult.status === "fulfilled" ? productResult.value as Product[] : [],
+          error: countResult.status === "rejected" || productResult.status === "rejected"
+            ? "جزء من فهرس المنتجات تعذر تحميله؛ اعرض البيانات المتاحة وأعد التحديث" : undefined,
+        };
       } catch {
         response.catalog = {...response.catalog, error: "تعذرت قراءة فهرس المنتجات من قاعدة CRM"};
       }
@@ -144,7 +150,7 @@ export const getCompanyWorkspaceData = createServerFn({ method: "POST" })
     if (sodfaUrl) jobs.push((async () => {
       try {
         const db = neon(sodfaUrl);
-        const [inv,sal,items] = await Promise.all([
+        const [invResult,salResult,itemResult] = await Promise.allSettled([
           db`SELECT count(*)::integer AS sku_rows, COALESCE(sum(remaining_qty),0)::float8 AS units,
              COALESCE(sum(remaining_qty * purchase_price),0)::float8 AS cost_value,
              count(DISTINCT warehouse)::integer AS warehouses FROM website_inventory`,
@@ -152,13 +158,18 @@ export const getCompanyWorkspaceData = createServerFn({ method: "POST" })
              min(sale_date)::text AS first_date, max(sale_date)::text AS last_date FROM sales`,
           db`SELECT product_id, product_name, warehouse, remaining_qty::float8 AS remaining_qty,
              purchase_price::float8 AS purchase_price, sale_price::float8 AS sale_price
-             FROM website_inventory ORDER BY product_name LIMIT 100`,
+             FROM website_inventory ORDER BY product_name LIMIT 1000`,
         ]);
         response.sodfa = {
-          connected: true,
-          inventorySummary: (inv[0] ?? null) as typeof response.sodfa.inventorySummary,
-          salesSummary: (sal[0] ?? null) as typeof response.sodfa.salesSummary,
-          items: items as typeof response.sodfa.items,
+          connected: invResult.status === "fulfilled" || salResult.status === "fulfilled",
+          inventorySummary: invResult.status === "fulfilled"
+            ? (invResult.value[0] ?? null) as typeof response.sodfa.inventorySummary : null,
+          salesSummary: salResult.status === "fulfilled"
+            ? (salResult.value[0] ?? null) as typeof response.sodfa.salesSummary : null,
+          items: itemResult.status === "fulfilled"
+            ? itemResult.value as typeof response.sodfa.items : [],
+          error: [invResult,salResult,itemResult].some(x=>x.status==="rejected")
+            ? "جزء من بيانات مخزون أو مبيعات صدفة تعذر تحميله" : undefined,
         };
       } catch {
         response.sodfa = {...response.sodfa,error:"تعذرت قراءة مخزون صدفة ومبيعاتها من Neon"};
