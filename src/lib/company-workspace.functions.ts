@@ -107,7 +107,7 @@ export const getCompanyWorkspaceData = createServerFn({ method: "POST" })
           db`SELECT id::text AS id, brand, created_at::text AS created_at, status,
              shipping_company, source FROM orders WHERE deleted_at IS NULL
              AND (${brandCondition} = 'all' OR brand = ${brandCondition})
-             ORDER BY created_at DESC LIMIT 40`,
+             ORDER BY created_at DESC LIMIT 500`,
           db`SELECT brand, count(*)::integer AS count
              FROM customers WHERE deleted_at IS NULL
              GROUP BY brand ORDER BY brand`,
