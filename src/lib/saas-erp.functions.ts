@@ -30,20 +30,27 @@ export const getSaaSWorkspace=createServerFn({method:"POST"}).validator(request)
 .handler(async({data})=>{
  const chosen=data.brand??"all";
  const {sql,scope,actor}=await context(data.token,data.tenantId,"read",chosen);
- const [scopeResult,org,products,channels,customers,orders,warehouses,expenses,integrations,events]=await sql.transaction([
+ const [scopeResult,org,products,channels,customers,orders,externalOrders,warehouses,expenses,integrations,events]=await sql.transaction([
   scope,
   sql`SELECT id::text,slug,display_name,state FROM saas.tenants
     WHERE id=${data.tenantId}::uuid LIMIT 1`,
-  sql`SELECT id::text,brand_id,title,status,source_system,external_id,sku,
-    cost_minor,updated_at::text FROM saas.products
-    WHERE (${chosen}='all' OR brand_id=${chosen})
-    ORDER BY updated_at DESC,title LIMIT 500`,
+  sql`SELECT p.id::text,p.brand_id,p.title,p.status,p.source_system,p.external_id,p.sku,
+    p.cost_minor,p.updated_at::text,
+    snap.source_status,snap.available_units,snap.min_sale_price_minor,snap.max_sale_price_minor,
+    snap.sampled_at::text AS source_sampled_at
+    FROM saas.products p LEFT JOIN saas.external_product_snapshots snap
+      ON snap.tenant_id=p.tenant_id AND snap.product_id=p.id
+    WHERE (${chosen}='all' OR p.brand_id=${chosen})
+    ORDER BY p.updated_at DESC,p.title LIMIT 500`,
   sql`SELECT id,brand_id,display_name,connector_state,enabled FROM saas.channels ORDER BY id`,
   sql`SELECT id::text,brand_id,display_name,phone,created_at::text FROM saas.customers
     WHERE (${chosen}='all' OR brand_id=${chosen}) ORDER BY created_at DESC LIMIT 100`,
   sql`SELECT id::text,brand_id,status,placed_at::text,version,external_order_id
     FROM saas.orders WHERE (${chosen}='all' OR brand_id=${chosen})
     ORDER BY placed_at DESC LIMIT 100`,
+  sql`SELECT source_order_id,brand_id,status,source_created_at::text,last_seen_at::text
+    FROM saas.external_order_snapshots WHERE (${chosen}='all' OR brand_id=${chosen})
+    ORDER BY source_created_at DESC NULLS LAST LIMIT 200`,
   sql`SELECT id::text,brand_id,name,active FROM saas.warehouses
     WHERE (${chosen}='all' OR brand_id=${chosen}) ORDER BY name`,
   sql`SELECT brand_id,category,amount_minor,incurred_at::text,description FROM saas.expenses
@@ -58,8 +65,8 @@ export const getSaaSWorkspace=createServerFn({method:"POST"}).validator(request)
  const protectedProducts=financialAccess?products:products.map(x=>({...x,cost_minor:null}));
  const protectedCustomers=actor.role==="viewer"?customers.map(x=>({...x,phone:null})):customers;
  const protectedExpenses=financialAccess?expenses:[];
- return {organization:org[0],products:protectedProducts,channels,customers:protectedCustomers,orders,warehouses,expenses:protectedExpenses,integrations,events,
-  summary:{products:products.length,customers:customers.length,orders:orders.length,warehouses:warehouses.length},
+ return {organization:org[0],products:protectedProducts,channels,customers:protectedCustomers,orders,externalOrders,warehouses,expenses:protectedExpenses,integrations,events,
+  summary:{products:products.length,customers:customers.length,orders:orders.length,externalOrders:externalOrders.length,warehouses:warehouses.length},
   warning:"STAGING_ONLY_NO_LIVE_PUBLICATION_OR_CARRIER_DISPATCH"};
 });
 
