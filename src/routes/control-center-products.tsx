@@ -22,6 +22,7 @@ function CatalogAdmin(){
  const [title,setTitle]=useState(""),[brand,setBrand]=useState<"homey"|"sodfa">("homey");
  const [price,setPrice]=useState(""),[homey,setHomey]=useState(true),[sodfa,setSodfa]=useState(false);
  const [reqId,setReqId]=useState(()=>crypto.randomUUID());
+ const [channelPrices,setChannelPrices]=useState<Record<string,string>>({});
  useEffect(()=>{void load();},[]);
  async function token(){
   const {data:{session}}=await supabase.auth.getSession();
@@ -43,8 +44,9 @@ function CatalogAdmin(){
    await saveChannelDraft({data:{
     token:await token(),source:product.source as "homey_store"|"sodfa_dashboard"|"crm_manual",
     sourceProductId:product.id,channel,intendedVisibility:visible,
-    price:channel==="homey_web"?(product.homey_price??product.min_sale_price_egp):
-      (product.sodfa_price??product.min_sale_price_egp),
+    price:(channelPrices[product.id+"_"+channel]===undefined)?
+      (channel==="homey_web"?(product.homey_price??product.min_sale_price_egp):(product.sodfa_price??product.min_sale_price_egp)):
+      channelPrices[product.id+"_"+channel]===""?null:Number(channelPrices[product.id+"_"+channel]),
    }});
    setNotice("اتحفظ قرار القناة كمسودة في CRM، وما تغيّرش أي موقع خارجي");
    await load();
@@ -119,6 +121,13 @@ function CatalogAdmin(){
      {(["homey_web","sodfa_web"] as const).map(channel=>{
       const x=channel==="homey_web"?p.homey_draft:p.sodfa_draft;
       return <td key={channel}><span style={{color:x===null?"#cdbf9b":x?"#8ee1b5":"#c6a8ee"}}>{x===null?"غير محدد":x?"عرض مقترح":"إخفاء مقترح"}</span>
+       <label style={{display:"block",fontSize:10,color:"#bbb",marginTop:6}}>السعر المقترح
+        <input aria-label={"سعر "+channel+" "+p.title} type="number" min="0" step="0.01"
+         value={channelPrices[p.id+"_"+channel]??String(
+          (channel==="homey_web"?p.homey_price:p.sodfa_price)??p.min_sale_price_egp??"")}
+         onChange={e=>setChannelPrices(v=>({...v,[p.id+"_"+channel]:e.target.value}))}
+         style={{...input,width:110,padding:6,fontSize:11,display:"block"}}/>
+       </label>
        <div style={{display:"flex",gap:5,marginTop:5}}>
         <button disabled={busy} type="button" onClick={()=>void save(p,channel,true)} style={{...btn,padding:"5px 9px",fontSize:10}}>عرض</button>
         <button disabled={busy} type="button" onClick={()=>void save(p,channel,false)} style={{...btn,padding:"5px 9px",fontSize:10,background:"#29252e"}}>إخفاء</button>
