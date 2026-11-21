@@ -68,7 +68,7 @@ export const updateSaaSLeadStage=createServerFn({method:"POST"})
  scope,
  sql`WITH updated AS (
  UPDATE saas.crm_leads SET stage=${data.stage},updated_at=now()
- WHERE id=${data.leadId}::uuid AND tenant_id=${data.tenantId}::uuid
+ WHERE id=${data.leadId}::uuid AND tenant_id=${data.tenantId}::uuid AND brand_id=${data.brand}
  RETURNING id,stage
  ), audited AS (
  INSERT INTO saas.audit_log(tenant_id,actor_id,action,entity_kind,entity_id,next)
@@ -90,7 +90,7 @@ export const createSaaSTask=createServerFn({method:"POST"})
  WITH added AS (
  INSERT INTO saas.crm_tasks(id,tenant_id,lead_id,assigned_to,summary,priority)
  SELECT ${id}::uuid,${data.tenantId}::uuid,l.id,${actor.id}::uuid,${data.summary},${data.priority}
- FROM saas.crm_leads l WHERE l.id=${data.leadId}::uuid AND l.tenant_id=${data.tenantId}::uuid
+ FROM saas.crm_leads l WHERE l.id=${data.leadId}::uuid AND l.tenant_id=${data.tenantId}::uuid AND l.brand_id=${data.brand}
  RETURNING id
  ), audited AS (
  INSERT INTO saas.audit_log(tenant_id,actor_id,action,entity_kind,entity_id)
