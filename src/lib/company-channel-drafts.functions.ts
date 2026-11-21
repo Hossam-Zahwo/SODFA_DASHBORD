@@ -1,5 +1,5 @@
 import { createServerFn } from "@tanstack/react-start";
-import { createClient } from "@supabase/supabase-js";
+import {requireCompanyAccess} from "./company-access.server";
 import { neon } from "@neondatabase/serverless";
 import { z } from "zod";
 
@@ -18,21 +18,21 @@ export const saveChannelDraft = createServerFn({method:"POST"})
   .handler(async({data})=>{
     // A draft may target either storefront. Publication is separately controlled
     // and never triggered here. This permits explicit cross-brand proposals.
-    const url = process.env.VITE_SUPABASE_URL;
-    const publishableKey = process.env.VITE_SUPABASE_PUBLISHABLE_KEY;
-    if (!url || !publishableKey) throw new Error("AUTH_NOT_CONFIGURED");
-    const auth = createClient(url,publishableKey,{auth:{persistSession:false,autoRefreshToken:false,detectSessionInUrl:false}});
-    const {data:result,error} = await auth.auth.getUser(data.token);
-    if(error || !result.user?.id || !result.user.email) throw new Error("UNAUTHORIZED");
-    const roleClient=createClient(url,publishableKey,{global:{headers:{Authorization:"Bearer "+data.token}},auth:{persistSession:false,autoRefreshToken:false,detectSessionInUrl:false}});const {data:profile,error:roleError}=await roleClient.from("profiles").select("role").eq("id",result.user.id).maybeSingle();if(roleError||profile?.role!=="admin")throw new Error("ADMIN_ONLY");
     const pgUrl=process.env.CRM_DRAFT_WRITE_URL;
     if(!pgUrl)throw new Error("DRAFT_STORAGE_NOT_CONFIGURED");
     const sql=neon(pgUrl);
-    const row=await sql`SELECT p.id AS product_ref
+    const row=await sql`SELECT p.id AS product_ref,p.brand_id AS brand
       FROM product_references p WHERE p.source_system_id=${data.source}
       AND p.source_product_id=${data.sourceProductId} LIMIT 1`;
     if(!row.length)throw new Error("PRODUCT_NOT_IN_CRM_INDEX");
     const id=Number(row[0].product_ref);
+    const originalBrand=String(row[0].brand) as "homey"|"sodfa";
+    const destination=data.channel==="homey_web"?"homey":"sodfa";
+    const actor=await requireCompanyAccess(data.token,originalBrand,"draft");
+    if(originalBrand!==destination){
+      await requireCompanyAccess(data.token,originalBrand,"approve");
+      await requireCompanyAccess(data.token,destination,"approve");
+    }
     const cross = (data.source==="homey_store" && data.channel==="sodfa_web")
       || (data.source==="sodfa_dashboard" && data.channel==="homey_web");
     const before=await sql`SELECT intended_visibility,proposed_price_egp
@@ -40,7 +40,7 @@ export const saveChannelDraft = createServerFn({method:"POST"})
       AND channel_id=${data.channel}`;
     await sql`INSERT INTO channel_listing_drafts(
       product_reference_id,channel_id,intended_visibility,proposed_price_egp,updated_by,brand_cross_listing)
-      VALUES (${id},${data.channel},${data.intendedVisibility},${data.price},${result.user.id},${cross})
+      VALUES (${id},${data.channel},${data.intendedVisibility},${data.price},${actor.id},${cross})
       ON CONFLICT(product_reference_id,channel_id) DO UPDATE
       SET intended_visibility=EXCLUDED.intended_visibility,
       proposed_price_egp=EXCLUDED.proposed_price_egp,
