@@ -39,6 +39,12 @@ export const getCompanyWorkspaceData = createServerFn({ method: "POST" })
     });
     const { data: result, error } = await auth.auth.getUser(data.token);
     if (error || !result.user || !result.user.email) throw new Error("UNAUTHORIZED");
+    const access = createClient(url, key, {global:{headers:{Authorization:"Bearer "+data.token}},
+      auth:{persistSession:false,autoRefreshToken:false,detectSessionInUrl:false}});
+    const {data:profile,error:roleError} = await access.from("profiles").select("role")
+      .eq("id",result.user.id).maybeSingle();
+    if(roleError || profile?.role!=="admin") throw new Error("ADMIN_ONLY");
+
 
     // No app secrets or customer records are returned by this server function.
     const response: {
