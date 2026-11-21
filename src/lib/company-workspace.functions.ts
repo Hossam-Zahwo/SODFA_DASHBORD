@@ -16,7 +16,7 @@ const RequestSchema = z.object({
 });
 
 type Summary = { brand: string; status: string; count: number };
-type Product = { id: string; title: string; brand: string; source: string };
+type Product = { id: string; title: string; brand: string; source: string; draft_visibility: boolean | null; draft_price: number | null };
 type OrderRow = {
   id: string; brand: string; created_at: string; status: string;
   shipping_company: string | null; source: string | null;
@@ -65,11 +65,15 @@ export const getCompanyWorkspaceData = createServerFn({ method: "POST" })
         // 454 reference records were imported from the source catalogs.
         const [counts, products] = await Promise.all([
           db`SELECT brand_id AS brand, count(*)::integer AS count FROM product_references GROUP BY brand_id ORDER BY brand_id`,
-          db`SELECT source_product_id AS id, title, brand_id AS brand, source_system_id AS source
-             FROM product_references
-             WHERE (${brandCondition} = 'all' OR brand_id = ${brandCondition})
-               AND (${search} = '' OR lower(title) LIKE '%' || ${search} || '%')
-             ORDER BY title LIMIT 100`,
+          db`SELECT p.source_product_id AS id, p.title, p.brand_id AS brand,
+             p.source_system_id AS source, d.intended_visibility AS draft_visibility,
+             d.proposed_price_egp::float8 AS draft_price
+             FROM product_references p LEFT JOIN channel_listing_drafts d
+              ON d.product_reference_id = p.id
+              AND d.channel_id = (CASE WHEN p.brand_id = 'homey' THEN 'homey_web' ELSE 'sodfa_web' END)
+             WHERE (${brandCondition} = 'all' OR p.brand_id = ${brandCondition})
+               AND (${search} = '' OR lower(p.title) LIKE '%' || ${search} || '%')
+             ORDER BY p.title LIMIT 100`,
         ]);
         response.catalog = {connected: true, counts: counts as Count[], products: products as Product[]};
       } catch {
