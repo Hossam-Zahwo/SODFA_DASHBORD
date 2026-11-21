@@ -154,6 +154,20 @@ function NavLinks({
 
   return (
     <nav className="flex flex-col gap-1.5 px-3">
+      <Link
+        to="/control-center"
+        onClick={onNavigate}
+        className={cn(
+          "group flex items-center gap-3 rounded-xl px-4 py-3 text-[15px] font-semibold transition-all",
+          pathname.startsWith("/control-center")
+            ? "bg-[#2A1530] text-white shadow-[0_0_20px_rgba(130,50,146,0.12)]"
+            : "text-zinc-300 hover:bg-[#17121A] hover:text-white",
+        )}
+        style={{ fontFamily: '"Cairo", sans-serif', border: "1px solid rgba(130,50,146,0.28)" }}
+      >
+        <Building2 className="h-5 w-5 text-[#A94FBC]" />
+        <span>مركز التحكم بالمشاريع</span>
+      </Link>
       {NAV.map(({ to, key, icon: Icon }) => {
         const active =
           to === "/"
