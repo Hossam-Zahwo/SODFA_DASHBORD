@@ -1,5 +1,5 @@
 import { createServerFn } from "@tanstack/react-start";
-import { createClient } from "@supabase/supabase-js";
+import {requireCompanyAccess} from "./company-access.server";
 import { neon } from "@neondatabase/serverless";
 import { z } from "zod";
 
@@ -13,12 +13,11 @@ const Request = z.object({
 });
 export const createCompanyProductDraft = createServerFn({method:"POST"})
  .validator(Request).handler(async({data})=>{
-  const url=process.env.VITE_SUPABASE_URL,key=process.env.VITE_SUPABASE_PUBLISHABLE_KEY;
-  if(!url||!key)throw new Error("AUTH_NOT_CONFIGURED");
-  const client=createClient(url,key,{auth:{persistSession:false,autoRefreshToken:false,detectSessionInUrl:false}});
-  const {data:{user},error}=await client.auth.getUser(data.token);
-  if(error||!user?.email||!user.id)throw new Error("UNAUTHORIZED");
-    const roleClient=createClient(url,key,{global:{headers:{Authorization:"Bearer "+data.token}},auth:{persistSession:false,autoRefreshToken:false,detectSessionInUrl:false}});const {data:profile,error:roleError}=await roleClient.from("profiles").select("role").eq("id",user.id).maybeSingle();if(roleError||profile?.role!=="admin")throw new Error("ADMIN_ONLY");
+  const actor=await requireCompanyAccess(data.token,data.brand,"draft");
+  if(data.channels.includes(data.brand==="homey"?"sodfa_web":"homey_web")){
+    await requireCompanyAccess(data.token,data.brand,"approve");
+    await requireCompanyAccess(data.token,data.brand==="homey"?"sodfa":"homey","approve");
+  }
   const writerUrl=process.env.CRM_DRAFT_WRITE_URL;
   if(!writerUrl)throw new Error("DRAFT_STORAGE_NOT_CONFIGURED");
   const sql=neon(writerUrl);
@@ -36,7 +35,7 @@ export const createCompanyProductDraft = createServerFn({method:"POST"})
     const checked=data.channels.includes(channel);
     await sql`INSERT INTO channel_listing_drafts
       (product_reference_id,channel_id,intended_visibility,proposed_price_egp,updated_by,brand_cross_listing)
-      VALUES (${id},${channel},${checked},${data.proposedPrice},${user.id},
+      VALUES (${id},${channel},${checked},${data.proposedPrice},${actor.id},
       ${(data.brand==="homey"&&channel==="sodfa_web")||(data.brand==="sodfa"&&channel==="homey_web")})
       ON CONFLICT(product_reference_id,channel_id) DO UPDATE
       SET intended_visibility=EXCLUDED.intended_visibility,
@@ -44,7 +43,7 @@ export const createCompanyProductDraft = createServerFn({method:"POST"})
       brand_cross_listing=EXCLUDED.brand_cross_listing,updated_at=now()`;
   }
   await sql`INSERT INTO audit_events(actor_id,system_id,event_type,target_table,target_key,next_value)
-    VALUES(${user.id},'company_control_center','create_product_draft',
+    VALUES(${actor.id},'company_control_center','create_product_draft',
       'product_references',${data.requestId},${JSON.stringify({brand:data.brand,channels:data.channels,title:data.title})}::jsonb)`;
   return {ok:true,status:"draft",productId:data.requestId};
  });
