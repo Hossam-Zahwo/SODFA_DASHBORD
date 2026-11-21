@@ -16,7 +16,11 @@ const RequestSchema = z.object({
 });
 
 type Summary = { brand: string; status: string; count: number };
-type Product = { id: string; title: string; brand: string; source: string; draft_visibility: boolean | null; draft_price: number | null };
+type Product = { id: string; title: string; brand: string; source: string; draft_visibility: boolean | null; draft_price: number | null;
+  source_status: string | null; available_units: number | null; min_sale_price_egp: number | null; max_sale_price_egp: number | null;
+  homey_draft: boolean | null; sodfa_draft: boolean | null; homey_price: number | null; sodfa_price: number | null;
+  source_refreshed_at: string | null;
+};
 type OrderRow = {
   id: string; brand: string; created_at: string; status: string;
   shipping_company: string | null; source: string | null;
@@ -66,14 +70,26 @@ export const getCompanyWorkspaceData = createServerFn({ method: "POST" })
         const [counts, products] = await Promise.all([
           db`SELECT brand_id AS brand, count(*)::integer AS count FROM product_references GROUP BY brand_id ORDER BY brand_id`,
           db`SELECT p.source_product_id AS id, p.title, p.brand_id AS brand,
-             p.source_system_id AS source, d.intended_visibility AS draft_visibility,
-             d.proposed_price_egp::float8 AS draft_price
-             FROM product_references p LEFT JOIN channel_listing_drafts d
-              ON d.product_reference_id = p.id
-              AND d.channel_id = (CASE WHEN p.brand_id = 'homey' THEN 'homey_web' ELSE 'sodfa_web' END)
+             p.source_system_id AS source, native.intended_visibility AS draft_visibility,
+             native.proposed_price_egp::float8 AS draft_price,
+             snap.source_status, snap.available_units,
+             snap.min_sale_price_egp::float8 AS min_sale_price_egp,
+             snap.max_sale_price_egp::float8 AS max_sale_price_egp,
+             snap.refreshed_at::text AS source_refreshed_at,
+             hd.intended_visibility AS homey_draft,
+             sd.intended_visibility AS sodfa_draft,
+             hd.proposed_price_egp::float8 AS homey_price,
+             sd.proposed_price_egp::float8 AS sodfa_price
+             FROM product_references p
+             LEFT JOIN product_source_snapshots snap ON snap.product_reference_id=p.id
+             LEFT JOIN channel_listing_drafts native
+               ON native.product_reference_id = p.id
+               AND native.channel_id = (CASE WHEN p.brand_id = 'homey' THEN 'homey_web' ELSE 'sodfa_web' END)
+             LEFT JOIN channel_listing_drafts hd ON hd.product_reference_id=p.id AND hd.channel_id='homey_web'
+             LEFT JOIN channel_listing_drafts sd ON sd.product_reference_id=p.id AND sd.channel_id='sodfa_web'
              WHERE (${brandCondition} = 'all' OR p.brand_id = ${brandCondition})
                AND (${search} = '' OR lower(p.title) LIKE '%' || ${search} || '%')
-             ORDER BY p.title LIMIT 100`,
+             ORDER BY p.title LIMIT 500`,
         ]);
         response.catalog = {connected: true, counts: counts as Count[], products: products as Product[]};
       } catch {
