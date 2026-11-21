@@ -2,7 +2,7 @@ import {createServerFn} from "@tanstack/react-start";
 import {neon} from "@neondatabase/serverless";
 import {z} from "zod";
 import {randomUUID} from "node:crypto";
-import {requireCompanyAccess} from "./company-access.server";
+import {requireSaaSAccess,type SaaSCapability} from "./saas-access.server";
 
 /** Staging SaaS environment. RLS requires a verified actor and tenant context
  * in the SAME PostgreSQL transaction. No user-supplied SQL identifiers, no
@@ -17,8 +17,8 @@ const connection=()=>{
   if(!url)throw new Error("SAAS_STAGING_DATABASE_NOT_CONFIGURED");
   return neon(url);
 };
-async function context(userToken:string,tenant:string){
-  const actor=await requireCompanyAccess(userToken,"all","admin");
+async function context(userToken:string,tenant:string,cap:SaaSCapability="read",brandScope:string="all"){
+  const actor=await requireSaaSAccess(userToken,tenant,cap,brandScope);
   const sql=connection();
   const scope=sql`SELECT set_config('app.tenant_id',${tenant},true) AS tenant_scope,
     set_config('app.actor_id',${actor.id},true) AS actor_scope`;
@@ -28,8 +28,8 @@ const request=z.object({token,tenantId,brand:brand.optional()});
 
 export const getSaaSWorkspace=createServerFn({method:"POST"}).validator(request)
 .handler(async({data})=>{
- const {sql,scope}=await context(data.token,data.tenantId);
  const chosen=data.brand??"all";
+ const {sql,scope,actor}=await context(data.token,data.tenantId,"read",chosen);
  const [scopeResult,org,products,channels,customers,orders,warehouses,expenses,integrations,events]=await sql.transaction([
   scope,
   sql`SELECT id::text,slug,display_name,state FROM saas.tenants
@@ -54,7 +54,11 @@ export const getSaaSWorkspace=createServerFn({method:"POST"}).validator(request)
  ],{readOnly:true});
  void scopeResult;
  if(!org.length)throw new Error("TENANT_ACCESS_DENIED");
- return {organization:org[0],products,channels,customers,orders,warehouses,expenses,integrations,events,
+ const financialAccess=actor.isAdmin||actor.role==="manager";
+ const protectedProducts=financialAccess?products:products.map(x=>({...x,cost_minor:null}));
+ const protectedCustomers=actor.role==="viewer"?customers.map(x=>({...x,phone:null})):customers;
+ const protectedExpenses=financialAccess?expenses:[];
+ return {organization:org[0],products:protectedProducts,channels,customers:protectedCustomers,orders,warehouses,expenses:protectedExpenses,integrations,events,
   summary:{products:products.length,customers:customers.length,orders:orders.length,warehouses:warehouses.length},
   warning:"STAGING_ONLY_NO_LIVE_PUBLICATION_OR_CARRIER_DISPATCH"};
 });
@@ -63,7 +67,7 @@ const createProduct=z.object({token,tenantId,brand,title:z.string().trim().min(3
  sku:z.string().trim().max(100).nullable(),channels:z.array(z.enum(["homey_web","sodfa_web"])).max(2)});
 export const createSaaSProduct=createServerFn({method:"POST"}).validator(createProduct)
 .handler(async({data})=>{
- const {sql,scope,actor}=await context(data.token,data.tenantId);
+ const {sql,scope,actor}=await context(data.token,data.tenantId,"catalog_write",data.brand);
  const id=randomUUID();
  const [_,brandExists,inserted,audit]=await sql.transaction([
   scope,
@@ -99,7 +103,7 @@ export const createSaaSCustomer=createServerFn({method:"POST"}).validator(z.obje
  token,tenantId,brand,name:z.string().trim().min(2).max(200),
  phone:z.string().trim().max(30).nullable()}))
 .handler(async({data})=>{
- const {sql,scope,actor}=await context(data.token,data.tenantId);
+ const {sql,scope,actor}=await context(data.token,data.tenantId,"crm_write",data.brand);
  const id=randomUUID();
  const [_,rows]=await sql.transaction([scope,sql`
  WITH added AS (
@@ -117,7 +121,7 @@ export const createSaaSCustomer=createServerFn({method:"POST"}).validator(z.obje
 export const createSaaSWarehouse=createServerFn({method:"POST"}).validator(z.object({
  token,tenantId,brand,name:z.string().trim().min(2).max(140)}))
 .handler(async({data})=>{
- const {sql,scope,actor}=await context(data.token,data.tenantId);
+ const {sql,scope,actor}=await context(data.token,data.tenantId,"inventory_write",data.brand);
  const id=randomUUID();
  const [_,rows]=await sql.transaction([scope,sql`
  WITH added AS (
@@ -137,7 +141,7 @@ export const createSaaSExpense=createServerFn({method:"POST"}).validator(z.objec
  amountEGP:z.number().finite().positive().max(10000000),
  description:z.string().max(500).default("")}))
 .handler(async({data})=>{
- const {sql,scope,actor}=await context(data.token,data.tenantId);
+ const {sql,scope,actor}=await context(data.token,data.tenantId,"finance_write",data.brand);
  const id=randomUUID(),minor=Math.round(data.amountEGP*100);
  const [_,rows]=await sql.transaction([scope,sql`
  WITH added AS (
