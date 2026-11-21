@@ -12,6 +12,7 @@ import { z } from "zod";
 const RequestSchema = z.object({
   token: z.string().min(16).max(8192),
   brand: z.enum(["homey", "sodfa", "all"]).default("all"),
+  project: z.enum(["all","homey","sodfa","sodfa_web","orders"]).default("all"),
   query: z.string().max(120).default(""),
 });
 
@@ -71,16 +72,21 @@ export const getCompanyWorkspaceData = createServerFn({ method: "POST" })
       operations: { connected: false, summary: [], orders: [], customers: [], shipments: [] },
       sodfa: { connected:false, inventorySummary:null, salesSummary:null, items:[] },
     };
-    const brandCondition = data.brand;
+    // Scope is applied to DB reads, not only the rendered interface.
+    const scope=data.project;
+    const brandCondition=scope==="homey"?"homey":scope==="sodfa"||scope==="sodfa_web"?"sodfa":"all";
+    const catalogEnabled=scope==="all"||scope==="homey"||scope==="sodfa";
+    const ordersEnabled=scope==="all"||scope==="homey"||scope==="sodfa"||scope==="orders";
+    const sodfaEnabled=scope==="all"||scope==="sodfa";
     const search = data.query.trim().toLowerCase();
     const jobs: Promise<void>[] = [];
     const catalogUrl = process.env.CRM_CATALOG_READ_URL;
-    if (catalogUrl) jobs.push((async () => {
+    if (catalogEnabled && catalogUrl) jobs.push((async () => {
       try {
         const db = neon(catalogUrl);
         // 454 reference records were imported from the source catalogs.
         const [countResult, productResult] = await Promise.allSettled([
-          db`SELECT brand_id AS brand, count(*)::integer AS count FROM product_references GROUP BY brand_id ORDER BY brand_id`,
+          db`SELECT brand_id AS brand, count(*)::integer AS count FROM product_references WHERE (${brandCondition} = 'all' OR brand_id = ${brandCondition}) GROUP BY brand_id ORDER BY brand_id`,
           db`SELECT p.source_product_id AS id, p.title, p.brand_id AS brand,
              p.source_system_id AS source, native.intended_visibility AS draft_visibility,
              native.proposed_price_egp::float8 AS draft_price,
@@ -115,7 +121,7 @@ export const getCompanyWorkspaceData = createServerFn({ method: "POST" })
       }
     })());
     const ordersUrl = process.env.CRM_ORDERS_READ_URL;
-    if (ordersUrl) jobs.push((async () => {
+    if (ordersEnabled && ordersUrl) jobs.push((async () => {
       try {
         const db = neon(ordersUrl);
         // Independent queries: a shipping integration failure must not erase
@@ -123,6 +129,7 @@ export const getCompanyWorkspaceData = createServerFn({ method: "POST" })
         const [summaryResult, orderResult, customerResult, shipmentResult] = await Promise.allSettled([
           db`SELECT brand, status, count(*)::integer AS count
              FROM orders WHERE deleted_at IS NULL
+             AND (${brandCondition} = 'all' OR brand = ${brandCondition})
              GROUP BY brand, status ORDER BY brand, status`,
           db`SELECT id::text AS id,brand,created_at::text AS created_at,status,
              shipping_company,source,customer_name,phone,city,governorate,
@@ -135,11 +142,13 @@ export const getCompanyWorkspaceData = createServerFn({ method: "POST" })
              ORDER BY created_at DESC LIMIT 500`,
           db`SELECT brand, count(*)::integer AS count
              FROM customers WHERE deleted_at IS NULL
+             AND (${brandCondition} = 'all' OR brand = ${brandCondition})
              GROUP BY brand ORDER BY brand`,
           db`SELECT o.brand, COALESCE(s.state,'not_dispatched') AS state,
              count(*)::integer AS count
              FROM orders o LEFT JOIN tala_order_shipments s ON s.order_id=o.id
              WHERE o.deleted_at IS NULL
+             AND (${brandCondition} = 'all' OR o.brand = ${brandCondition})
              GROUP BY o.brand, COALESCE(s.state,'not_dispatched')
              ORDER BY o.brand, state`,
         ]);
@@ -158,7 +167,7 @@ export const getCompanyWorkspaceData = createServerFn({ method: "POST" })
       }
     })());
     const sodfaUrl = process.env.CRM_SODFA_READ_URL;
-    if (sodfaUrl) jobs.push((async () => {
+    if (sodfaEnabled && sodfaUrl) jobs.push((async () => {
       try {
         const db = neon(sodfaUrl);
         const [invResult,salResult,itemResult] = await Promise.allSettled([
