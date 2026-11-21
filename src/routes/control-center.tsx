@@ -162,6 +162,7 @@ function ControlCenter(){
         <button onClick={downloadCsv} style={{background:ui.soft,color:"#fff",border:"1px solid "+ui.purple,padding:"10px 13px",borderRadius:10,cursor:"pointer",fontSize:12}}><FileDown size={14} style={{display:"inline",marginLeft:6}}/>تصدير CSV</button>
         </div>
       </div>
+      {tab==="orders"&&<div style={{display:"flex",gap:10,alignItems:"center",marginBottom:12}}><Link to="/control-center-orders" style={{border:"1px solid #823292",background:"#642472",borderRadius:10,padding:"11px 16px",color:"white",fontSize:13,fontWeight:800}}>فتح نموذج إضافة وتأكيد الطلبات داخل المركز — اختبار معزول</Link></div>}
       {tab==="products"&&<div style={{display:"flex",gap:10,alignItems:"center",marginBottom:12}}><Link to="/control-center-products" style={{border:"1px solid #823292",background:"#642472",borderRadius:10,padding:"11px 16px",color:"white",fontSize:13,fontWeight:800}}>فتح إدارة المنتجات الكاملة: السعر والمخزون وإضافة منتج واختيار الموقعين</Link></div>}
       {draftMessage&&<div role="status" style={{padding:10,marginTop:10,background:ui.soft,borderRadius:8,fontSize:12}}>{draftMessage}</div>}
       <div style={{overflowX:"auto",marginTop:18}}>
