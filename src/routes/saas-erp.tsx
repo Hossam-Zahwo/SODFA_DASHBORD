@@ -87,7 +87,7 @@ function ERP(){
    <div style={{display:"flex",justifyContent:"space-between",flexWrap:"wrap",gap:12,alignItems:"center"}}>
     <div><Link to="/control-center" style={{color:palette.light,fontSize:12}}>مركز الشركة / رجوع</Link>
      <h1 style={{fontSize:26,fontWeight:900,margin:"6px 0"}}>{orgName} · ERP + CRM</h1>
-     <div style={{fontSize:12,color:palette.muted}}>نسخة SaaS تجريبية مع عزل الشركات وصلاحيات على مستوى قاعدة البيانات</div>
+     <div style={{fontSize:12,color:palette.muted}}>نسخة SaaS تجريبية مع عزل الشركات وصلاحيات على مستوى قاعدة البيانات</div><div style={{display:"flex",gap:10,marginTop:10,flexWrap:"wrap"}}><Link to="/saas-crm" style={{fontSize:12,color:palette.light}}>إدارة فرص البيع والمتابعة ←</Link><Link to="/saas-inventory" style={{fontSize:12,color:palette.light}}>إدارة المخزون والحركات ←</Link></div>
     </div>
     <button disabled={loading} onClick={()=>void load()} style={btn}><RefreshCw size={15} style={{display:"inline",marginLeft:6}}/>تحديث البيانات</button>
    </div>
