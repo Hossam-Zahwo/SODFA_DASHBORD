@@ -38,8 +38,8 @@ type Count = { brand: string; count: number };
 export const getCompanyWorkspaceData = createServerFn({ method: "POST" })
   .validator(RequestSchema)
   .handler(async ({ data }) => {
-    await requireCompanyAccess(data.token,data.project,"read");
-    // No app secrets or customer records are returned by this server function.
+    const access=await requireCompanyAccess(data.token,data.project,"read");
+    // All queries are server-side. Order PII is only exposed to operators/managers, never viewers.
     const response: {
       fetchedAt: string;
       catalog: { connected: boolean; error?: string; counts: Count[]; products: Product[] };
@@ -182,5 +182,15 @@ export const getCompanyWorkspaceData = createServerFn({ method: "POST" })
       }
     })());
     await Promise.all(jobs);
+    // A viewer sees operational counts and non-sensitive rows, not customer
+    // contact details or purchase costs.
+    if(!access.isAdmin && access.role==="viewer"){
+      response.operations.orders=response.operations.orders.map(o=>({
+        ...o,customer_name:"محجوب",phone:"",city:null,governorate:null,address:null,
+        payment_method:null,items:[],manual_total:null,carrier_received:null,
+      }));
+      response.sodfa.items=response.sodfa.items.map(i=>({...i,purchase_price:0}));
+      if(response.sodfa.inventorySummary)response.sodfa.inventorySummary.cost_value=0;
+    }
     return response;
   });
