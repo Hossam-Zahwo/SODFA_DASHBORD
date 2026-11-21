@@ -42,41 +42,14 @@ export const adjustSaaSInventory=createServerFn({method:"POST"})
  // The movement idempotency key is unique per tenant+warehouse+product+reason.
  // A duplicate retry inserts no movement, and hence makes no second change.
  const [_,rows]=await sql.transaction([scope,sql`
- WITH verified AS (
-  SELECT p.id product_id,w.id warehouse_id
-  FROM saas.products p JOIN saas.warehouses w
-  ON w.tenant_id=p.tenant_id AND w.brand_id=p.brand_id
-  WHERE p.tenant_id=${data.tenantId}::uuid AND p.id=${data.productId}::uuid
-   AND w.id=${data.warehouseId}::uuid AND p.brand_id=${data.brand}
- ), claimed AS (
-  INSERT INTO saas.inventory_movements(tenant_id,warehouse_id,product_id,delta,reason,reference,actor_id)
-  SELECT ${data.tenantId}::uuid,warehouse_id,product_id,
-   ${data.delta},${data.reason},${data.requestId},${actor.id}::uuid FROM verified
-  ON CONFLICT(tenant_id,warehouse_id,product_id,reference,reason) DO NOTHING
-  RETURNING tenant_id,warehouse_id,product_id,delta
- ), updated AS (
-  INSERT INTO saas.inventory_balances(tenant_id,warehouse_id,product_id,on_hand,reserved)
-  SELECT tenant_id,warehouse_id,product_id,delta,0 FROM claimed
-  ON CONFLICT(tenant_id,warehouse_id,product_id) DO UPDATE
-  SET on_hand=saas.inventory_balances.on_hand+EXCLUDED.on_hand,
-   updated_at=now(),version=saas.inventory_balances.version+1
-  WHERE saas.inventory_balances.on_hand+EXCLUDED.on_hand>=saas.inventory_balances.reserved
-  RETURNING on_hand,reserved,version
- ), audited AS (
-  INSERT INTO saas.audit_log(tenant_id,actor_id,action,entity_kind,entity_id,next)
-  SELECT ${data.tenantId}::uuid,${actor.id}::uuid,'inventory_adjustment','product',
-   ${data.productId},${JSON.stringify({delta:data.delta,reason:data.reason,requestId:data.requestId})}::jsonb
-  FROM updated RETURNING id
- ) SELECT on_hand,reserved,version FROM updated`]);
- if(rows.length)return {ok:true,changed:true,onHand:rows[0].on_hand,reserved:rows[0].reserved};
- // Empty result means either a duplicate idempotency key, mismatched warehouse/brand,
- // or insufficient available stock. Report honestly; never claim an adjustment.
- const [scope2,exists]=await sql.transaction([
-  sql`SELECT set_config('app.tenant_id',${data.tenantId},true),set_config('app.actor_id',${actor.id},true)`,
-  sql`SELECT count(*)::integer AS n FROM saas.inventory_movements
-   WHERE tenant_id=${data.tenantId}::uuid AND warehouse_id=${data.warehouseId}::uuid
-    AND product_id=${data.productId}::uuid AND reference=${data.requestId} AND reason=${data.reason}`
- ],{readOnly:true});void scope2;
- if(Number(exists[0]?.n??0)>0)return {ok:true,changed:false,idempotentReplay:true};
- throw Error("INVALID_PRODUCT_WAREHOUSE_OR_INSUFFICIENT_AVAILABLE_STOCK");
+  SELECT on_hand,reserved,version,replayed
+  FROM saas.apply_inventory_movement(
+   ${data.tenantId}::uuid,${actor.id}::uuid,
+   ${data.warehouseId}::uuid,${data.productId}::uuid,
+   ${data.delta},${data.reason},${data.requestId}
+  )`]);
+ if(!rows.length)throw Error("INVENTORY_MOVEMENT_NOT_RECORDED");
+ const result=rows[0];
+ return {ok:true,changed:!result.replayed,idempotentReplay:!!result.replayed,
+   onHand:Number(result.on_hand),reserved:Number(result.reserved),version:Number(result.version)};
 });
