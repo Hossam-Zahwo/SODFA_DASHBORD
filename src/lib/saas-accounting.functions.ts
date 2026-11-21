@@ -1,10 +1,10 @@
 import {createServerFn} from "@tanstack/react-start";
 import {neon} from "@neondatabase/serverless";
 import {z} from "zod";
-import {requireCompanyAccess} from "./company-access.server";
+import {requireSaaSAccess,type SaaSCapability} from "./saas-access.server";
 const token=z.string().min(16).max(8192),tenantId=z.string().uuid();
 async function context(t:string,tenant:string){
- const actor=await requireCompanyAccess(t,"all","admin");
+ const actor=await requireSaaSAccess(t,tenant,"tenant_admin");
  const url=process.env.SAAS_DATABASE_URL;if(!url)throw Error("SAAS_STAGING_UNAVAILABLE");
  const sql=neon(url);
  return {sql,actor,scope:sql`SELECT set_config('app.tenant_id',${tenant},true),set_config('app.actor_id',${actor.id},true)`};
