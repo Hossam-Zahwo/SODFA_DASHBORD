@@ -37,45 +37,60 @@ export const postSaaSJournal=createServerFn({method:"POST"}).validator(z.object(
  if(cents<1)throw Error("AMOUNT_BELOW_MINIMUM");
  // Single SQL statement: idempotent insert; create exactly 2 balanced lines
  // only for a newly inserted entry. A replay cannot post a second journal.
- const [_,rows]=await sql.transaction([scope,sql`
- WITH allowed AS (
-  SELECT count(*)::int AS n FROM saas.account_categories
-  WHERE tenant_id=${data.tenantId}::uuid
-   AND id IN (${data.debitAccountId}::uuid,${data.creditAccountId}::uuid)
-   AND active
- ), inserted AS (
-  INSERT INTO saas.journal_entries(id,tenant_id,reference,description,state,created_by)
-  SELECT ${data.requestId}::uuid,${data.tenantId}::uuid,${data.requestId},
-    ${data.description},'draft',${actor.id}::uuid FROM allowed WHERE n=2
-  ON CONFLICT(tenant_id,reference) DO NOTHING RETURNING id
- ), lines AS (
-  INSERT INTO saas.journal_lines(tenant_id,entry_id,account_id,debit_minor,credit_minor)
-  SELECT ${data.tenantId}::uuid,inserted.id,entry.account_id,entry.debit,entry.credit
-  FROM inserted JOIN (VALUES
-    (${data.debitAccountId}::uuid,${cents}::bigint,0::bigint),
-    (${data.creditAccountId}::uuid,0::bigint,${cents}::bigint)
-  ) AS entry(account_id,debit,credit) ON true
-  RETURNING entry_id,debit_minor,credit_minor
- ), balanced AS (
-  SELECT entry_id,sum(debit_minor) AS debits,sum(credit_minor) AS credits
-  FROM lines GROUP BY entry_id HAVING count(*)=2 AND sum(debit_minor)=sum(credit_minor)
- ), posted AS (
-  UPDATE saas.journal_entries j SET state='posted'
-  FROM balanced b WHERE j.id=b.entry_id AND j.tenant_id=${data.tenantId}::uuid
-  RETURNING j.id,j.state
- ), audited AS (
-  INSERT INTO saas.audit_log(tenant_id,actor_id,action,entity_kind,entity_id,next)
-  SELECT ${data.tenantId}::uuid,${actor.id}::uuid,'journal_posted','journal',id::text,
-   ${JSON.stringify({amountMinor:cents})}::jsonb FROM posted
-  RETURNING id
- ) SELECT posted.id::text,posted.state FROM posted JOIN audited ON true
- `]);
+ const [_,created,lines,rows]=await sql.transaction([
+  scope,
+  sql`INSERT INTO saas.journal_entries(id,tenant_id,reference,description,state,created_by)
+    SELECT ${data.requestId}::uuid,${data.tenantId}::uuid,${data.requestId},
+      ${data.description},'draft',${actor.id}::uuid
+    WHERE (SELECT count(*) FROM saas.account_categories WHERE tenant_id=${data.tenantId}::uuid
+       AND id IN (${data.debitAccountId}::uuid,${data.creditAccountId}::uuid) AND active)=2
+    ON CONFLICT(tenant_id,reference) DO NOTHING RETURNING id`,
+  sql`INSERT INTO saas.journal_lines(tenant_id,entry_id,account_id,debit_minor,credit_minor)
+    SELECT ${data.tenantId}::uuid,j.id,accounts.account_id,accounts.debit,accounts.credit
+    FROM saas.journal_entries j JOIN (VALUES
+      (${data.debitAccountId}::uuid,${cents}::bigint,0::bigint),
+      (${data.creditAccountId}::uuid,0::bigint,${cents}::bigint)
+    ) AS accounts(account_id,debit,credit) ON true
+    WHERE j.id=${data.requestId}::uuid AND j.tenant_id=${data.tenantId}::uuid
+      AND j.state='draft' AND j.description=${data.description}
+      AND NOT EXISTS(SELECT 1 FROM saas.journal_lines l WHERE l.tenant_id=j.tenant_id AND l.entry_id=j.id)
+    RETURNING entry_id`,
+  sql`WITH posted AS (
+    UPDATE saas.journal_entries j SET state='posted'
+    WHERE j.id=${data.requestId}::uuid AND j.tenant_id=${data.tenantId}::uuid
+      AND j.state='draft'
+      AND (SELECT count(*) FROM saas.journal_lines l WHERE l.tenant_id=j.tenant_id AND l.entry_id=j.id)=2
+      AND (SELECT sum(debit_minor)-sum(credit_minor) FROM saas.journal_lines l
+           WHERE l.tenant_id=j.tenant_id AND l.entry_id=j.id)=0
+    RETURNING j.id,j.state
+   ), audited AS (
+    INSERT INTO saas.audit_log(tenant_id,actor_id,action,entity_kind,entity_id,next)
+    SELECT ${data.tenantId}::uuid,${actor.id}::uuid,'journal_posted','journal',id::text,
+      ${JSON.stringify({amountMinor:cents})}::jsonb FROM posted RETURNING id
+   ) SELECT posted.id::text,posted.state FROM posted JOIN audited ON true`
+ ]);
+ void created;void lines;
  if(rows.length)return {ok:true,id:rows[0].id,posted:true,idempotentReplay:false};
  const [scope2,existing]=await sql.transaction([
   sql`SELECT set_config('app.tenant_id',${data.tenantId},true),set_config('app.actor_id',${actor.id},true)`,
-  sql`SELECT id::text,state FROM saas.journal_entries
-   WHERE id=${data.requestId}::uuid AND tenant_id=${data.tenantId}::uuid`
+  sql`SELECT j.id::text,j.state,j.description,
+   count(l.id)::int AS lines,
+   coalesce(sum(l.debit_minor),0)::bigint AS debit_total,
+   coalesce(sum(l.credit_minor),0)::bigint AS credit_total,
+   count(*) FILTER(WHERE l.account_id=${data.debitAccountId}::uuid AND l.debit_minor=${cents})::int AS matching_debit,
+   count(*) FILTER(WHERE l.account_id=${data.creditAccountId}::uuid AND l.credit_minor=${cents})::int AS matching_credit
+   FROM saas.journal_entries j LEFT JOIN saas.journal_lines l
+   ON l.tenant_id=j.tenant_id AND l.entry_id=j.id
+   WHERE j.id=${data.requestId}::uuid AND j.tenant_id=${data.tenantId}::uuid
+   GROUP BY j.id,j.state,j.description`
  ],{readOnly:true});void scope2;
- if(existing.length)return {ok:true,id:existing[0].id,posted:existing[0].state==="posted",idempotentReplay:true};
+ if(existing.length){
+   const e=existing[0];
+   if(e.description!==data.description || Number(e.lines)!==2 ||
+      Number(e.debit_total)!==cents || Number(e.credit_total)!==cents ||
+      Number(e.matching_debit)!==1 || Number(e.matching_credit)!==1)
+     throw Error("IDEMPOTENCY_PAYLOAD_CONFLICT");
+   return {ok:true,id:e.id,posted:e.state==="posted",idempotentReplay:true};
+ }
  throw Error("INVALID_ACCOUNT_OR_UNBALANCED_JOURNAL");
 });
