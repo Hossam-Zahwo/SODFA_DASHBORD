@@ -17,22 +17,24 @@ function CatalogAdmin(){
  const [products,setProducts]=useState<Product[]>([]);
  const [connected,setConnected]=useState(false),[loading,setLoading]=useState(true);
  const [notice,setNotice]=useState(""),[busy,setBusy]=useState(false);
- const [query,setQuery]=useState(""),[filter,setFilter]=useState("all");
+ const [query,setQuery]=useState(""),[filter,setFilter]=useState<"homey"|"sodfa">("homey");
  const [formVisible,setFormVisible]=useState(false);
  const [title,setTitle]=useState(""),[brand,setBrand]=useState<"homey"|"sodfa">("homey");
  const [price,setPrice]=useState(""),[homey,setHomey]=useState(true),[sodfa,setSodfa]=useState(false);
  const [reqId,setReqId]=useState(()=>crypto.randomUUID());
  const [channelPrices,setChannelPrices]=useState<Record<string,string>>({});
- useEffect(()=>{void load();},[]);
+ useEffect(()=>{const selected=new URLSearchParams(window.location.search).get("project");if(selected==="homey"||selected==="sodfa")setFilter(selected);},[]);
+ useEffect(()=>{void load(filter);},[filter]);
  async function token(){
   const {data:{session}}=await supabase.auth.getSession();
   if(!session?.access_token)throw new Error("يلزم تسجيل الدخول بحساب صدفة");
   return session.access_token;
  }
- async function load(){
+ async function load(scope:"homey"|"sodfa"=filter){
+  setProducts([]);
   setLoading(true);
   try{
-   const r=await getCompanyWorkspaceData({data:{token:await token(),brand:"all",query:""}});
+   const r=await getCompanyWorkspaceData({data:{token:await token(),brand:scope,project:scope,query:""}});
    setProducts(r.catalog.products);setConnected(r.catalog.connected);
    if(!r.catalog.connected)setNotice(r.catalog.error??"تعذر ربط فهرس المنتجات");
   }catch(e){setNotice(e instanceof Error?e.message:"تعذر تحميل المنتجات");}
@@ -68,12 +70,12 @@ function CatalogAdmin(){
   }catch(e){setNotice("تعذر إنشاء المنتج: "+(e instanceof Error?e.message:"خطأ"))}
   finally{setBusy(false)}
  }
- const filtered=products.filter(p=>(filter==="all"||p.brand===filter)&&p.title.toLowerCase().includes(query.toLowerCase()));
+ const filtered=products.filter(p=>p.brand===filter&&p.title.toLowerCase().includes(query.toLowerCase()));
  return <AppShell title="المنتجات وقنوات البيع">
  <div dir="rtl" style={{fontFamily:"Cairo,sans-serif",color:"white",padding:"10px 0 50px"}}>
   <div style={{display:"flex",justifyContent:"space-between",gap:12,alignItems:"center",flexWrap:"wrap"}}>
    <div><Link to="/control-center" style={{color:ui.violet,fontSize:12}}>مركز الشركة / رجوع</Link>
-    <h1 style={{fontWeight:900,fontSize:26,margin:"8px 0"}}>إدارة المنتجات وقنوات البيع</h1>
+    <h1 style={{fontWeight:900,fontSize:26,margin:"8px 0"}}>إدارة منتجات {filter==="homey"?"هومي":"صدفة"}</h1>
     <p style={{fontSize:12,color:"#aaa"}}>المنتجات من المصادر الفعلية، وقرارات العرض محفوظة كمسودات منفصلة لكل متجر</p></div>
    <div style={{display:"flex",gap:10}}>
     <button onClick={()=>void load()} disabled={loading} style={btn}><RefreshCcw size={14} style={{display:"inline",marginLeft:6}}/>تحديث</button>
@@ -102,8 +104,8 @@ function CatalogAdmin(){
   <div style={{...box,marginBottom:15,display:"flex",gap:12,flexWrap:"wrap",alignItems:"center"}}>
    <Search size={18} color={ui.violet}/>
    <input placeholder="ابحث عن منتج" value={query} onChange={e=>setQuery(e.target.value)} style={{...input,flex:1,minWidth:170}}/>
-   <select aria-label="تصفية البراند" value={filter} onChange={e=>setFilter(e.target.value)} style={input}>
-    <option value="all">كل المنتجات</option><option value="homey">هومي</option><option value="sodfa">صدفة</option>
+   <select aria-label="تصفية البراند" value={filter} onChange={e=>{setQuery("");setFilter(e.target.value as "homey"|"sodfa")}} style={input}>
+    <option value="homey">منتجات هومي فقط</option><option value="sodfa">منتجات صدفة فقط</option>
    </select>
    <span style={{color:"#aaa",fontSize:12}}>{loading?"جاري التحميل":connected?filtered.length+" منتج":"فشل الاتصال"}</span>
   </div>
