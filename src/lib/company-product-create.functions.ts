@@ -18,6 +18,7 @@ export const createCompanyProductDraft = createServerFn({method:"POST"})
   const client=createClient(url,key,{auth:{persistSession:false,autoRefreshToken:false,detectSessionInUrl:false}});
   const {data:{user},error}=await client.auth.getUser(data.token);
   if(error||!user?.email||!user.id)throw new Error("UNAUTHORIZED");
+    const roleClient=createClient(url,key,{global:{headers:{Authorization:"Bearer "+data.token}},auth:{persistSession:false,autoRefreshToken:false,detectSessionInUrl:false}});const {data:profile,error:roleError}=await roleClient.from("profiles").select("role").eq("id",user.id).maybeSingle();if(roleError||profile?.role!=="admin")throw new Error("ADMIN_ONLY");
   const writerUrl=process.env.CRM_DRAFT_WRITE_URL;
   if(!writerUrl)throw new Error("DRAFT_STORAGE_NOT_CONFIGURED");
   const sql=neon(writerUrl);
