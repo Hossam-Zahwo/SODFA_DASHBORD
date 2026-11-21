@@ -1,10 +1,10 @@
 import {createServerFn} from "@tanstack/react-start";
 import {neon} from "@neondatabase/serverless";
 import {z} from "zod";
-import {requireCompanyAccess} from "./company-access.server";
+import {requireSaaSAccess,type SaaSCapability} from "./saas-access.server";
 const token=z.string().min(16).max(8192),tenantId=z.string().uuid(),brand=z.enum(["homey","sodfa"]);
-async function runtime(t:string,tenant:string){
- const actor=await requireCompanyAccess(t,"all","admin");
+async function runtime(t:string,tenant:string,cap:SaaSCapability="read",brandScope:string="all"){
+ const actor=await requireSaaSAccess(t,tenant,cap,brandScope);
  const url=process.env.SAAS_DATABASE_URL;
  if(!url)throw Error("SAAS_DATABASE_NOT_CONFIGURED");
  const sql=neon(url);
@@ -13,7 +13,7 @@ async function runtime(t:string,tenant:string){
 export const getSaaSInventory=createServerFn({method:"POST"})
 .validator(z.object({token,tenantId,brand}))
 .handler(async({data})=>{
- const {sql,scope}=await runtime(data.token,data.tenantId);
+ const {sql,scope}=await runtime(data.token,data.tenantId,"read",data.brand);
  const [_,warehouses,products,balances,movements]=await sql.transaction([
  scope,
  sql`SELECT id::text,brand_id,name FROM saas.warehouses WHERE brand_id=${data.brand} ORDER BY name`,
@@ -38,7 +38,7 @@ export const adjustSaaSInventory=createServerFn({method:"POST"})
  reason:z.enum(["receipt","return","count_adjustment","transfer_in","transfer_out","sale"]),
  requestId:z.string().uuid()}))
 .handler(async({data})=>{
- const {sql,scope,actor}=await runtime(data.token,data.tenantId);
+ const {sql,scope,actor}=await runtime(data.token,data.tenantId,"inventory_write",data.brand);
  // The movement idempotency key is unique per tenant+warehouse+product+reason.
  // A duplicate retry inserts no movement, and hence makes no second change.
  const [_,rows]=await sql.transaction([scope,sql`
