@@ -42,18 +42,20 @@ export const getCompanyWorkspaceData = createServerFn({ method: "POST" })
     // All queries are server-side. Order PII is only exposed to operators/managers, never viewers.
     const response: {
       fetchedAt: string;
+      accessRole: "admin"|"viewer"|"operator"|"manager";
       catalog: { connected: boolean; error?: string; counts: Count[]; products: Product[] };
       operations: {
         connected: boolean; error?: string; summary: Summary[];
         orders: OrderRow[]; customers: Count[]; shipments: Shipment[];
       };
       sodfa: { connected: boolean; error?: string;
-        inventorySummary: { sku_rows: number; units: number; cost_value: number; warehouses: number } | null;
+        inventorySummary: { sku_rows: number; units: number; cost_value: number | null; warehouses: number } | null;
         salesSummary: { count_sales: number; sales_egp: number; first_date: string | null; last_date: string | null } | null;
         items: {product_id: string; product_name: string; warehouse: string; remaining_qty: number; purchase_price: number; sale_price: number}[];
       };
     } = {
       fetchedAt: new Date().toISOString(),
+      accessRole:access.role,
       catalog: { connected: false, counts: [], products: [] },
       operations: { connected: false, summary: [], orders: [], customers: [], shipments: [] },
       sodfa: { connected:false, inventorySummary:null, salesSummary:null, items:[] },
@@ -190,7 +192,7 @@ export const getCompanyWorkspaceData = createServerFn({ method: "POST" })
         payment_method:null,items:[],manual_total:null,carrier_received:null,
       }));
       response.sodfa.items=response.sodfa.items.map(i=>({...i,purchase_price:0}));
-      if(response.sodfa.inventorySummary)response.sodfa.inventorySummary.cost_value=0;
+      if(response.sodfa.inventorySummary)response.sodfa.inventorySummary.cost_value=null;
     }
     return response;
   });
