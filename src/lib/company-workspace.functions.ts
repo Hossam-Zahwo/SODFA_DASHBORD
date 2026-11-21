@@ -24,6 +24,12 @@ type Product = { id: string; title: string; brand: string; source: string; draft
 type OrderRow = {
   id: string; brand: string; created_at: string; status: string;
   shipping_company: string | null; source: string | null;
+  customer_name: string; phone: string; city: string | null; governorate: string | null;
+  address: string | null; payment_method: string | null;
+  items: Array<{name:string;quantity:number;price:number;sku?:string}>;
+  shipping: number; discount: number; prepaid: number;
+  manual_total: number | null; carrier_received: number | null;
+  source_order_id: string | null; version: number;
 };
 type Shipment = { brand: string; state: string; count: number };
 type Count = { brand: string; count: number };
@@ -118,8 +124,13 @@ export const getCompanyWorkspaceData = createServerFn({ method: "POST" })
           db`SELECT brand, status, count(*)::integer AS count
              FROM orders WHERE deleted_at IS NULL
              GROUP BY brand, status ORDER BY brand, status`,
-          db`SELECT id::text AS id, brand, created_at::text AS created_at, status,
-             shipping_company, source FROM orders WHERE deleted_at IS NULL
+          db`SELECT id::text AS id,brand,created_at::text AS created_at,status,
+             shipping_company,source,customer_name,phone,city,governorate,
+             address,payment_method,items,shipping::float8 AS shipping,
+             discount::float8 AS discount,prepaid::float8 AS prepaid,
+             manual_total::float8 AS manual_total,carrier_received::float8 AS carrier_received,
+             source_order_id,version
+             FROM orders WHERE deleted_at IS NULL
              AND (${brandCondition} = 'all' OR brand = ${brandCondition})
              ORDER BY created_at DESC LIMIT 500`,
           db`SELECT brand, count(*)::integer AS count
