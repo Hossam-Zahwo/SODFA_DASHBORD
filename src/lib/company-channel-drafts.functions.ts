@@ -49,7 +49,7 @@ export const saveChannelDraft = createServerFn({method:"POST"})
     // Audit is deliberately non-PII, and records who made the proposed edit.
     await sql`INSERT INTO audit_events(actor_id,system_id,event_type,target_table,target_key,
       previous_value,next_value)
-      VALUES (${result.user.id},'company_control_center','draft_channel_update',
+      VALUES (${actor.id},'company_control_center','draft_channel_update',
       'channel_listing_drafts',${data.sourceProductId},
       ${JSON.stringify(before[0]??null)}::jsonb,
       ${JSON.stringify({channel:data.channel,visible:data.intendedVisibility,price:data.price})}::jsonb)`;
