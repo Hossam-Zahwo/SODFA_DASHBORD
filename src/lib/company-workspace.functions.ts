@@ -44,10 +44,16 @@ export const getCompanyWorkspaceData = createServerFn({ method: "POST" })
         connected: boolean; error?: string; summary: Summary[];
         orders: OrderRow[]; customers: Count[]; shipments: Shipment[];
       };
+      sodfa: { connected: boolean; error?: string;
+        inventorySummary: { sku_rows: number; units: number; cost_value: number; warehouses: number } | null;
+        salesSummary: { count_sales: number; sales_egp: number; first_date: string | null; last_date: string | null } | null;
+        items: {product_id: string; product_name: string; warehouse: string; remaining_qty: number; purchase_price: number; sale_price: number}[];
+      };
     } = {
       fetchedAt: new Date().toISOString(),
       catalog: { connected: false, counts: [], products: [] },
       operations: { connected: false, summary: [], orders: [], customers: [], shipments: [] },
+      sodfa: { connected:false, inventorySummary:null, salesSummary:null, items:[] },
     };
     const brandCondition = data.brand;
     const search = data.query.trim().toLowerCase();
@@ -100,6 +106,30 @@ export const getCompanyWorkspaceData = createServerFn({ method: "POST" })
         };
       } catch {
         response.operations = {...response.operations, error: "تعذرت قراءة بيانات إدارة الطلبات"};
+      }
+    })());
+    const sodfaUrl = process.env.CRM_SODFA_READ_URL;
+    if (sodfaUrl) jobs.push((async () => {
+      try {
+        const db = neon(sodfaUrl);
+        const [inv,sal,items] = await Promise.all([
+          db`SELECT count(*)::integer AS sku_rows, COALESCE(sum(remaining_qty),0)::float8 AS units,
+             COALESCE(sum(remaining_qty * purchase_price),0)::float8 AS cost_value,
+             count(DISTINCT warehouse)::integer AS warehouses FROM website_inventory`,
+          db`SELECT count(*)::integer AS count_sales, COALESCE(sum(total_sale_value),0)::float8 AS sales_egp,
+             min(sale_date)::text AS first_date, max(sale_date)::text AS last_date FROM sales`,
+          db`SELECT product_id, product_name, warehouse, remaining_qty::float8 AS remaining_qty,
+             purchase_price::float8 AS purchase_price, sale_price::float8 AS sale_price
+             FROM website_inventory ORDER BY product_name LIMIT 100`,
+        ]);
+        response.sodfa = {
+          connected: true,
+          inventorySummary: (inv[0] ?? null) as typeof response.sodfa.inventorySummary,
+          salesSummary: (sal[0] ?? null) as typeof response.sodfa.salesSummary,
+          items: items as typeof response.sodfa.items,
+        };
+      } catch {
+        response.sodfa = {...response.sodfa,error:"تعذرت قراءة مخزون صدفة ومبيعاتها من Neon"};
       }
     })());
     await Promise.all(jobs);
