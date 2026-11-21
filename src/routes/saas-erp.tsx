@@ -108,7 +108,8 @@ function ERP(){
    {section==="overview"&&<div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(185px,1fr))",gap:12}}>
     <Metric label="المنتجات" value={fmt(data?.summary.products??0)} note="مراجع مستوردة ومسودات SaaS"/>
     <Metric label="العملاء" value={fmt(data?.summary.customers??0)} note="العملاء المضافون للـCRM الجديد"/>
-    <Metric label="الأوردرات" value={fmt(data?.summary.orders??0)} note="أوردرات SaaS فقط، غير شاملة النظام الأصلي"/>
+    <Metric label="طلبات إدارة الطلبات الأصلية" value={fmt(data?.summary.externalOrders??0)} note="لقطة مرجعية، لا تتحدث تلقائيًا"/>
+    <Metric label="أوردرات SaaS التجريبية" value={fmt(data?.summary.orders??0)} note="منشأة داخل البيئة الجديدة فقط"/>
     <Metric label="المخازن" value={fmt(data?.summary.warehouses??0)} note="المخازن الجديدة في ERP"/>
     <div style={{...card,gridColumn:"1/-1",lineHeight:2}}>
       <strong>التحويل لنظام SaaS</strong><p style={{color:palette.muted,fontSize:13}}>البنية الأساسية اتبنت للشركات والمستخدمين والاشتراكات والمنتجات والمخزون والطلبات والعملاء والمدفوعات والمصروفات وسجل المراجعة والمزامنة. البيانات المعروضة هنا تابعة لقاعدة التجربة وليست إجمالي إنتاج الشركة. الربط الحي بالأنظمة القديمة لم يتم تحويله بعد.</p>
@@ -118,8 +119,11 @@ function ERP(){
     <div style={{display:"flex",gap:12,justifyContent:"space-between",flexWrap:"wrap",alignItems:"center"}}><h2>كتالوج المنتجات</h2><button style={btn} onClick={()=>open("product")}><Plus size={15} style={{display:"inline",marginLeft:5}}/>مسودة منتج جديد</button></div>
     <input placeholder="ابحث عن منتج من البيانات الحقيقية المستوردة" value={query} onChange={e=>setQuery(e.target.value)} style={{...inp,marginBottom:12}}/>
     <div style={{overflowX:"auto",maxHeight:500,overflowY:"auto"}}>
-     <table style={{width:"100%",minWidth:640,fontSize:12,borderCollapse:"collapse"}}><thead><tr style={{color:palette.light}}>{["المنتج","العلامة","مصدر البيانات","الحالة"].map(x=><th key={x} style={{padding:10,textAlign:"right"}}>{x}</th>)}</tr></thead>
-     <tbody>{filtered.map(p=><tr key={String(p.id)} style={{borderTop:"1px solid "+palette.line}}><td style={{padding:10}}>{String(p.title)}</td><td>{p.brand_id==="homey"?"هومي":"صدفة"}</td><td>{String(p.source_system??"سجل داخلي")}</td><td style={{color:palette.light}}>{String(p.status)}</td></tr>)}</tbody></table>
+     <table style={{width:"100%",minWidth:640,fontSize:12,borderCollapse:"collapse"}}><thead><tr style={{color:palette.light}}>{["المنتج","العلامة","السعر من المصدر","المتاح بالمصدر","حالة المصدر","سجل SaaS"].map(x=><th key={x} style={{padding:10,textAlign:"right"}}>{x}</th>)}</tr></thead>
+     <tbody>{filtered.map(p=><tr key={String(p.id)} style={{borderTop:"1px solid "+palette.line}}><td style={{padding:10}}>{String(p.title)}</td><td>{p.brand_id==="homey"?"هومي":"صدفة"}</td><td>{p.min_sale_price_minor==null?"—":(Number(p.min_sale_price_minor)/100).toLocaleString("en-US")+" ج.م"}</td>
+     <td>{p.available_units==null?"غير معروف":Number(p.available_units).toLocaleString("en-US")}</td>
+     <td>{String(p.source_status??"بدون مزامنة")}</td>
+     <td style={{color:palette.light}}>{String(p.status)}<div style={{color:palette.muted,fontSize:10}}>{String(p.source_system??"سجل داخلي")}</div></td></tr>)}</tbody></table>
     </div>
    </div>}
    {section==="crm"&&<div style={card}>
@@ -131,6 +135,11 @@ function ERP(){
    {section==="orders"&&<div style={card}><h2>الأوردرات</h2>
     <p style={{fontSize:12,color:palette.muted}}>جداول الطلبات والبنود ووسائل الدفع موجودة ومعزولة لكل شركة. النموذج الحي الموجود في مركز الشركة منفصل وعمليات التعديل على الإنتاج غير مفعّلة.</p>
     {(data?.orders??[]).map(x=><div key={String(x.id)} style={{padding:10,borderBottom:"1px solid "+palette.line}}>#{String(x.id).slice(0,8)} · {String(x.status)} · {String(x.brand_id)}</div>)}
+    <h3 style={{fontSize:16,marginTop:16}}>الطلبات الموجودة في النظام الأصلي — للعرض فقط</h3>
+    {(data?.externalOrders??[]).map(o=><div key={String(o.source_order_id)} style={{padding:"8px 0",borderBottom:"1px solid "+palette.line,fontSize:12}}>
+      #{String(o.source_order_id).slice(0,12)} · {o.brand_id==="homey"?"هومي":"صدفة"} · {String(o.status)} · {String(o.source_created_at??"").slice(0,10)}
+    </div>)}
+    <p style={{fontSize:11,color:palette.muted}}>هذه لقطة مستوردة من Neon Orders Manager، وليست اتصال تحديث آني. لم تُنقل أرقام التليفونات والعناوين.</p>
     <Link to="/control-center-orders" style={{color:palette.light}}>افتح نموذج الطلبات التجريبي الحالي</Link>
    </div>}
    {section==="inventory"&&<div style={card}><div style={{display:"flex",justifyContent:"space-between",gap:12}}><h2>المستودعات والجرد</h2><button style={btn} onClick={()=>open("warehouse")}><Plus size={15} style={{display:"inline",marginLeft:6}}/>إضافة مخزن</button></div>
