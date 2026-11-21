@@ -24,6 +24,7 @@ export const saveChannelDraft = createServerFn({method:"POST"})
     const auth = createClient(url,publishableKey,{auth:{persistSession:false,autoRefreshToken:false,detectSessionInUrl:false}});
     const {data:result,error} = await auth.auth.getUser(data.token);
     if(error || !result.user?.id || !result.user.email) throw new Error("UNAUTHORIZED");
+    const roleClient=createClient(url,publishableKey,{global:{headers:{Authorization:"Bearer "+data.token}},auth:{persistSession:false,autoRefreshToken:false,detectSessionInUrl:false}});const {data:profile,error:roleError}=await roleClient.from("profiles").select("role").eq("id",result.user.id).maybeSingle();if(roleError||profile?.role!=="admin")throw new Error("ADMIN_ONLY");
     const pgUrl=process.env.CRM_DRAFT_WRITE_URL;
     if(!pgUrl)throw new Error("DRAFT_STORAGE_NOT_CONFIGURED");
     const sql=neon(pgUrl);
