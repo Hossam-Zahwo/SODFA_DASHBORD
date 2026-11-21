@@ -52,6 +52,7 @@ function ControlCenter(){
   const [loading,setLoading]=useState(true);
   const [loadError,setLoadError]=useState("");
   const [lastRefresh,setLastRefresh]=useState("");
+  const [selectedOrderId,setSelectedOrderId]=useState("");
   const [draftBusy,setDraftBusy]=useState("");
   const [draftMessage,setDraftMessage]=useState("");
   useEffect(()=>{void refresh();},[]);
@@ -92,6 +93,7 @@ function ControlCenter(){
   const customers=bridge?.operations.customers.filter(x=>selectedBrand==="all"||x.brand===selectedBrand).reduce((a,b)=>a+Number(b.count),0)??0;
   const rowProducts=bridge?.catalog.products.filter(x=>(selectedBrand==="all"||x.brand===selectedBrand)&&x.title.toLowerCase().includes(search.toLowerCase()))??[];
   const rowOrders=bridge?.operations.orders.filter(x=>(selectedBrand==="all"||x.brand===selectedBrand)&&x.id.toLowerCase().includes(search.toLowerCase()))??[];
+  const selectedOrder=bridge?.operations.orders.find(o=>o.id===selectedOrderId);
   const inventory=bridge?.sodfa.items??[];
   const sodfaTotalSales=Number(bridge?.sodfa.salesSummary?.sales_egp??0);
   const canSeeSodfaStock=project==="sodfa"||project==="all";
@@ -169,10 +171,33 @@ function ControlCenter(){
           style={{border:"1px solid "+ui.purple,borderRadius:8,background:ui.soft,color:"white",padding:"6px 9px",cursor:"pointer",fontSize:11}}>اقتراح عرض</button>
         <button type="button" disabled={Boolean(draftBusy)} onClick={()=>void updateDraft(p,false)}
           style={{border:"1px solid "+ui.border,borderRadius:8,background:"#111114",color:"white",padding:"6px 9px",cursor:"pointer",fontSize:11}}>اقتراح إخفاء</button>
-      </div></td></tr>)}</tbody></table>:<table style={{width:"100%",minWidth:700,borderCollapse:"collapse",fontSize:12}}><thead><tr style={{color:ui.light,borderBottom:"1px solid "+ui.border}}>{["رقم الطلب","البراند","تاريخ التسجيل","حالة الطلب","شركة الشحن","المصدر"].map(h=><th key={h} style={{textAlign:"right",padding:12}}>{h}</th>)}</tr></thead><tbody>{rowOrders.map(o=><tr key={o.id} style={{borderBottom:"1px solid "+ui.border}}><td style={{padding:12,fontFamily:"monospace"}}>{o.id.slice(0,12)}</td><td>{o.brand==="homey"?"هومي":"صدفة"}</td><td>{o.created_at?.slice(0,10)??"—"}</td><td><Tag>{o.status}</Tag></td><td>{o.shipping_company??"غير محدد"}</td><td>{o.source??"—"}</td></tr>)}</tbody></table>}
+      </div></td></tr>)}</tbody></table>:<table style={{width:"100%",minWidth:700,borderCollapse:"collapse",fontSize:12}}><thead><tr style={{color:ui.light,borderBottom:"1px solid "+ui.border}}>{["رقم الطلب","البراند","العميل","الإجمالي","تاريخ التسجيل","حالة الطلب","شركة الشحن","تفاصيل"].map(h=><th key={h} style={{textAlign:"right",padding:12}}>{h}</th>)}</tr></thead><tbody>{rowOrders.map(o=><tr key={o.id} style={{borderBottom:"1px solid "+ui.border}}><td style={{padding:12,fontFamily:"monospace"}}>{o.id.slice(0,12)}</td><td>{o.brand==="homey"?"هومي":"صدفة"}</td><td>{o.customer_name}</td><td>{fmt(o.manual_total??((o.items??[]).reduce((a,i)=>a+Number(i.quantity||0)*Number(i.price||0),0)+Number(o.shipping||0)-Number(o.discount||0)))} ج.م</td><td>{o.created_at?.slice(0,10)??"—"}</td><td><Tag>{o.status}</Tag></td><td>{o.shipping_company??"غير محدد"}</td><td><button type="button" onClick={()=>setSelectedOrderId(o.id)} style={{border:"1px solid "+ui.purple,color:"white",background:ui.soft,padding:"6px 10px",borderRadius:8,cursor:"pointer"}}>تفاصيل الطلب</button></td></tr>)}</tbody></table>}
       </div>
+      {tab==="orders"&&selectedOrder&&<div style={{...panel,marginTop:18,background:"#1b1420",border:"1px solid "+ui.purple}}>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:10}}>
+          <h3 style={{margin:0}}>تفاصيل الطلب: {selectedOrder.id.slice(0,12)}</h3>
+          <button type="button" onClick={()=>setSelectedOrderId("")} style={{background:ui.card,color:"white",border:"1px solid "+ui.border,borderRadius:8,padding:"6px 10px",cursor:"pointer"}}>إغلاق</button>
+        </div>
+        <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(190px,1fr))",gap:14,marginTop:16,fontSize:12}}>
+          <div><span style={{color:ui.muted}}>العميل</span><div>{selectedOrder.customer_name}</div></div>
+          <div><span style={{color:ui.muted}}>رقم الهاتف</span><div dir="ltr" style={{textAlign:"right"}}>{selectedOrder.phone}</div></div>
+          <div><span style={{color:ui.muted}}>المحافظة والمدينة</span><div>{selectedOrder.governorate??"—"} · {selectedOrder.city??"—"}</div></div>
+          <div><span style={{color:ui.muted}}>العنوان</span><div>{selectedOrder.address??"—"}</div></div>
+          <div><span style={{color:ui.muted}}>حالة الطلب</span><div>{selectedOrder.status}</div></div>
+          <div><span style={{color:ui.muted}}>شركة الشحن</span><div>{selectedOrder.shipping_company??"غير محدد"}</div></div>
+          <div><span style={{color:ui.muted}}>طريقة الدفع</span><div>{selectedOrder.payment_method??"غير محدد"}</div></div>
+          <div><span style={{color:ui.muted}}>المصدر</span><div>{selectedOrder.source??"—"} · {selectedOrder.source_order_id?"مرتبط بأصل الطلب":"غير مرتبط بمعرّف الطلب الأصلي"}</div></div>
+          <div><span style={{color:ui.muted}}>المدفوع مقدمًا</span><div>{fmt(selectedOrder.prepaid??0)} ج.م</div></div>
+          <div><span style={{color:ui.muted}}>المستلم من الشحن</span><div>{selectedOrder.carrier_received==null?"غير مسجل":fmt(selectedOrder.carrier_received)+" ج.م"}</div></div>
+        </div>
+        <h4 style={{margin:"18px 0 6px"}}>الأصناف داخل الطلب</h4>
+        {(selectedOrder.items??[]).map((item,i)=><div key={i} style={{display:"flex",justifyContent:"space-between",gap:10,padding:"8px 0",borderBottom:"1px solid "+ui.border,fontSize:12}}>
+          <span>{item.name} × {fmt(item.quantity)}</span><span>{fmt(Number(item.price||0)*Number(item.quantity||0))} ج.م</span>
+        </div>)}
+        <p style={{fontSize:11,color:ui.muted,marginTop:12}}>البيانات دي للمدير المسجل فقط. تحديث حالة الطلب والتحصيل والشحن لسه لازم يمر من API مدير الطلبات الأصلي.</p>
+      </div>}
       {!loading&&((tab==="products"&&!rowProducts.length)||(tab==="orders"&&!rowOrders.length))&&<p style={{color:ui.muted}}>لا توجد نتائج متاحة للفلاتر الحالية أو أن الاتصال لم يكتمل.</p>}
-      <p style={{color:ui.muted,fontSize:11}}>عرض بحد أقصى {tab==="products"?"100 منتج":"40 طلب"} في المعاينة؛ الحقول التفصيلية والتعديل تتطلب صلاحيات خاصة بالبراند.</p>
+      <p style={{color:ui.muted,fontSize:11}}>عرض بحد أقصى {tab==="products"?"500 منتج":"500 طلب"}؛ البيانات من مصادرها الحقيقية وصلاحيات الصفحة للمدير.</p>
     </div>}
     {tab==="shipping"&&<div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(290px,1fr))",gap:13}}><div style={panel}><h2>حالات الشحن حسب المشروع</h2>{(bridge?.operations.shipments??[]).filter(s=>selectedBrand==="all"||s.brand===selectedBrand).map(s=><div key={s.brand+s.state} style={{display:"flex",justifyContent:"space-between",padding:"11px 0",borderBottom:"1px solid "+ui.border}}><span>{s.brand==="homey"?"هومي":"صدفة"} · {s.state}</span><b>{fmt(s.count)}</b></div>)}{!bridge?.operations.connected&&<p>ربط الشحن غير متاح حاليًا</p>}</div><div style={panel}><h2>إدارة عمليات الشحن</h2><p style={{fontSize:12,lineHeight:2,color:ui.muted}}>ده ملخص مباشر من جداول تالا المسجلة في مدير الطلبات. إنشاء الشحنة، طباعة البوليصة، تحصيل الأموال وتحديث الحالة تحتاج واجهة كتابة آمنة بنفس صلاحيات مدير الطلبات. مش هنشغلها بتعديل مباشر في قاعدة البيانات.</p><Tag tone="amber">الإجراءات مؤجلة لحين التحقق من التفويض</Tag></div></div>}
     {tab==="customers"&&<div style={panel}><h2>عملاء {chosen.name}</h2><div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(200px,1fr))",gap:12,marginBottom:14}}><Metric title="عدد العملاء المسجلين" value={bridge?.operations.connected?fmt(customers):"غير متاح"} icon={Users}/><Metric title="عدد طلبات المشروع" value={bridge?.operations.connected?fmt(orderTotal):"غير متاح"} icon={ShoppingCart}/></div><p style={{color:ui.muted,fontSize:12}}>الدمج الآمن لسجلات العملاء والوصول لأرقام الهاتف وإرسال واتساب يتطلب ربط صلاحيات هومي وصدفة قبل عرض بيانات شخصية داخل المركز.</p></div>}
