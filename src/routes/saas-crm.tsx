@@ -33,14 +33,14 @@ function CRM(){
  }
  async function setStage(id:string,stage:string){
   setBusy(true);
-  try{await updateSaaSLeadStage({data:{token:await token(),tenantId,leadId:id,
+  try{await updateSaaSLeadStage({data:{token:await token(),tenantId,leadId:id,brand,
    stage:stage as "new"|"contacted"|"qualified"|"proposal"|"won"|"lost"}});
    setMsg("تم تحديث المرحلة وحفظ الحدث في سجل المراجعة");await load();
   }catch(e){setMsg(e instanceof Error?e.message:"تعذر التعديل")}finally{setBusy(false)}
  }
  async function createTask(e:FormEvent){
   e.preventDefault();setBusy(true);
-  try{await createSaaSTask({data:{token:await token(),tenantId,leadId:taskLead,summary:task,priority:"normal"}});
+  try{await createSaaSTask({data:{token:await token(),tenantId,leadId:taskLead,brand,summary:task,priority:"normal"}});
    setMsg("اتسجلت المهمة في CRM التجريبي");setTask("");setTaskLead("");await load();
   }catch(e){setMsg(e instanceof Error?e.message:"تعذر إضافة المهمة")}finally{setBusy(false)}
  }
