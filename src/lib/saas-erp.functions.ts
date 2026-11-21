@@ -69,33 +69,25 @@ export const createSaaSProduct=createServerFn({method:"POST"}).validator(createP
 .handler(async({data})=>{
  const {sql,scope,actor}=await context(data.token,data.tenantId,"catalog_write",data.brand);
  const id=randomUUID();
- const [_,brandExists,inserted,audit]=await sql.transaction([
+ const channelWrites=data.channels.map(channel=>
+  sql`INSERT INTO saas.channel_listings(tenant_id,product_id,channel_id,visibility)
+   VALUES(${data.tenantId}::uuid,${id}::uuid,${channel},
+    CASE WHEN ${channel}=${data.brand==="homey"?"homey_web":"sodfa_web"}
+      THEN 'draft' ELSE 'pending_approval' END)
+   RETURNING id`);
+ const results=await sql.transaction([
   scope,
-  sql`SELECT id FROM saas.brands WHERE id=${data.brand} LIMIT 1`,
   sql`INSERT INTO saas.products(id,tenant_id,brand_id,source_system,external_id,sku,title)
-    SELECT ${id}::uuid,${data.tenantId}::uuid,${data.brand},${source},${id},
-      ${data.sku},${data.title}
-    WHERE EXISTS(SELECT 1 FROM saas.brands WHERE id=${data.brand})
+    VALUES(${id}::uuid,${data.tenantId}::uuid,${data.brand},${source},${id},
+      ${data.sku},${data.title})
     RETURNING id::text,title`,
+  ...channelWrites,
   sql`INSERT INTO saas.audit_log(tenant_id,actor_id,action,entity_kind,entity_id,next)
     VALUES(${data.tenantId}::uuid,${actor.id}::uuid,'draft_product_created','product',${id},
       ${JSON.stringify({brand:data.brand,title:data.title,channels:data.channels})}::jsonb)
     RETURNING id`,
  ]);
- void brandExists;void audit;
- if(!inserted.length)throw new Error("INVALID_BRAND");
- if(data.channels.length){
-  const writes=data.channels.map(channel=>
-    sql`INSERT INTO saas.channel_listings(tenant_id,product_id,channel_id,visibility)
-      VALUES(${data.tenantId}::uuid,${id}::uuid,${channel},
-       CASE WHEN ${channel}=${data.brand==="homey"?"homey_web":"sodfa_web"}
-         THEN 'draft' ELSE 'pending_approval' END)
-      RETURNING id`);
-  const [scope2,...out]=await sql.transaction([
-   sql`SELECT set_config('app.tenant_id',${data.tenantId},true),
-     set_config('app.actor_id',${actor.id},true)`,...writes]);
-  void scope2;void out;
- }
+ if(!results[1].length)throw new Error("PRODUCT_NOT_CREATED");
  return {ok:true,id,status:"draft",published:false};
 });
 
