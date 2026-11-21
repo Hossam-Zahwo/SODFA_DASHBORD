@@ -22,12 +22,15 @@ export const createCompanyProductDraft = createServerFn({method:"POST"})
   if(!writerUrl)throw new Error("DRAFT_STORAGE_NOT_CONFIGURED");
   const sql=neon(writerUrl);
   // Idempotency: retrying the same requestId never creates a second catalog row.
-  const record=await sql`INSERT INTO product_references
+  const created=await sql`INSERT INTO product_references
     (source_system_id,source_product_id,brand_id,title)
     VALUES ('crm_manual',${data.requestId},${data.brand},${data.title})
     ON CONFLICT (source_system_id,source_product_id)
-    DO UPDATE SET title=product_references.title RETURNING id,title`;
-  const id=Number(record[0].id);
+    DO NOTHING RETURNING id,title`;
+  const existing=created.length?created:await sql`SELECT id,title FROM product_references
+      WHERE source_system_id='crm_manual' AND source_product_id=${data.requestId} LIMIT 1`;
+  if(!existing.length)throw new Error("DRAFT_CREATION_FAILED");
+  const id=Number(existing[0].id);
   for(const channel of ["homey_web","sodfa_web"] as const){
     const checked=data.channels.includes(channel);
     await sql`INSERT INTO channel_listing_drafts
