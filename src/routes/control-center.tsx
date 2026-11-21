@@ -3,6 +3,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { AppShell } from "@/components/AppShell";
 import { supabase } from "@/lib/supabase";
 import { getCompanyWorkspaceData } from "@/lib/company-workspace.functions";
+import { saveChannelDraft } from "@/lib/company-channel-drafts.functions";
 import {
   Activity, Boxes, Bot, Building2, ChartNoAxesCombined, ClipboardList,
   Database, ExternalLink, LockKeyhole, Package, RefreshCw, Search,
@@ -51,6 +52,8 @@ function ControlCenter(){
   const [loading,setLoading]=useState(true);
   const [loadError,setLoadError]=useState("");
   const [lastRefresh,setLastRefresh]=useState("");
+  const [draftBusy,setDraftBusy]=useState("");
+  const [draftMessage,setDraftMessage]=useState("");
   useEffect(()=>{void refresh();},[]);
   async function refresh(){
     setLoading(true);setLoadError("");
@@ -61,6 +64,23 @@ function ControlCenter(){
       setBridge(next);setLastRefresh(new Date(next.fetchedAt).toLocaleString("en-GB"));
     }catch(e){setLoadError(e instanceof Error?e.message:"فشل قراءة بيانات الربط");setBridge(null)}
     finally{setLoading(false)}
+  }
+  async function updateDraft(product:NonNullable<Bridge>["catalog"]["products"][number], visible:boolean){
+    const source=product.source==="homey_store"?"homey_store":product.source==="sodfa_dashboard"?"sodfa_dashboard":null;
+    if(!source){setDraftMessage("هذا المنتج مصدره غير مدعوم حالياً");return;}
+    setDraftBusy(product.id);setDraftMessage("");
+    try {
+      const {data:{session}}=await supabase.auth.getSession();
+      if(!session?.access_token) throw new Error("سجّل دخولك أولاً");
+      await saveChannelDraft({data:{
+        token:session.access_token,source,sourceProductId:product.id,
+        channel:source==="homey_store"?"homey_web":"sodfa_web",
+        intendedVisibility:visible,price:product.draft_price??null
+      }});
+      setDraftMessage("تم حفظ إعداد العرض كمسودة داخل الـCRM، ولم يتم تغيير أي موقع خارجي");
+      await refresh();
+    }catch(e){setDraftMessage("فشل حفظ المسودة: "+(e instanceof Error?e.message:"خطأ غير معروف"))}
+    finally {setDraftBusy("")}
   }
   const selectProject=(id:Project)=>{setProject(id);setTab("dashboard");setSearch("")};
   const chosen=projectData.find(p=>p.id===project)!;
@@ -76,7 +96,7 @@ function ControlCenter(){
   const sodfaTotalSales=Number(bridge?.sodfa.salesSummary?.sales_egp??0);
   const canSeeSodfaStock=project==="sodfa"||project==="all";
   const sodfaInventoryValue=Number(bridge?.sodfa.inventorySummary?.cost_value??0);
-  const channelNotice=project==="sodfa_web"?"قائمة صدفة المعروضة هنا فهرس مخزون صدفة وليس تأكيدًا بأنها منشورة حاليًا في الموقع. ربط النشر الفعلي ما زال مطلوبًا.":project==="homey"?"منتجات هومي من الفهرس المركزي المستورد. حالة نشر كل منتج وأسعاره الحية لم تتم مزامنتها بعد.":"كل قناة لها صلاحيات نشر مستقلة، والموجود هنا لا ينشر أو يخفي منتجات فعليًا.";
+  const channelNotice=project==="sodfa_web"?"قائمة صدفة المعروضة هنا فهرس مخزون صدفة وليس تأكيدًا بأنها منشورة حاليًا في الموقع. ربط النشر الفعلي ما زال مطلوبًا.":project==="homey"?"منتجات هومي من الفهرس المركزي المستورد. حالة نشر كل منتج وأسعاره الحية لم تتم مزامنتها بعد.":"كل قناة لها صلاحيات نشر مستقلة، ويمكن حفظ اقتراحات العرض والإخفاء في قاعدة CRM المستقلة كمسودات؛ نشرها فعليًا على المتاجر لم يُفعّل بعد.";
   function downloadCsv(){
     const rows=tab==="products"?[["Source ID","Brand","Name","Source"],...rowProducts.map(p=>[p.id,p.brand,p.title,p.source])]:[["Order ID","Brand","Status","Created","Carrier"],...rowOrders.map(o=>[o.id,o.brand,o.status,o.created_at,o.shipping_company??""])];
     const text="\ufeff"+rows.map(row=>row.map(v=>'"'+String(v).replaceAll('"','""')+'"').join(",")).join("\r\n");
@@ -126,8 +146,15 @@ function ControlCenter(){
         <button onClick={downloadCsv} style={{background:ui.soft,color:"#fff",border:"1px solid "+ui.purple,padding:"10px 13px",borderRadius:10,cursor:"pointer",fontSize:12}}><FileDown size={14} style={{display:"inline",marginLeft:6}}/>تصدير CSV</button>
         </div>
       </div>
+      {draftMessage&&<div role="status" style={{padding:10,marginTop:10,background:ui.soft,borderRadius:8,fontSize:12}}>{draftMessage}</div>}
       <div style={{overflowX:"auto",marginTop:18}}>
-      {tab==="products"?<table style={{width:"100%",minWidth:650,borderCollapse:"collapse",fontSize:12}}><thead><tr style={{color:ui.light,borderBottom:"1px solid "+ui.border}}>{["المنتج","المشروع","المصدر","حالة النشر من المركز"].map(h=><th key={h} style={{textAlign:"right",padding:12}}>{h}</th>)}</tr></thead><tbody>{rowProducts.map(p=><tr key={p.source+p.id} style={{borderBottom:"1px solid "+ui.border}}><td style={{padding:12}}>{p.title}</td><td>{p.brand==="homey"?"هومي":"صدفة"}</td><td>{p.source}</td><td><Tag tone="amber">غير محددة بعد</Tag></td></tr>)}</tbody></table>:<table style={{width:"100%",minWidth:700,borderCollapse:"collapse",fontSize:12}}><thead><tr style={{color:ui.light,borderBottom:"1px solid "+ui.border}}>{["رقم الطلب","البراند","تاريخ التسجيل","حالة الطلب","شركة الشحن","المصدر"].map(h=><th key={h} style={{textAlign:"right",padding:12}}>{h}</th>)}</tr></thead><tbody>{rowOrders.map(o=><tr key={o.id} style={{borderBottom:"1px solid "+ui.border}}><td style={{padding:12,fontFamily:"monospace"}}>{o.id.slice(0,12)}</td><td>{o.brand==="homey"?"هومي":"صدفة"}</td><td>{o.created_at?.slice(0,10)??"—"}</td><td><Tag>{o.status}</Tag></td><td>{o.shipping_company??"غير محدد"}</td><td>{o.source??"—"}</td></tr>)}</tbody></table>}
+      {tab==="products"?<table style={{width:"100%",minWidth:650,borderCollapse:"collapse",fontSize:12}}><thead><tr style={{color:ui.light,borderBottom:"1px solid "+ui.border}}>{["المنتج","المشروع","المصدر","إعدادات العرض المقترحة (مسودة)"].map(h=><th key={h} style={{textAlign:"right",padding:12}}>{h}</th>)}</tr></thead><tbody>{rowProducts.map(p=><tr key={p.source+p.id} style={{borderBottom:"1px solid "+ui.border}}><td style={{padding:12}}>{p.title}</td><td>{p.brand==="homey"?"هومي":"صدفة"}</td><td>{p.source}</td><td><div style={{display:"flex",alignItems:"center",flexWrap:"wrap",gap:8}}>
+        <Tag tone={p.draft_visibility===null?"amber":"purple"}>{p.draft_visibility===null?"لم تُحدد":p.draft_visibility?"مقترح للعرض":"مقترح للإخفاء"}</Tag>
+        <button type="button" disabled={Boolean(draftBusy)} onClick={()=>void updateDraft(p,true)}
+          style={{border:"1px solid "+ui.purple,borderRadius:8,background:ui.soft,color:"white",padding:"6px 9px",cursor:"pointer",fontSize:11}}>اقتراح عرض</button>
+        <button type="button" disabled={Boolean(draftBusy)} onClick={()=>void updateDraft(p,false)}
+          style={{border:"1px solid "+ui.border,borderRadius:8,background:"#111114",color:"white",padding:"6px 9px",cursor:"pointer",fontSize:11}}>اقتراح إخفاء</button>
+      </div></td></tr>)}</tbody></table>:<table style={{width:"100%",minWidth:700,borderCollapse:"collapse",fontSize:12}}><thead><tr style={{color:ui.light,borderBottom:"1px solid "+ui.border}}>{["رقم الطلب","البراند","تاريخ التسجيل","حالة الطلب","شركة الشحن","المصدر"].map(h=><th key={h} style={{textAlign:"right",padding:12}}>{h}</th>)}</tr></thead><tbody>{rowOrders.map(o=><tr key={o.id} style={{borderBottom:"1px solid "+ui.border}}><td style={{padding:12,fontFamily:"monospace"}}>{o.id.slice(0,12)}</td><td>{o.brand==="homey"?"هومي":"صدفة"}</td><td>{o.created_at?.slice(0,10)??"—"}</td><td><Tag>{o.status}</Tag></td><td>{o.shipping_company??"غير محدد"}</td><td>{o.source??"—"}</td></tr>)}</tbody></table>}
       </div>
       {!loading&&((tab==="products"&&!rowProducts.length)||(tab==="orders"&&!rowOrders.length))&&<p style={{color:ui.muted}}>لا توجد نتائج متاحة للفلاتر الحالية أو أن الاتصال لم يكتمل.</p>}
       <p style={{color:ui.muted,fontSize:11}}>عرض بحد أقصى {tab==="products"?"100 منتج":"40 طلب"} في المعاينة؛ الحقول التفصيلية والتعديل تتطلب صلاحيات خاصة بالبراند.</p>
