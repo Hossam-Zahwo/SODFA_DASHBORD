@@ -96,6 +96,8 @@ function ControlCenter(){
   const sodfaTotalSales=Number(bridge?.sodfa.salesSummary?.sales_egp??0);
   const canSeeSodfaStock=project==="sodfa"||project==="all";
   const sodfaInventoryValue=Number(bridge?.sodfa.inventorySummary?.cost_value??0);
+  const stockMissing=(bridge?.catalog.products??[]).filter(x=>x.source==="sodfa_dashboard"&&x.available_units===null).length;
+  const snapshotDate=bridge?.catalog.products.reduce<string|null>((last,p)=>p.source_refreshed_at&&(!last||p.source_refreshed_at>last)?p.source_refreshed_at:last,null)??null;
   const channelNotice=project==="sodfa_web"?"قائمة صدفة المعروضة هنا فهرس مخزون صدفة وليس تأكيدًا بأنها منشورة حاليًا في الموقع. ربط النشر الفعلي ما زال مطلوبًا.":project==="homey"?"منتجات هومي من الفهرس المركزي المستورد. حالة نشر كل منتج وأسعاره الحية لم تتم مزامنتها بعد.":"كل قناة لها صلاحيات نشر مستقلة، ويمكن حفظ اقتراحات العرض والإخفاء في قاعدة CRM المستقلة كمسودات؛ نشرها فعليًا على المتاجر لم يُفعّل بعد.";
   function downloadCsv(){
     const rows=tab==="products"?[["Source ID","Brand","Name","Source"],...rowProducts.map(p=>[p.id,p.brand,p.title,p.source])]:[["Order ID","Brand","Status","Created","Carrier"],...rowOrders.map(o=>[o.id,o.brand,o.status,o.created_at,o.shipping_company??""])];
@@ -116,15 +118,27 @@ function ControlCenter(){
     <div style={{...panel,padding:14,marginBottom:14}}>
       <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",flexWrap:"wrap",gap:12}}>
         <div><strong style={{fontSize:18}}>{chosen.name}</strong><div style={{fontSize:11,color:ui.muted}}>{chosen.detail} · الإدارة الداخلية للمشروع</div></div>
-        <div style={{display:"flex",alignItems:"center",gap:8}}><Tag tone={bridge?.operations.connected?"green":"amber"}>إدارة الطلبات: {bridge?.operations.connected?"قراءة مباشرة":"غير متصلة"}</Tag><Tag tone={bridge?.catalog.connected?"green":"amber"}>فهرس المنتجات: {bridge?.catalog.connected?"متصل":"غير متصل"}</Tag></div>
+        <div style={{display:"flex",alignItems:"center",gap:8}}><Tag tone={bridge?.operations.connected?"green":"amber"}>إدارة الطلبات: {bridge?.operations.connected?"قراءة مباشرة":"غير متصلة"}</Tag><Tag tone={bridge?.catalog.connected?"green":"amber"}>فهرس المنتجات: {bridge?.catalog.connected?"متصل":"غير متصل"}</Tag><Tag tone={bridge?.sodfa.connected?"green":"amber"}>مخزون صدفة: {bridge?.sodfa.connected?"قراءة مباشرة":"غير متصل"}</Tag></div>
       </div>
     </div>
     <div style={{display:"flex",gap:8,overflowX:"auto",marginBottom:17,paddingBottom:4}}>
       {tabData.map(t=><button type="button" key={t.id} onClick={()=>{setTab(t.id);setSearch("")}} style={{display:"inline-flex",alignItems:"center",gap:7,whiteSpace:"nowrap",padding:"10px 14px",borderRadius:10,border:"1px solid "+(t.id===tab?ui.purple:ui.border),background:t.id===tab?ui.purple:ui.card,color:t.id===tab?"#fff":ui.muted,cursor:"pointer",fontSize:12}}><t.icon size={15}/>{t.name}</button>)}
     </div>
-    {bridge?.sodfa.error&&<div style={{...panel,marginBottom:12}}>{bridge.sodfa.error}</div>}
+    {bridge?.catalog.error&&<div role="alert" style={{...panel,marginBottom:12,border:"1px solid #985e38"}}>فهرس المنتجات: {bridge.catalog.error}</div>}
+    {bridge?.operations.error&&<div role="alert" style={{...panel,marginBottom:12,border:"1px solid #985e38"}}>بيانات الطلبات والشحن: {bridge.operations.error}</div>}
+    {bridge?.sodfa.error&&<div role="alert" style={{...panel,marginBottom:12,border:"1px solid #985e38"}}>صدفة: {bridge.sodfa.error}</div>}
+    {project==="sodfa_web"&&<div role="status" style={{...panel,marginBottom:12,border:"1px solid #985e38"}}>
+      قاعدة SODFA Web الأصلية غير نشطة حالياً؛ المخزون المعروض هنا ليس دليلاً على نشر المنتجات في الموقع.
+      بيانات القناة المنشورة غير متاحة لحين استرجاع قاعدة المتجر أو تهيئة مصدر منشور بديل معتمد.
+    </div>}
     {loadError&&<div style={{...panel,border:"1px solid #8f5151",marginBottom:14}}><AlertTriangle size={17} style={{display:"inline",marginLeft:8}}/>تعذر جلب بيانات الربط: {loadError}. بيانات صدفة المحلية قد تظل متاحة.</div>}
     {tab==="dashboard"&&<>
+      <div style={{...panel,marginBottom:14,fontSize:12,lineHeight:2}}>
+        <b>حالة التوصيلات:</b> فهرس الشركة {bridge?.catalog.connected?"متصل":"غير متصل"}، إدارة الطلبات {bridge?.operations.connected?"متصلة":"غير متصلة"}،
+        مخزون صدفة {bridge?.sodfa.connected?"متصل":"غير متصل"}.
+        {snapshotDate&&<> آخر تحديث لبيانات المنتجات المخزنة: {new Date(snapshotDate).toLocaleString("ar-EG")}.</>}
+        {stockMissing>0&&<> يوجد {stockMissing.toLocaleString("en-US")} سجل صدفة في الصفحة الحالية بدون رصيد معروف؛ لم نعتبرهم صفر.</>}
+      </div>
       <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(190px,1fr))",gap:12,marginBottom:13}}>
         <Metric title="فهرس المنتجات" value={bridge?.catalog.connected?fmt(activeProductRefs):"غير متاح"} icon={Package} sub="سجلات مرجعية، ليست كل المنتجات المنشورة"/>
         <Metric title="الأوردرات المسجلة" value={bridge?.operations.connected?fmt(orderTotal):"غير متاح"} icon={ShoppingCart} sub="الموجودة في قاعدة Orders Manager"/>
