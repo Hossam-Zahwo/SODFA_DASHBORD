@@ -1,5 +1,5 @@
 import { createServerFn } from "@tanstack/react-start";
-import { createClient } from "@supabase/supabase-js";
+import { requireCompanyAccess } from "./company-access.server";
 import { neon } from "@neondatabase/serverless";
 import { z } from "zod";
 
@@ -38,21 +38,7 @@ type Count = { brand: string; count: number };
 export const getCompanyWorkspaceData = createServerFn({ method: "POST" })
   .validator(RequestSchema)
   .handler(async ({ data }) => {
-    const url = process.env.VITE_SUPABASE_URL;
-    const key = process.env.VITE_SUPABASE_PUBLISHABLE_KEY;
-    if (!url || !key) throw new Error("AUTH_NOT_CONFIGURED");
-    const auth = createClient(url, key, {
-      auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false },
-    });
-    const { data: result, error } = await auth.auth.getUser(data.token);
-    if (error || !result.user || !result.user.email) throw new Error("UNAUTHORIZED");
-    const access = createClient(url, key, {global:{headers:{Authorization:"Bearer "+data.token}},
-      auth:{persistSession:false,autoRefreshToken:false,detectSessionInUrl:false}});
-    const {data:profile,error:roleError} = await access.from("profiles").select("role")
-      .eq("id",result.user.id).maybeSingle();
-    if(roleError || profile?.role!=="admin") throw new Error("ADMIN_ONLY");
-
-
+    await requireCompanyAccess(data.token,data.project,"read");
     // No app secrets or customer records are returned by this server function.
     const response: {
       fetchedAt: string;
