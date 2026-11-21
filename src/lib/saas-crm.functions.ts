@@ -2,12 +2,12 @@ import {createServerFn} from "@tanstack/react-start";
 import {neon} from "@neondatabase/serverless";
 import {randomUUID} from "node:crypto";
 import {z} from "zod";
-import {requireCompanyAccess} from "./company-access.server";
+import {requireSaaSAccess,type SaaSCapability} from "./saas-access.server";
 
 const token=z.string().min(16).max(8192),tenantId=z.string().uuid();
 const brand=z.enum(["homey","sodfa"]);
-async function runtime(t:string,tenant:string){
- const actor=await requireCompanyAccess(t,"all","admin");
+async function runtime(t:string,tenant:string,cap:SaaSCapability="read",brandScope:string="all"){
+ const actor=await requireSaaSAccess(t,tenant,cap,brandScope);
  const url=process.env.SAAS_DATABASE_URL;
  if(!url)throw Error("SAAS_STAGING_UNCONFIGURED");
  const sql=neon(url);
@@ -18,8 +18,8 @@ async function runtime(t:string,tenant:string){
 export const getSaaSCRM=createServerFn({method:"POST"})
 .validator(z.object({token,tenantId,brand:brand.optional()}))
 .handler(async({data})=>{
- const {sql,scope}=await runtime(data.token,data.tenantId);
  const b=data.brand??"all";
+ const {sql,scope,actor}=await runtime(data.token,data.tenantId,"read",b);
  const [_,leads,tasks,activities]=await sql.transaction([
  scope,
  sql`SELECT id::text,brand_id,full_name,phone,stage,source,
@@ -34,7 +34,7 @@ export const getSaaSCRM=createServerFn({method:"POST"})
  ON l.tenant_id=a.tenant_id AND l.id=a.lead_id
  WHERE (${b}='all' OR l.brand_id=${b}) ORDER BY a.occurred_at DESC LIMIT 50`,
  ],{readOnly:true});
- return {leads,tasks,activities,staging:true};
+ return {leads:actor.role==="viewer"?leads.map(x=>({...x,phone:null})):leads,tasks,activities,staging:true};
 });
 export const createSaaSLead=createServerFn({method:"POST"})
 .validator(z.object({token,tenantId,brand,fullName:z.string().trim().min(2).max(200),
@@ -42,7 +42,7 @@ export const createSaaSLead=createServerFn({method:"POST"})
  source:z.string().trim().max(80).nullable(),
  estimatedEGP:z.number().nonnegative().max(10_000_000)}))
 .handler(async({data})=>{
- const {sql,scope,actor}=await runtime(data.token,data.tenantId);
+ const {sql,scope,actor}=await runtime(data.token,data.tenantId,"crm_write",data.brand);
  const id=randomUUID();
  const [_,rows]=await sql.transaction([
  scope,
@@ -60,10 +60,10 @@ export const createSaaSLead=createServerFn({method:"POST"})
  return {id:rows[0]?.id??null,created:rows.length===1};
 });
 export const updateSaaSLeadStage=createServerFn({method:"POST"})
-.validator(z.object({token,tenantId,leadId:z.string().uuid(),
+.validator(z.object({token,tenantId,leadId:z.string().uuid(),brand,
  stage:z.enum(["new","contacted","qualified","proposal","won","lost"])}))
 .handler(async({data})=>{
- const {sql,scope,actor}=await runtime(data.token,data.tenantId);
+ const {sql,scope,actor}=await runtime(data.token,data.tenantId,"crm_write",data.brand);
  const [_,changed]=await sql.transaction([
  scope,
  sql`WITH updated AS (
@@ -80,11 +80,11 @@ export const updateSaaSLeadStage=createServerFn({method:"POST"})
  return changed[0];
 });
 export const createSaaSTask=createServerFn({method:"POST"})
-.validator(z.object({token,tenantId,leadId:z.string().uuid(),
+.validator(z.object({token,tenantId,leadId:z.string().uuid(),brand,
  summary:z.string().trim().min(3).max(400),
  priority:z.enum(["low","normal","high","urgent"]).default("normal")}))
 .handler(async({data})=>{
- const {sql,scope,actor}=await runtime(data.token,data.tenantId);
+ const {sql,scope,actor}=await runtime(data.token,data.tenantId,"crm_write",data.brand);
  const id=randomUUID();
  const [_,rows]=await sql.transaction([scope,sql`
  WITH added AS (
