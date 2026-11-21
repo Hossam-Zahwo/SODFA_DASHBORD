@@ -106,7 +106,9 @@ export const getCompanyWorkspaceData = createServerFn({ method: "POST" })
     if (ordersUrl) jobs.push((async () => {
       try {
         const db = neon(ordersUrl);
-        const [summary, orders, customers, shipments] = await Promise.all([
+        // Independent queries: a shipping integration failure must not erase
+        // all orders and customer counts from the operations dashboard.
+        const [summaryResult, orderResult, customerResult, shipmentResult] = await Promise.allSettled([
           db`SELECT brand, status, count(*)::integer AS count
              FROM orders WHERE deleted_at IS NULL
              GROUP BY brand, status ORDER BY brand, status`,
@@ -117,18 +119,22 @@ export const getCompanyWorkspaceData = createServerFn({ method: "POST" })
           db`SELECT brand, count(*)::integer AS count
              FROM customers WHERE deleted_at IS NULL
              GROUP BY brand ORDER BY brand`,
-          db`SELECT o.brand, COALESCE(s.state,'not_dispatched') AS state, count(*)::integer AS count
+          db`SELECT o.brand, COALESCE(s.state,'not_dispatched') AS state,
+             count(*)::integer AS count
              FROM orders o LEFT JOIN tala_order_shipments s ON s.order_id=o.id
              WHERE o.deleted_at IS NULL
              GROUP BY o.brand, COALESCE(s.state,'not_dispatched')
              ORDER BY o.brand, state`,
         ]);
+        const okay = (x:PromiseSettledResult<any>)=>x.status==="fulfilled"?x.value:[];
         response.operations = {
-          connected: true,
-          summary: summary as Summary[],
-          orders: orders as OrderRow[],
-          customers: customers as Count[],
-          shipments: shipments as Shipment[],
+          connected: summaryResult.status==="fulfilled" || orderResult.status==="fulfilled",
+          summary: okay(summaryResult) as Summary[],
+          orders: okay(orderResult) as OrderRow[],
+          customers: okay(customerResult) as Count[],
+          shipments: okay(shipmentResult) as Shipment[],
+          error: [summaryResult,orderResult,customerResult,shipmentResult]
+            .some(x=>x.status==="rejected") ? "بعض مصادر الطلبات أو الشحن غير متاحة؛ البيانات السليمة ظاهرة" : undefined,
         };
       } catch {
         response.operations = {...response.operations, error: "تعذرت قراءة بيانات إدارة الطلبات"};
