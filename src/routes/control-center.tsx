@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
 import { AppShell } from "@/components/AppShell";
-import { useInventorySummary, useSales, useWarehouses } from "@/hooks/useSodfa";
 import { supabase } from "@/lib/supabase";
 import { getCompanyWorkspaceData } from "@/lib/company-workspace.functions";
 import {
@@ -52,9 +51,6 @@ function ControlCenter(){
   const [loading,setLoading]=useState(true);
   const [loadError,setLoadError]=useState("");
   const [lastRefresh,setLastRefresh]=useState("");
-  const stock=useInventorySummary();
-  const sales=useSales();
-  const warehouses=useWarehouses();
   useEffect(()=>{void refresh();},[]);
   async function refresh(){
     setLoading(true);setLoadError("");
@@ -76,11 +72,10 @@ function ControlCenter(){
   const customers=bridge?.operations.customers.filter(x=>selectedBrand==="all"||x.brand===selectedBrand).reduce((a,b)=>a+Number(b.count),0)??0;
   const rowProducts=bridge?.catalog.products.filter(x=>(selectedBrand==="all"||x.brand===selectedBrand)&&x.title.toLowerCase().includes(search.toLowerCase()))??[];
   const rowOrders=bridge?.operations.orders.filter(x=>(selectedBrand==="all"||x.brand===selectedBrand)&&x.id.toLowerCase().includes(search.toLowerCase()))??[];
-  const inventory=stock.data??[];
-  const saleRecords=sales.data??[];
-  const sodfaTotalSales=saleRecords.reduce((a,r)=>a+Number((r as {total?:number}).total??0),0);
+  const inventory=bridge?.sodfa.items??[];
+  const sodfaTotalSales=Number(bridge?.sodfa.salesSummary?.sales_egp??0);
   const canSeeSodfaStock=project==="sodfa"||project==="all";
-  const sodfaInventoryValue=inventory.reduce((a,r)=>a+Number((r as {remaining_qty?:number;price?:number}).remaining_qty??0)*Number((r as {price?:number}).price??0),0);
+  const sodfaInventoryValue=Number(bridge?.sodfa.inventorySummary?.cost_value??0);
   const channelNotice=project==="sodfa_web"?"قائمة صدفة المعروضة هنا فهرس مخزون صدفة وليس تأكيدًا بأنها منشورة حاليًا في الموقع. ربط النشر الفعلي ما زال مطلوبًا.":project==="homey"?"منتجات هومي من الفهرس المركزي المستورد. حالة نشر كل منتج وأسعاره الحية لم تتم مزامنتها بعد.":"كل قناة لها صلاحيات نشر مستقلة، والموجود هنا لا ينشر أو يخفي منتجات فعليًا.";
   function downloadCsv(){
     const rows=tab==="products"?[["Source ID","Brand","Name","Source"],...rowProducts.map(p=>[p.id,p.brand,p.title,p.source])]:[["Order ID","Brand","Status","Created","Carrier"],...rowOrders.map(o=>[o.id,o.brand,o.status,o.created_at,o.shipping_company??""])];
@@ -107,6 +102,7 @@ function ControlCenter(){
     <div style={{display:"flex",gap:8,overflowX:"auto",marginBottom:17,paddingBottom:4}}>
       {tabData.map(t=><button type="button" key={t.id} onClick={()=>{setTab(t.id);setSearch("")}} style={{display:"inline-flex",alignItems:"center",gap:7,whiteSpace:"nowrap",padding:"10px 14px",borderRadius:10,border:"1px solid "+(t.id===tab?ui.purple:ui.border),background:t.id===tab?ui.purple:ui.card,color:t.id===tab?"#fff":ui.muted,cursor:"pointer",fontSize:12}}><t.icon size={15}/>{t.name}</button>)}
     </div>
+    {bridge?.sodfa.error&&<div style={{...panel,marginBottom:12}}>{bridge.sodfa.error}</div>}
     {loadError&&<div style={{...panel,border:"1px solid #8f5151",marginBottom:14}}><AlertTriangle size={17} style={{display:"inline",marginLeft:8}}/>تعذر جلب بيانات الربط: {loadError}. بيانات صدفة المحلية قد تظل متاحة.</div>}
     {tab==="dashboard"&&<>
       <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(190px,1fr))",gap:12,marginBottom:13}}>
@@ -114,8 +110,8 @@ function ControlCenter(){
         <Metric title="الأوردرات المسجلة" value={bridge?.operations.connected?fmt(orderTotal):"غير متاح"} icon={ShoppingCart} sub="الموجودة في قاعدة Orders Manager"/>
         <Metric title="العملاء المسجلون" value={bridge?.operations.connected?fmt(customers):"غير متاح"} icon={Users} sub="أعداد فقط بدون بيانات شخصية"/>
         <Metric title="طلبات بتصنيفات شحن/تسليم" value={bridge?.operations.connected?fmt(shipped):"غير متاح"} icon={Truck} sub="وفق الحالات الأصلية المسجلة"/>
-        {canSeeSodfaStock&&<Metric title="أصناف مخزون صدفة" value={stock.isLoading?"...":stock.isError?"غير متاح":fmt(inventory.length)} icon={Boxes} sub="من واجهة صدفة الحالية"/>}
-        {canSeeSodfaStock&&<Metric title="مبيعات صدفة (السجل الحالي)" value={sales.isLoading?"...":sales.isError?"غير متاح":fmt(sodfaTotalSales)+" ج.م"} icon={ChartNoAxesCombined} sub="بناءً على سجلات المبيعات في صدفة، دون دمج مع طلبات OMS"/>}
+        {canSeeSodfaStock&&<Metric title="أصناف مخزون صدفة" value={bridge?.sodfa.connected?fmt(bridge.sodfa.inventorySummary?.sku_rows??0):"غير متاح"} icon={Boxes} sub="صفوف عرض المخزون في Neon، لا تشمل بالضرورة كل المستودعات"/>}
+        {canSeeSodfaStock&&<Metric title="مبيعات صدفة (السجل الحالي)" value={bridge?.sodfa.connected?fmt(sodfaTotalSales)+" ج.م":"غير متاح"} icon={ChartNoAxesCombined} sub="بناءً على سجلات المبيعات في صدفة، دون دمج مع طلبات OMS"/>}
       </div>
       <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(300px,1fr))",gap:13}}>
         <div style={panel}><h2 style={{fontSize:17}}>ملخص الطلبات حسب الحالة</h2>{statuses.length?statuses.map(s=><div key={s.brand+s.status} style={{display:"flex",justifyContent:"space-between",borderBottom:"1px solid "+ui.border,padding:"10px 0",fontSize:12}}><span>{s.brand==="homey"?"هومي":"صدفة"} · {s.status}</span><b>{fmt(s.count)}</b></div>):<p style={{fontSize:12,color:ui.muted}}>لا توجد بيانات متاحة</p>}<button onClick={()=>setTab("orders")} style={{marginTop:16,color:"#eacafa",background:"transparent",border:0,cursor:"pointer"}}>فتح إدارة الأوردرات داخل المركز ←</button></div>
@@ -138,8 +134,8 @@ function ControlCenter(){
     </div>}
     {tab==="shipping"&&<div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(290px,1fr))",gap:13}}><div style={panel}><h2>حالات الشحن حسب المشروع</h2>{(bridge?.operations.shipments??[]).filter(s=>selectedBrand==="all"||s.brand===selectedBrand).map(s=><div key={s.brand+s.state} style={{display:"flex",justifyContent:"space-between",padding:"11px 0",borderBottom:"1px solid "+ui.border}}><span>{s.brand==="homey"?"هومي":"صدفة"} · {s.state}</span><b>{fmt(s.count)}</b></div>)}{!bridge?.operations.connected&&<p>ربط الشحن غير متاح حاليًا</p>}</div><div style={panel}><h2>إدارة عمليات الشحن</h2><p style={{fontSize:12,lineHeight:2,color:ui.muted}}>ده ملخص مباشر من جداول تالا المسجلة في مدير الطلبات. إنشاء الشحنة، طباعة البوليصة، تحصيل الأموال وتحديث الحالة تحتاج واجهة كتابة آمنة بنفس صلاحيات مدير الطلبات. مش هنشغلها بتعديل مباشر في قاعدة البيانات.</p><Tag tone="amber">الإجراءات مؤجلة لحين التحقق من التفويض</Tag></div></div>}
     {tab==="customers"&&<div style={panel}><h2>عملاء {chosen.name}</h2><div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(200px,1fr))",gap:12,marginBottom:14}}><Metric title="عدد العملاء المسجلين" value={bridge?.operations.connected?fmt(customers):"غير متاح"} icon={Users}/><Metric title="عدد طلبات المشروع" value={bridge?.operations.connected?fmt(orderTotal):"غير متاح"} icon={ShoppingCart}/></div><p style={{color:ui.muted,fontSize:12}}>الدمج الآمن لسجلات العملاء والوصول لأرقام الهاتف وإرسال واتساب يتطلب ربط صلاحيات هومي وصدفة قبل عرض بيانات شخصية داخل المركز.</p></div>}
-    {tab==="finance"&&<div style={panel}><h2>تقارير {chosen.name}</h2>{canSeeSodfaStock&&<div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(200px,1fr))",gap:12,marginBottom:14}}><Metric title="قيمة المخزون (بتقييم السعر الحالي)" value={stock.isError?"غير متاح":fmt(sodfaInventoryValue)+" ج.م"} icon={Database}/><Metric title="إجمالي قيمة المبيعات بسجل صدفة" value={sales.isError?"غير متاح":fmt(sodfaTotalSales)+" ج.م"} icon={ChartNoAxesCombined}/></div>}<p style={{color:ui.muted,fontSize:12,lineHeight:2}}>لم يتم دمج المبيعات بالأوردرات ماليًا بعد، حفاظًا على عدم تكرار الإيرادات. صافي الربح والتكلفة والتحصيل النهائي يحتاجون مطابقة سعر البيع التاريخي وتكلفة البضاعة والشحن والمرتجعات.</p></div>}
-    {tab==="settings"&&<div style={panel}><h2>الربط والصلاحيات</h2><div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(200px,1fr))",gap:12}}>{[{name:"قاعدة CRM المركزية",ok:bridge?.catalog.connected},{name:"قاعدة إدارة الطلبات",ok:bridge?.operations.connected},{name:"بيانات مخزون صدفة",ok:!stock.isError},{name:"نشر المنتجات على المتاجر",ok:false},{name:"تعديل الطلبات وتالا",ok:false}].map(x=><div key={x.name} style={{padding:15,background:"#0A0A0C",border:"1px solid "+ui.border,borderRadius:12}}><b>{x.name}</b><div style={{marginTop:12}}><Tag tone={x.ok?"green":"amber"}>{x.ok?"متاح للقراءة":"غير مفعّل"}</Tag></div></div>)}</div><p style={{color:ui.muted,fontSize:12,lineHeight:2,marginTop:16}}>كل حساب لا يحصل على صلاحيات الكتابة تلقائيًا. تُمنع بيانات التكلفة والموردين من الوصول لمواقع العملاء. فصل العلامات وقنوات النشر لا يزال قيد تطبيق سياسات الوصول قبل ربط الكتابة.</p></div>}
+    {tab==="finance"&&<div style={panel}><h2>تقارير {chosen.name}</h2>{canSeeSodfaStock&&<div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(200px,1fr))",gap:12,marginBottom:14}}><Metric title="قيمة تكلفة مخزون الويب المسجل" value={bridge?.sodfa.connected?fmt(sodfaInventoryValue)+" ج.م":"غير متاح"} icon={Database}/><Metric title="إجمالي قيمة المبيعات بسجل صدفة" value={bridge?.sodfa.connected?fmt(sodfaTotalSales)+" ج.م":"غير متاح"} icon={ChartNoAxesCombined}/></div>}<p style={{color:ui.muted,fontSize:12,lineHeight:2}}>لم يتم دمج المبيعات بالأوردرات ماليًا بعد، حفاظًا على عدم تكرار الإيرادات. صافي الربح والتكلفة والتحصيل النهائي يحتاجون مطابقة سعر البيع التاريخي وتكلفة البضاعة والشحن والمرتجعات.</p></div>}
+    {tab==="settings"&&<div style={panel}><h2>الربط والصلاحيات</h2><div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(200px,1fr))",gap:12}}>{[{name:"قاعدة CRM المركزية",ok:bridge?.catalog.connected},{name:"قاعدة إدارة الطلبات",ok:bridge?.operations.connected},{name:"بيانات مخزون صدفة",ok:bridge?.sodfa.connected},{name:"نشر المنتجات على المتاجر",ok:false},{name:"تعديل الطلبات وتالا",ok:false}].map(x=><div key={x.name} style={{padding:15,background:"#0A0A0C",border:"1px solid "+ui.border,borderRadius:12}}><b>{x.name}</b><div style={{marginTop:12}}><Tag tone={x.ok?"green":"amber"}>{x.ok?"متاح للقراءة":"غير مفعّل"}</Tag></div></div>)}</div><p style={{color:ui.muted,fontSize:12,lineHeight:2,marginTop:16}}>كل حساب لا يحصل على صلاحيات الكتابة تلقائيًا. تُمنع بيانات التكلفة والموردين من الوصول لمواقع العملاء. فصل العلامات وقنوات النشر لا يزال قيد تطبيق سياسات الوصول قبل ربط الكتابة.</p></div>}
     <p style={{marginTop:22,color:"#88818e",fontSize:11}}><ShieldCheck size={13} style={{display:"inline",marginLeft:6}}/> نسخة تطوير، وصول مصادق عليه، قراءة فقط، دون تعديل مواقع الإنتاج أو مخازنها. {lastRefresh&&"آخر تحميل "+lastRefresh}</p>
   </div></AppShell>
 }
