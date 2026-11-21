@@ -1,21 +1,9 @@
 import {createServerFn} from "@tanstack/react-start";
-import {createClient} from "@supabase/supabase-js";
+import {requireCompanyAccess} from "./company-access.server";
 import {neon} from "@neondatabase/serverless";
 import {z} from "zod";
 
 /** Isolated Neon OMS staging branch only. Never sends shipments to Tala. */
-async function requireAdmin(token:string){
-  const url=process.env.VITE_SUPABASE_URL,key=process.env.VITE_SUPABASE_PUBLISHABLE_KEY;
-  if(!url||!key)throw new Error("AUTH_NOT_CONFIGURED");
-  const auth=createClient(url,key,{auth:{persistSession:false,autoRefreshToken:false,detectSessionInUrl:false}});
-  const {data:{user},error}=await auth.auth.getUser(token);
-  if(error||!user?.id||!user.email)throw new Error("UNAUTHORIZED");
-  const asUser=createClient(url,key,{global:{headers:{Authorization:"Bearer "+token}},
-    auth:{persistSession:false,autoRefreshToken:false,detectSessionInUrl:false}});
-  const {data:profile,error:roleError}=await asUser.from("profiles").select("role").eq("id",user.id).maybeSingle();
-  if(roleError||profile?.role!=="admin")throw new Error("ADMIN_ONLY");
-  return user;
-}
 function stage(){
  const url=process.env.CRM_ORDERS_STAGING_URL;
  if(!url)throw new Error("OMS_STAGING_NOT_CONFIGURED");
@@ -24,7 +12,7 @@ function stage(){
 export const getStagingLocations=createServerFn({method:"POST"})
  .validator(z.object({token:z.string().min(16).max(8192)}))
  .handler(async({data})=>{
-  await requireAdmin(data.token);
+  await requireCompanyAccess(data.token,"orders","read");
   const rows=await stage()`SELECT g.name AS governorate,l.name AS city FROM address_governorates g LEFT JOIN address_localities l ON l.governorate=g.name ORDER BY g.name,l.name`;
   const locations:Record<string,string[]>={};
   for(const row of rows){
@@ -52,7 +40,7 @@ const CreateSchema=z.object({
 });
 export const createStagingOrder=createServerFn({method:"POST"})
  .validator(CreateSchema).handler(async({data})=>{
-  const actor=await requireAdmin(data.token);
+  const actor=await requireCompanyAccess(data.token,"orders","staging_order");
   const phone=data.phone.normalize("NFKC").replace(/[٠-٩۰-۹]/g,d=>String(d.charCodeAt(0)-(d.charCodeAt(0)>=0x6f0?0x6f0:0x660))).replace(/[\s().-]/g,"");
   if(!/^\+?\d{8,15}$/.test(phone))throw new Error("PHONE_INVALID");
   const db=stage();
