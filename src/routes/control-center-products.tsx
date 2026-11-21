@@ -1,4 +1,4 @@
-import { useEffect, useState, type FormEvent } from "react";
+import { useEffect, useRef, useState, type FormEvent } from "react";
 import {createFileRoute,Link} from "@tanstack/react-router";
 import {AppShell} from "@/components/AppShell";
 import {supabase} from "@/lib/supabase";
@@ -23,6 +23,7 @@ function CatalogAdmin(){
  const [price,setPrice]=useState(""),[homey,setHomey]=useState(true),[sodfa,setSodfa]=useState(false);
  const [reqId,setReqId]=useState(()=>crypto.randomUUID());
  const [channelPrices,setChannelPrices]=useState<Record<string,string>>({});
+ const fetchSeq=useRef(0);
  useEffect(()=>{const selected=new URLSearchParams(window.location.search).get("project");if(selected==="homey"||selected==="sodfa")setFilter(selected);},[]);
  useEffect(()=>{void load(filter);},[filter]);
  async function token(){
@@ -31,14 +32,16 @@ function CatalogAdmin(){
   return session.access_token;
  }
  async function load(scope:"homey"|"sodfa"=filter){
-  setProducts([]);
+  const seq=++fetchSeq.current;
+  setProducts([]);setConnected(false);
   setLoading(true);
   try{
    const r=await getCompanyWorkspaceData({data:{token:await token(),brand:scope,project:scope,query:""}});
-   setProducts(r.catalog.products);setConnected(r.catalog.connected);
+   if(seq!==fetchSeq.current)return;
+   setProducts(r.catalog.products.filter(p=>p.brand===scope));setConnected(r.catalog.connected);
    if(!r.catalog.connected)setNotice(r.catalog.error??"تعذر ربط فهرس المنتجات");
-  }catch(e){setNotice(e instanceof Error?e.message:"تعذر تحميل المنتجات");}
-  finally{setLoading(false)}
+  }catch(e){if(seq===fetchSeq.current)setNotice(e instanceof Error?e.message:"تعذر تحميل المنتجات");}
+  finally{if(seq===fetchSeq.current)setLoading(false)}
  }
  async function save(product:Product,channel:"homey_web"|"sodfa_web",visible:boolean){
   setBusy(true);setNotice("");
