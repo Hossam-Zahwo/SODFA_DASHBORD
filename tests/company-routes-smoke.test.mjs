@@ -25,7 +25,7 @@ test("CRM SSR routes return HTML without 500 errors", { timeout: 40000 }, async 
     const response = await fetch(base + path, { signal: AbortSignal.timeout(10000) });
     const html = await response.text();
     assert.equal(response.status, 200, `Unexpected status at ${path}`);
-    assert.match(response.headers.get("content-type") ?? "", /text\\/html/, `HTML at ${path}`);
+    assert.ok((response.headers.get("content-type") ?? "").includes("text/html"), `HTML at ${path}`);
     assert.ok(html.length > 400, `Nonempty SSR at ${path}`);
     assert.doesNotMatch(html, /This page didn't load|Unhandled Server Error/, `No SSR error at ${path}`);
   }
