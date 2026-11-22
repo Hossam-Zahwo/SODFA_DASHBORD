@@ -68,7 +68,7 @@ export const getCompanyWorkspaceData = createServerFn({ method: "POST" })
     const sodfaEnabled=scope==="all"||scope==="sodfa";
     const search = data.query.trim().toLowerCase();
     const jobs: Promise<void>[] = [];
-    const catalogUrl = process.env.CRM_CATALOG_READ_URL;
+    const catalogUrl = process.env["CRM_CATALOG_READ_URL"];
     if (catalogEnabled && catalogUrl) jobs.push((async () => {
       try {
         const db = neon(catalogUrl);
@@ -108,7 +108,7 @@ export const getCompanyWorkspaceData = createServerFn({ method: "POST" })
         response.catalog = {...response.catalog, error: "تعذرت قراءة فهرس المنتجات من قاعدة CRM"};
       }
     })());
-    const ordersUrl = process.env.CRM_ORDERS_READ_URL;
+    const ordersUrl = process.env["CRM_ORDERS_READ_URL"];
     if (ordersEnabled && ordersUrl) jobs.push((async () => {
       try {
         const db = neon(ordersUrl);
@@ -140,7 +140,7 @@ export const getCompanyWorkspaceData = createServerFn({ method: "POST" })
              GROUP BY o.brand, COALESCE(s.state,'not_dispatched')
              ORDER BY o.brand, state`,
         ]);
-        const okay = (x:PromiseSettledResult<any>)=>x.status==="fulfilled"?x.value:[];
+        const okay = <T,>(x:PromiseSettledResult<T[]>)=>x.status==="fulfilled"?x.value:[];
         response.operations = {
           connected: summaryResult.status==="fulfilled" || orderResult.status==="fulfilled",
           summary: okay(summaryResult) as Summary[],
@@ -154,7 +154,7 @@ export const getCompanyWorkspaceData = createServerFn({ method: "POST" })
         response.operations = {...response.operations, error: "تعذرت قراءة بيانات إدارة الطلبات"};
       }
     })());
-    const sodfaUrl = process.env.CRM_SODFA_READ_URL;
+    const sodfaUrl = process.env["CRM_SODFA_READ_URL"];
     if (sodfaEnabled && sodfaUrl) jobs.push((async () => {
       try {
         const db = neon(sodfaUrl);
