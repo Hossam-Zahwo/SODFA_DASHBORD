@@ -18,15 +18,15 @@ export const saveChannelDraft = createServerFn({method:"POST"})
   .handler(async({data})=>{
     // A draft may target either storefront. Publication is separately controlled
     // and never triggered here. This permits explicit cross-brand proposals.
-    const pgUrl=process.env.CRM_DRAFT_WRITE_URL;
+    const pgUrl=process.env["CRM_DRAFT_WRITE_URL"];
     if(!pgUrl)throw new Error("DRAFT_STORAGE_NOT_CONFIGURED");
     const sql=neon(pgUrl);
     const row=await sql`SELECT p.id AS product_ref,p.brand_id AS brand
       FROM product_references p WHERE p.source_system_id=${data.source}
       AND p.source_product_id=${data.sourceProductId} LIMIT 1`;
     if(!row.length)throw new Error("PRODUCT_NOT_IN_CRM_INDEX");
-    const id=Number(row[0].product_ref);
-    const originalBrand=String(row[0].brand) as "homey"|"sodfa";
+    const id=Number(row[0]!["product_ref"]);
+    const originalBrand=String(row[0]!["brand"]) as "homey"|"sodfa";
     const destination=data.channel==="homey_web"?"homey":"sodfa";
     const actor=await requireCompanyAccess(data.token,originalBrand,"draft");
     if(originalBrand!==destination){
