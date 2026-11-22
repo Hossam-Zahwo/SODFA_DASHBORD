@@ -5,7 +5,7 @@ import {z} from "zod";
 
 /** Isolated Neon OMS staging branch only. Never sends shipments to Tala. */
 function stage(){
- const url=process.env.CRM_ORDERS_STAGING_URL;
+ const url=process.env["CRM_ORDERS_STAGING_URL"];
  if(!url)throw new Error("OMS_STAGING_NOT_CONFIGURED");
  return neon(url);
 }
@@ -16,9 +16,9 @@ export const getStagingLocations=createServerFn({method:"POST"})
   const rows=await stage()`SELECT g.name AS governorate,l.name AS city FROM address_governorates g LEFT JOIN address_localities l ON l.governorate=g.name ORDER BY g.name,l.name`;
   const locations:Record<string,string[]>={};
   for(const row of rows){
-   const g=String(row.governorate??"");
+   const g=String(row["governorate"]??"");
    if(!locations[g])locations[g]=[];
-   if(row.city!=null)locations[g].push(String(row.city));
+   if(row["city"]!=null)locations[g].push(String(row["city"]));
   }
   return locations;
  });
@@ -64,12 +64,12 @@ export const createStagingOrder=createServerFn({method:"POST"})
   if(rows.length) await db`INSERT INTO audit_log(actor,action,entity,entity_id,brand,details)
     VALUES(${actor.id},'create','order',${data.creationRequestId},${data.brand},
       'control-center staging only, no shipping dispatch')`;
-  return {id:String(out[0].id),status:String(out[0].status),version:Number(out[0].version),amount,staging:true};
+  return {id:String(out[0]!["id"]),status:String(out[0]!["status"]),version:Number(out[0]!["version"]),amount,staging:true};
  });
 export const confirmStagingOrder=createServerFn({method:"POST"})
  .validator(z.object({token:z.string().min(16).max(8192),id:z.string().uuid(),version:z.number().int().min(0)}))
  .handler(async({data})=>{
-  const actor=await requireAdmin(data.token);
+  const actor=await requireCompanyAccess(data.token,"orders","approve");
   const db=stage();
   const rows=await db`UPDATE orders SET status='confirmed',updated_at=now(),version=version+1
     WHERE id=${data.id}::uuid AND version=${data.version}
@@ -77,6 +77,6 @@ export const confirmStagingOrder=createServerFn({method:"POST"})
       AND deleted_at IS NULL RETURNING id::text,status,version,brand`;
   if(!rows.length)throw new Error("ORDER_CONFLICT_OR_ALREADY_CONFIRMED");
   await db`INSERT INTO audit_log(actor,action,entity,entity_id,brand,details)
-    VALUES(${actor.id},'confirm','order',${data.id},${String(rows[0].brand)},'control-center staging confirmation')`;
-  return {id:String(rows[0].id),status:String(rows[0].status),version:Number(rows[0].version),staging:true};
+    VALUES(${actor.id},'confirm','order',${data.id},${String(rows[0]!["brand"])},'control-center staging confirmation')`;
+  return {id:String(rows[0]!["id"]),status:String(rows[0]!["status"]),version:Number(rows[0]!["version"]),staging:true};
  });
