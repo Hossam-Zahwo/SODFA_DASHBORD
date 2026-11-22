@@ -1,3 +1,5 @@
+import { VoiceInput } from "@/components/VoiceInput";
+import { calculateOrderTotal, parseSpokenOrder } from "@/lib/inventory-planning";
 import {useEffect,useState,type FormEvent} from "react";
 import {createFileRoute,Link} from "@tanstack/react-router";
 import {AppShell} from "@/components/AppShell";
@@ -16,8 +18,27 @@ function OrderOperations(){
  const [brand,setBrand]=useState<"homey"|"sodfa">("homey");
  const [name,setName]=useState(""),[phone,setPhone]=useState("");
  const [gov,setGov]=useState(""),[city,setCity]=useState(""),[address,setAddress]=useState("");
- const [product,setProduct]=useState(""),[qty,setQty]=useState(1),[price,setPrice]=useState(0);
+ const [items,setItems]=useState([{name:"",quantity:1,price:0}]);
+ const [carrier,setCarrier]=useState("");
+ const [spokenTotal,setSpokenTotal]=useState<number>();
+
  const [shipping,setShipping]=useState(0),[prepaid,setPrepaid]=useState(0),[discount,setDiscount]=useState(0);
+ const amount=calculateOrderTotal(items,shipping,discount);
+ const totalMismatch=spokenTotal!==undefined&&spokenTotal!==amount;
+ function fillOrder(text:string){
+  const draft=parseSpokenOrder(text);
+  if(draft.invalidAmounts){setNotice("تكلفة الشحن أو الإجمالي مش واضحين. أملِهم بالأرقام أو اكتبهم.");return;}
+  if(draft.hasItemText&&!draft.items.length){setNotice("راجع الأصناف. لكل صنف قول الاسم ثم عدد القطع وسعر الوحدة.");return;}
+  if(!draft.name&&!draft.phone&&!draft.address&&!draft.items.length&&draft.shipping===undefined&&!draft.carrier&&draft.total===undefined){setNotice("ما اتعرفش على بيانات الطلب. قول اسم الحقل قبل قيمته.");return;}
+  if(draft.name)setName(draft.name);
+  if(draft.phone)setPhone(draft.phone);
+  if(draft.address)setAddress(draft.address);
+  if(draft.items.length)setItems(draft.items);
+  if(draft.shipping!==undefined)setShipping(draft.shipping);
+  if(draft.carrier)setCarrier(draft.carrier);
+  setSpokenTotal(draft.total);
+  setNotice("راجع البيانات واختار المحافظة والمنطقة قبل الحفظ.");
+ }
  const [requestId,setRequestId]=useState(()=>crypto.randomUUID());
  const [notice,setNotice]=useState(""),[busy,setBusy]=useState(false);
  const [saved,setSaved]=useState<{id:string;status:string;version:number;amount:number}|null>(null);
@@ -32,13 +53,13 @@ function OrderOperations(){
   catch(e){setNotice("تعذر تحميل المحافظات والمدن: "+(e instanceof Error?e.message:"خطأ"))}
  }
  async function create(e:FormEvent){
-  e.preventDefault();setBusy(true);setNotice("");
+  e.preventDefault();if(totalMismatch||busy||saved)return;setBusy(true);setNotice("");
   try{
    const result=await createStagingOrder({data:{
     token:await getToken(),creationRequestId:requestId,brand,
     customerName:name.trim(),phone,governorate:gov,city,address:address.trim(),
-    items:[{name:product.trim(),sku:"",quantity:qty,price}],
-    shipping,prepaid,discount
+    items:items.map(item=>({...item,name:item.name.trim(),sku:""})),
+    shipping,prepaid,discount,carrier
    }});
    setSaved(result);
    setNotice("تم إنشاء أوردر في قاعدة التجربة المعزولة فقط. لم يُرسل أي طلب إلى تالا أو موقع العميل.");
@@ -55,7 +76,7 @@ function OrderOperations(){
   }catch(e){setNotice("تعذر التأكيد: "+(e instanceof Error?e.message:"خطأ"))}
   finally{setBusy(false)}
  }
- function reset(){setSaved(null);setRequestId(crypto.randomUUID());setName("");setPhone("");setProduct("");setAddress("");setNotice("");setQty(1);setPrice(0)}
+ function reset(){setSaved(null);setRequestId(crypto.randomUUID());setName("");setPhone("");setItems([{name:"",quantity:1,price:0}]);setAddress("");setNotice("");setCarrier("");setShipping(0);setPrepaid(0);setDiscount(0);setSpokenTotal(undefined)}
  return <AppShell title="إضافة وتأكيد الطلبات">
   <div dir="rtl" style={{fontFamily:"Cairo,sans-serif",maxWidth:1050,margin:"0 auto",color:"white",paddingBottom:60}}>
    <Link to="/control-center" style={{color:"#C98ADB",fontSize:12}}>مركز الشركة / الرجوع</Link>
@@ -67,6 +88,8 @@ function OrderOperations(){
    </div>
    <div style={css.card}>
     <h2 style={{fontSize:19,marginTop:0}}>بيانات الطلب الجديد</h2>
+    <VoiceInput disabled={busy||Boolean(saved)} onTranscript={fillOrder} prompt="قول اسم العميل، العنوان، رقم الهاتف، المنتجات، تكلفة الشحن، شركة الشحن والإجمالي." />
+    <p style={{fontSize:12}}>للأصناف قول: المنتجات تيشيرت عدد ٢ سعر ١٠٠، ومنتج بنطلون عدد ١ سعر ٢٠٠.</p>
     <form onSubmit={e=>void create(e)} style={{display:"grid",gap:15}}>
      <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(220px,1fr))",gap:12}}>
       <label>البراند <select value={brand} onChange={e=>setBrand(e.target.value as "homey"|"sodfa")} style={{...css.input,display:"block",width:"100%"}}><option value="homey">هومي</option><option value="sodfa">صدفة</option></select></label>
@@ -78,15 +101,22 @@ function OrderOperations(){
      </div>
      <h3 style={{margin:"8px 0 0",fontSize:16}}>المنتجات والمبالغ</h3>
      <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(180px,1fr))",gap:12}}>
-      <label>اسم المنتج <input required minLength={2} value={product} onChange={e=>setProduct(e.target.value)} style={{...css.input,display:"block",width:"100%"}}/></label>
-      <label>الكمية <input type="number" required min={1} max={999} value={qty} onChange={e=>setQty(Number(e.target.value))} style={{...css.input,display:"block",width:"100%"}}/></label>
-      <label>السعر للوحدة (ج.م) <input type="number" required min={0} step="0.01" value={price} onChange={e=>setPrice(Number(e.target.value))} style={{...css.input,display:"block",width:"100%"}}/></label>
+      {items.map((item,index)=> <fieldset key={index} style={{display:"grid",gap:8}}>
+       <legend>الصنف {index+1}</legend>
+       <label>اسم المنتج <input required minLength={2} maxLength={180} value={item.name} onChange={e=>setItems(items.map((row,i)=>i===index?{...row,name:e.target.value}:row))} style={css.input}/></label>
+       <label>الكمية <input type="number" required min={1} max={999} value={item.quantity} onChange={e=>setItems(items.map((row,i)=>i===index?{...row,quantity:Number(e.target.value)}:row))} style={css.input}/></label>
+       <label>السعر للوحدة <input type="number" required min={0} step="0.01" value={item.price} onChange={e=>setItems(items.map((row,i)=>i===index?{...row,price:Number(e.target.value)}:row))} style={css.input}/></label>
+       {items.length>1&&<button type="button" onClick={()=>setItems(items.filter((_,i)=>i!==index))}>حذف الصنف</button>}
+      </fieldset>)}
+      <button type="button" disabled={items.length>=50} onClick={()=>setItems([...items,{name:"",quantity:1,price:0}])}>إضافة صنف</button>
+      <label>شركة الشحن <input maxLength={100} value={carrier} onChange={e=>setCarrier(e.target.value)} style={css.input}/></label>
       <label>الشحن <input type="number" min={0} step="0.01" value={shipping} onChange={e=>setShipping(Number(e.target.value))} style={{...css.input,display:"block",width:"100%"}}/></label>
       <label>المدفوع مقدمًا <input type="number" min={0} step="0.01" value={prepaid} onChange={e=>setPrepaid(Number(e.target.value))} style={{...css.input,display:"block",width:"100%"}}/></label>
       <label>الخصم <input type="number" min={0} step="0.01" value={discount} onChange={e=>setDiscount(Number(e.target.value))} style={{...css.input,display:"block",width:"100%"}}/></label>
      </div>
-     <strong>إجمالي الطلب: {(qty*price+shipping-discount).toLocaleString("en-US")} ج.م</strong>
-     <button disabled={busy||Boolean(saved)} type="submit" style={{...css.button,opacity:busy||saved?0.6:1}}>
+     <strong>إجمالي الطلب: {amount.toLocaleString("en-US")} ج.م</strong>
+     {totalMismatch&&<p role="alert">الإجمالي المسموع {spokenTotal} ج.م مختلف عن الإجمالي المحسوب. راجع المبالغ أو <button type="button" onClick={()=>setSpokenTotal(undefined)}>اعتمد الإجمالي المحسوب</button>.</p>}
+     <button disabled={busy||Boolean(saved)||totalMismatch} type="submit" style={{...css.button,opacity:busy||saved?0.6:1}}>
       <Truck size={15} style={{display:"inline",marginLeft:7}}/>{busy?"جار التنفيذ":saved?"تم تسجيل الطلب التجريبي":"حفظ طلب تجريبي"}
      </button>
     </form>

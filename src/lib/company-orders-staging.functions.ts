@@ -1,3 +1,4 @@
+import { calculateOrderTotal } from "./inventory-planning";
 import {createServerFn} from "@tanstack/react-start";
 import {requireCompanyAccess} from "./company-access.server";
 import {neon} from "@neondatabase/serverless";
@@ -34,6 +35,7 @@ const CreateSchema=z.object({
  items:z.array(z.object({name:z.string().trim().min(2).max(200),
   sku:z.string().max(100).default(""),quantity:z.number().int().min(1).max(999),
   price:z.number().min(0).max(1_000_000)})).min(1).max(50),
+ carrier:z.string().trim().max(100).default(""),
  shipping:z.number().min(0).max(100_000).default(0),
  prepaid:z.number().min(0).max(1_000_000).default(0),
  discount:z.number().min(0).max(100_000).default(0),
@@ -46,7 +48,7 @@ export const createStagingOrder=createServerFn({method:"POST"})
   const db=stage();
   const place=await db`SELECT 1 FROM address_localities WHERE governorate=${data.governorate} AND name=${data.city} LIMIT 1`;
   if(!place.length)throw new Error("INVALID_ORDER_LOCATION");
-  const amount=data.items.reduce((sum,item)=>sum+item.quantity*item.price,0)+data.shipping-data.discount;
+  const amount=calculateOrderTotal(data.items,data.shipping,data.discount);
   if(data.prepaid>amount)throw new Error("PREPAID_EXCEEDS_TOTAL");
   // Reuse the production table schema and stable idempotency key, but only in a
   // separate staging clone. Do not call the live Orders Manager or Tala.
@@ -56,7 +58,7 @@ export const createStagingOrder=createServerFn({method:"POST"})
    VALUES(${data.creationRequestId}::uuid,${data.brand},now(),${data.customerName},${phone},'',
     ${data.governorate},${data.city},${data.address},'central-control-center-staging',
     'الدفع عند الاستلام',${data.prepaid},${data.shipping},${data.discount},
-    ${JSON.stringify(data.items)}::jsonb,'new','',0,'','', '',NULL,NULL)
+    ${JSON.stringify(data.items)}::jsonb,'new',${data.carrier},0,'','', '',NULL,NULL)
    ON CONFLICT(id) DO NOTHING RETURNING id::text,status,version`;
   const out=rows.length?rows:await db`SELECT id::text,status,version FROM orders WHERE id=${data.creationRequestId}::uuid
     AND source='central-control-center-staging' AND deleted_at IS NULL`;

@@ -1,27 +1,13 @@
-import { useEffect, useRef, useState, type FormEvent } from "react";
-import { Bot, Mic, Square } from "lucide-react";
+import { useState, type FormEvent } from "react";
+import { Bot } from "lucide-react";
 import { searchCompanyInventory } from "@/lib/company-inventory-assistant.functions";
 import { supabase } from "@/lib/supabase";
 
+import { VoiceInput } from "./VoiceInput";
+import { InventoryReorderPlanner } from "./InventoryReorderPlanner";
+import { inventoryVoiceCommand } from "@/lib/inventory-planning";
+
 type Result = Awaited<ReturnType<typeof searchCompanyInventory>>;
-
-type Recognition = {
-  lang: string;
-  onresult: ((event: { results: ArrayLike<ArrayLike<{ transcript: string }>> }) => void) | null;
-  onerror: ((event: { error: string }) => void) | null;
-  onend: (() => void) | null;
-  start(): void;
-  stop(): void;
-  abort(): void;
-};
-
-function speechConstructor() {
-  const browser = window as Window & {
-    SpeechRecognition?: new () => Recognition;
-    webkitSpeechRecognition?: new () => Recognition;
-  };
-  return browser.SpeechRecognition ?? browser.webkitSpeechRecognition;
-}
 
 export function CompanyInventoryAssistant() {
   const [query, setQuery] = useState("");
@@ -30,60 +16,32 @@ export function CompanyInventoryAssistant() {
   const [error, setError] = useState("");
   const [result, setResult] = useState<Result | null>(null);
 
-  const recognition = useRef<Recognition | null>(null);
-  const [voiceAvailable, setVoiceAvailable] = useState(false);
-  const [listening, setListening] = useState(false);
   const [voiceMessage, setVoiceMessage] = useState("");
+  const [plannerOpen, setPlannerOpen] = useState(false);
 
-  useEffect(() => {
-    setVoiceAvailable(Boolean(speechConstructor()));
-    return () => {
-      const active = recognition.current;
-      if (!active) return;
-      active.onresult = active.onerror = active.onend = null;
-      recognition.current = null;
-      active.abort();
-    };
-  }, []);
-
-  function toggleVoice() {
-    if (recognition.current) {
-      recognition.current.stop();
-      return;
-    }
-    const SpeechRecognition = speechConstructor();
-    if (!SpeechRecognition) return;
-    const active = new SpeechRecognition();
-    active.lang = "ar-EG";
-    active.onresult = (event) => {
-      const transcript = event.results[0]?.[0]?.transcript.trim().slice(0, 100);
-      if (transcript) setQuery(transcript);
-    };
-    active.onerror = ({ error }) => {
-      setVoiceMessage(
-        error === "not-allowed" || error === "service-not-allowed"
-          ? "اسمح للمتصفح باستخدام الميكروفون أو اكتب اسم المنتج."
-          : "تعذّر تحويل الصوت لنص. جرّب تاني أو اكتب اسم المنتج.",
-      );
-    };
-    active.onend = () => {
-      recognition.current = null;
-      setListening(false);
-    };
-    recognition.current = active;
-    try {
-      active.start();
-      setVoiceMessage("");
-      setListening(true);
-    } catch {
-      recognition.current = null;
-      setVoiceMessage("الميكروفون مش متاح دلوقتي.");
+  function handleVoice(transcript: string) {
+    const command = inventoryVoiceCommand(transcript);
+    if (command.action === "plan") {
+      setPlannerOpen(true);
+      setVoiceMessage("اتفتحت خطة إعادة الطلب.");
+    } else if (command.action === "clear") {
+      setQuery("");
+      setResult(null);
+      setError("");
+      setVoiceMessage("اتمسح البحث.");
+    } else if (command.action === "order") {
+      window.location.assign("/control-center-orders");
+    } else if (command.query) {
+      setQuery(command.query);
+      setResult(null);
+      setError("");
+      setVoiceMessage("راجع اسم المنتج واضغط بحث.");
     }
   }
 
   async function search(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (busy || recognition.current || !query.trim()) return;
+    if (busy || !query.trim()) return;
     setBusy(true);
     setError("");
     setResult(null);
@@ -124,18 +82,11 @@ export function CompanyInventoryAssistant() {
             disabled={busy}
           />
         </label>
-        {voiceAvailable && (
-          <button
-            type="button"
-            onClick={toggleVoice}
-            aria-pressed={listening}
-            disabled={busy}
-            className="flex items-center gap-2 rounded-lg border border-[#53505a] px-3 py-2 text-sm"
-          >
-            {listening ? <Square size={16} /> : <Mic size={16} />}
-            {listening ? "إيقاف الاستماع" : "إملاء صوتي"}
-          </button>
-        )}
+        <VoiceInput
+          onTranscript={handleVoice}
+          disabled={busy}
+          prompt="جاري الاستماع… قول اسم المنتج أو أمر البحث."
+        />
         <label className="flex items-center gap-2 text-sm">
           <input
             type="checkbox"
@@ -147,16 +98,12 @@ export function CompanyInventoryAssistant() {
         </label>
         <button
           className="rounded-lg bg-[#823292] px-4 py-2 text-sm font-bold disabled:opacity-50"
-          disabled={busy || listening || !query.trim()}
+          disabled={busy || !query.trim()}
         >
           {busy ? "جاري البحث…" : "بحث في المخزون"}
         </button>
       </form>
-      {(listening || voiceMessage) && (
-        <p className="mt-3 text-sm" role="status">
-          {voiceMessage || "جاري الاستماع… قول اسم المنتج."}
-        </p>
-      )}
+      {voiceMessage && <p role="status">{voiceMessage}</p>}
       {error && (
         <p className="mt-3 text-sm text-red-300" role="alert">
           {error}
@@ -208,6 +155,17 @@ export function CompanyInventoryAssistant() {
           )}
         </div>
       )}
+      <div className="mt-4 border-t border-[#27272a] pt-4">
+        <button
+          type="button"
+          aria-expanded={plannerOpen}
+          onClick={() => setPlannerOpen(!plannerOpen)}
+          className="text-sm font-bold text-purple-200"
+        >
+          خطة إعادة طلب المخزون
+        </button>
+        {plannerOpen && <InventoryReorderPlanner />}
+      </div>
     </section>
   );
 }

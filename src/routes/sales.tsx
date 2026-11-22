@@ -1,3 +1,5 @@
+import { VoiceInput } from "@/components/VoiceInput";
+import { parseSpokenSale } from "@/lib/inventory-planning";
 import { useCompany } from "@/lib/company";
 import { useCallback, useMemo, useState } from "react";
 
@@ -208,7 +210,7 @@ function SalesPage() {
      ============================================================ */
 
   const addToCart = useCallback(
-    (product: Product) => {
+    (product: Product, quantity = 1) => {
       setCart((prev) => {
         const existing = prev.find(
           (line) =>
@@ -217,7 +219,7 @@ function SalesPage() {
         );
 
         const nextQty =
-          (existing?.qty ?? 0) + 1;
+          (existing?.qty ?? 0) + quantity;
 
         if (
           nextQty >
@@ -244,7 +246,7 @@ function SalesPage() {
               ...prev,
               {
                 product,
-                qty: 1,
+                qty: quantity,
               },
             ];
       });
@@ -687,6 +689,22 @@ function SalesPage() {
           </div>
         </div>
 
+        <VoiceInput prompt="قول: تم بيع تيشيرت أسود عدد ٣ قطع" disabled={record.isPending} onTranscript={(text) => {
+          const sale = parseSpokenSale(text);
+          if (!sale) {
+            toast.error("قول اسم المنتج والكمية، مثل: تم بيع تيشيرت أسود عدد ٣ قطع.");
+            return;
+          }
+          const matches = (inventory.data ?? []).filter((product) =>
+            product.product_name.trim().toLowerCase() === sale.name.toLowerCase(),
+          );
+          if (matches.length !== 1 || !matches[0]) {
+            setManual(sale.name);
+            toast.error("راجع نتائج البحث واختار المنتج والمستودع بنفسك.");
+            return;
+          }
+          addToCart(matches[0], sale.quantity);
+        }} />
         <SellingSection
           camera={camera}
           setCamera={setCamera}
