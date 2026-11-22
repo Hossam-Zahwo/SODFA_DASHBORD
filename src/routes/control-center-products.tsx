@@ -1,3 +1,4 @@
+import { CatalogProductPhotos } from "@/components/CatalogProductPhotos";
 import { companyLocation, type CompanyProject } from "@/lib/company-navigation";
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import {createFileRoute,Link} from "@tanstack/react-router";
@@ -149,7 +150,7 @@ function CatalogAdmin(){
      {["المنتج","البراند","سعر المصدر","المخزون","حالة المصدر","مسودة هومي","مسودة صدفة"].map(x=><th key={x} style={{padding:11,textAlign:"right"}}>{x}</th>)}
     </tr></thead>
     <tbody>{filtered.map(p=><tr key={p.source+p.id} style={{borderBottom:"1px solid "+ui.border}}>
-     <td style={{padding:11}}><strong>{p.title}</strong>
+     <td style={{padding:11}}><div className="flex items-start gap-3"><CatalogProductPhotos title={p.title} photos={p.images}/><div><strong>{p.title}</strong>
        {p.source==="crm_manual"&&access?.canWrite&&(
         renaming?.id===p.id?<form onSubmit={event=>{event.preventDefault();void rename(p);}} className="mt-2 grid gap-2">
          <input aria-label="اسم المنتج الجديد" required minLength={3} maxLength={240} value={renaming.title}
@@ -158,7 +159,7 @@ function CatalogAdmin(){
          <button type="button" disabled={busy} onClick={()=>setRenaming(null)}>إلغاء</button>
         </form>:<button type="button" className="ms-2 text-purple-200 underline" disabled={busy}
           onClick={()=>setRenaming({id:p.id,title:p.title})}>تعديل الاسم</button>
-       )}{p.source==="sodfa_dashboard"&&<Link to="/sales" search={{product:p.id}} className="block text-purple-200 underline">ابحث عنه في شاشة البيع</Link>}<div style={{fontSize:10,color:"#999"}}>{p.source}</div></td>
+       )}{p.source==="sodfa_dashboard"&&<Link to="/sales" search={{product:p.id}} className="block text-purple-200 underline">ابحث عنه في شاشة البيع</Link>}<div style={{fontSize:10,color:"#999"}}>{p.source} · <bdi>{p.id}</bdi></div></div></div></td>
      <td>{p.brand==="homey"?"هومي":"صدفة"}</td>
      <td>{p.min_sale_price_egp==null?"—":Number(p.min_sale_price_egp).toLocaleString("en-US")+" ج.م"}</td>
      <td>{p.available_units==null?"—":Number(p.available_units).toLocaleString("en-US")}</td>

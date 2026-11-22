@@ -17,7 +17,8 @@ const RequestSchema = z.object({
 });
 
 type Summary = { brand: string; status: string; count: number };
-type Product = { id: string; title: string; brand: string; source: string; draft_visibility: boolean | null; draft_price: number | null;
+type CatalogImage = { url: string; fallback: string | null; variantId: string; label: string | null };
+type Product = { images?: CatalogImage[]; id: string; title: string; brand: string; source: string; draft_visibility: boolean | null; draft_price: number | null;
   source_status: string | null; available_units: number | null; min_sale_price_egp: number | null; max_sale_price_egp: number | null;
   homey_draft: boolean | null; sodfa_draft: boolean | null; homey_price: number | null; sodfa_price: number | null;
   source_refreshed_at: string | null;
@@ -99,10 +100,33 @@ export const getCompanyWorkspaceData = createServerFn({ method: "POST" })
                AND (${search} = '' OR lower(p.title) LIKE '%' || ${search} || '%')
              ORDER BY p.title LIMIT 500`,
         ]);
+        const products = productResult.status === "fulfilled" ? productResult.value as Product[] : [];
+        if (products.length) {
+          try {
+            const imageRows = await db`SELECT p.source_system_id AS source,p.source_product_id AS id,
+                i.image_url AS url,i.fallback_url AS fallback,i.variant_id AS "variantId",i.variant_label AS label
+              FROM catalog_image_references i JOIN product_references p ON p.id=i.product_reference_id
+              WHERE (${brandCondition} = 'all' OR p.brand_id = ${brandCondition})
+                AND p.source_product_id=ANY(${products.map(product=>product.id)}::text[])
+              ORDER BY (i.variant_id<>'') ASC,i.sort_order,i.image_url`;
+            const imagesByProduct = new Map<string,CatalogImage[]>();
+            for (const row of imageRows) {
+              const key = JSON.stringify([row["source"],row["id"]]);
+              const images = imagesByProduct.get(key) ?? [];
+              if (images.length < 24) images.push(row as CatalogImage);
+              imagesByProduct.set(key,images);
+            }
+            for (const product of products) {
+              product.images = imagesByProduct.get(JSON.stringify([product.source,product.id])) ?? [];
+            }
+          } catch {
+            // Keep the product catalog usable if the preview image index is unavailable.
+          }
+        }
         response.catalog = {
           connected: countResult.status === "fulfilled" || productResult.status === "fulfilled",
           counts: countResult.status === "fulfilled" ? countResult.value as Count[] : [],
-          products: productResult.status === "fulfilled" ? productResult.value as Product[] : [],
+          products,
           error: countResult.status === "rejected" || productResult.status === "rejected"
             ? "جزء من فهرس المنتجات تعذر تحميله؛ اعرض البيانات المتاحة وأعد التحديث" : undefined,
         };

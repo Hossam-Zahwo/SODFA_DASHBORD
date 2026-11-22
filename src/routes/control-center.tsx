@@ -1,3 +1,4 @@
+import { CatalogProductPhotos } from "@/components/CatalogProductPhotos";
 import { companyLocation, companySections, ordersManagerUrl, type CompanyProject as Project, type CompanySection as Tab } from "@/lib/company-navigation";
 import { OrderMarginCalculator } from "@/components/OrderMarginCalculator";
 import { useEffect, useRef, useState } from "react";
@@ -205,10 +206,10 @@ function ControlCenter(){
       </div>
       {draftMessage&&<div role="status" style={{padding:10,marginTop:10,background:ui.soft,borderRadius:8,fontSize:12}}>{draftMessage}</div>}
       <div style={{overflowX:"auto",marginTop:18}}>
-      {tab==="products"?<table style={{width:"100%",minWidth:650,borderCollapse:"collapse",fontSize:12}}><thead><tr style={{color:ui.light,borderBottom:"1px solid "+ui.border}}>{["المنتج","المشروع","المصدر","إعدادات العرض المقترحة (مسودة)"].map(h=><th key={h} style={{textAlign:"right",padding:12}}>{h}</th>)}</tr></thead><tbody>{rowProducts.map(p=><tr key={p.source+p.id} style={{borderBottom:"1px solid "+ui.border}}><td style={{padding:12}}>
+      {tab==="products"?<table style={{width:"100%",minWidth:650,borderCollapse:"collapse",fontSize:12}}><thead><tr style={{color:ui.light,borderBottom:"1px solid "+ui.border}}>{["المنتج","المشروع","المصدر","إعدادات العرض المقترحة (مسودة)"].map(h=><th key={h} style={{textAlign:"right",padding:12}}>{h}</th>)}</tr></thead><tbody>{rowProducts.map(p=><tr key={p.source+p.id} style={{borderBottom:"1px solid "+ui.border}}><td style={{padding:12}}><div className="flex items-center gap-3"><CatalogProductPhotos title={p.title} photos={p.images}/><div>
         <span>{p.title}</span>
         {p.source==="sodfa_dashboard"&&<Link to="/sales" search={{product:p.id}} className="mt-1 block text-purple-200 underline">ابحث عنه في شاشة البيع</Link>}
-      </td><td>{p.brand==="homey"?"هومي":"صدفة"}</td><td>{p.source}</td><td><div style={{display:"flex",alignItems:"center",flexWrap:"wrap",gap:8}}>
+      </div></div></td><td>{p.brand==="homey"?"هومي":"صدفة"}</td><td>{p.source}</td><td><div style={{display:"flex",alignItems:"center",flexWrap:"wrap",gap:8}}>
         <Tag tone={p.draft_visibility===null?"amber":"purple"}>{p.draft_visibility===null?"لم تُحدد":p.draft_visibility?"مقترح للعرض":"مقترح للإخفاء"}</Tag>
         <button type="button" disabled={!bridge?.canWriteCatalogDrafts||Boolean(draftBusy)} onClick={()=>void updateDraft(p,true)}
           style={{border:"1px solid "+ui.purple,borderRadius:8,background:ui.soft,color:"white",padding:"6px 9px",cursor:"pointer",fontSize:11}}>اقتراح عرض</button>
