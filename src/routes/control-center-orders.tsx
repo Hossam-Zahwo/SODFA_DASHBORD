@@ -1,3 +1,4 @@
+import { StagingOrderProductPicker } from "@/components/StagingOrderProductPicker";
 import { VoiceInput } from "@/components/VoiceInput";
 import { calculateOrderTotal, parseSpokenOrder } from "@/lib/inventory-planning";
 import {useEffect,useState,type FormEvent} from "react";
@@ -18,7 +19,7 @@ function OrderOperations(){
  const [brand,setBrand]=useState<"homey"|"sodfa">("homey");
  const [name,setName]=useState(""),[phone,setPhone]=useState("");
  const [gov,setGov]=useState(""),[city,setCity]=useState(""),[address,setAddress]=useState("");
- const [items,setItems]=useState([{name:"",quantity:1,price:0}]);
+ const [items,setItems]=useState<Array<{name:string;quantity:number;price:number;catalogId?:string}>>([{name:"",quantity:1,price:0}]);
  const [carrier,setCarrier]=useState("");
  const [spokenTotal,setSpokenTotal]=useState<number>();
 
@@ -92,7 +93,7 @@ function OrderOperations(){
     <p style={{fontSize:12}}>للأصناف قول: المنتجات تيشيرت عدد ٢ سعر ١٠٠، ومنتج بنطلون عدد ١ سعر ٢٠٠.</p>
     <form onSubmit={e=>void create(e)} style={{display:"grid",gap:15}}>
      <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(220px,1fr))",gap:12}}>
-      <label>البراند <select value={brand} onChange={e=>setBrand(e.target.value as "homey"|"sodfa")} style={{...css.input,display:"block",width:"100%"}}><option value="homey">هومي</option><option value="sodfa">صدفة</option></select></label>
+      <label>البراند <select value={brand} onChange={e=>{setBrand(e.target.value as "homey"|"sodfa");setItems(items.map(({name,quantity,price})=>({name,quantity,price})));}} style={{...css.input,display:"block",width:"100%"}}><option value="homey">هومي</option><option value="sodfa">صدفة</option></select></label>
       <label>اسم العميل <input required minLength={2} value={name} onChange={e=>setName(e.target.value)} style={{...css.input,display:"block",width:"100%"}}/></label>
       <label>رقم الموبايل <input required value={phone} onChange={e=>setPhone(e.target.value)} placeholder="01..." style={{...css.input,display:"block",width:"100%"}}/></label>
       <label>المحافظة <select required value={gov} onChange={e=>{setGov(e.target.value);setCity("")}} style={{...css.input,display:"block",width:"100%"}}><option value="">اختر المحافظة</option>{Object.keys(places).map(x=><option key={x}>{x}</option>)}</select></label>
@@ -103,7 +104,10 @@ function OrderOperations(){
      <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(180px,1fr))",gap:12}}>
       {items.map((item,index)=> <fieldset key={index} style={{display:"grid",gap:8}}>
        <legend>الصنف {index+1}</legend>
-       <label>اسم المنتج <input required minLength={2} maxLength={180} value={item.name} onChange={e=>setItems(items.map((row,i)=>i===index?{...row,name:e.target.value}:row))} style={css.input}/></label>
+       <label>اسم المنتج <input required minLength={2} maxLength={180} value={item.name} onChange={e=>setItems(items.map((row,i)=>i===index?{name:e.target.value,quantity:row.quantity,price:row.price}:row))} style={css.input}/></label>
+       {item.catalogId ? <small>صنف مرتبط بالكتالوج · {item.catalogId}</small> :
+        <StagingOrderProductPicker key={JSON.stringify([brand,item.name])} brand={brand} name={item.name}
+         onSelect={product=>setItems(rows=>rows.map((row,i)=>i===index?{...row,name:product.name,catalogId:product.id}:row))}/>}
        <label>الكمية <input type="number" required min={1} max={999} value={item.quantity} onChange={e=>setItems(items.map((row,i)=>i===index?{...row,quantity:Number(e.target.value)}:row))} style={css.input}/></label>
        <label>السعر للوحدة <input type="number" required min={0} step="0.01" value={item.price} onChange={e=>setItems(items.map((row,i)=>i===index?{...row,price:Number(e.target.value)}:row))} style={css.input}/></label>
        {items.length>1&&<button type="button" onClick={()=>setItems(items.filter((_,i)=>i!==index))}>حذف الصنف</button>}
