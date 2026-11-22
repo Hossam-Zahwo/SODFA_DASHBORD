@@ -42,6 +42,7 @@ export const getCompanyWorkspaceData = createServerFn({ method: "POST" })
     // All queries are server-side. Order PII is only exposed to operators/managers, never viewers.
     const response: {
       fetchedAt: string;
+      canWriteCatalogDrafts: boolean;
       accessRole: "admin"|"viewer"|"operator"|"manager";
       catalog: { connected: boolean; error?: string | undefined; counts: Count[]; products: Product[] };
       operations: {
@@ -56,6 +57,7 @@ export const getCompanyWorkspaceData = createServerFn({ method: "POST" })
     } = {
       fetchedAt: new Date().toISOString(),
       accessRole:access.role,
+      canWriteCatalogDrafts: access.role!=="viewer" && Boolean(process.env["CRM_DRAFT_WRITE_URL"]),
       catalog: { connected: false, counts: [], products: [] },
       operations: { connected: false, summary: [], orders: [], customers: [], shipments: [] },
       sodfa: { connected:false, inventorySummary:null, salesSummary:null, items:[] },
