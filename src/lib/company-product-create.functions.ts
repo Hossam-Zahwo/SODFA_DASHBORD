@@ -18,7 +18,7 @@ export const createCompanyProductDraft = createServerFn({method:"POST"})
     await requireCompanyAccess(data.token,data.brand,"approve");
     await requireCompanyAccess(data.token,data.brand==="homey"?"sodfa":"homey","approve");
   }
-  const writerUrl=process.env.CRM_DRAFT_WRITE_URL;
+  const writerUrl=process.env["CRM_DRAFT_WRITE_URL"];
   if(!writerUrl)throw new Error("DRAFT_STORAGE_NOT_CONFIGURED");
   const sql=neon(writerUrl);
   // Idempotency: retrying the same requestId never creates a second catalog row.
@@ -30,7 +30,7 @@ export const createCompanyProductDraft = createServerFn({method:"POST"})
   const existing=created.length?created:await sql`SELECT id,title FROM product_references
       WHERE source_system_id='crm_manual' AND source_product_id=${data.requestId} LIMIT 1`;
   if(!existing.length)throw new Error("DRAFT_CREATION_FAILED");
-  const id=Number(existing[0].id);
+  const id=Number(existing[0]!["id"]);
   for(const channel of Array.from(new Set(data.channels))){
     const checked=true;
     await sql`INSERT INTO channel_listing_drafts
