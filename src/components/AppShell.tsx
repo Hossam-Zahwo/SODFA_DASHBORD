@@ -168,6 +168,19 @@ function NavLinks({
         <Building2 className="h-5 w-5 text-[#A94FBC]" />
         <span>مركز التحكم بالمشاريع</span>
       </Link>
+      <Link
+        to="/control-center-social"
+        onClick={onNavigate}
+        className={cn(
+          "group flex items-center gap-3 rounded-xl px-4 py-3 text-[15px] font-semibold transition-all",
+          pathname.startsWith("/control-center-social")
+            ? "bg-[#2A1530] text-white"
+            : "text-zinc-300 hover:bg-[#17121A] hover:text-white",
+        )}
+      >
+        <Building2 className="h-5 w-5 text-[#A94FBC]" />
+        <span>فيسبوك وإنستجرام</span>
+      </Link>
       {NAV.map(({ to, key, icon: Icon }) => {
         const active =
           to === "/"
