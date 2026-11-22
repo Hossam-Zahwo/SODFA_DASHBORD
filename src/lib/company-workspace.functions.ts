@@ -45,9 +45,9 @@ export const getCompanyWorkspaceData = createServerFn({ method: "POST" })
       fetchedAt: string;
       canWriteCatalogDrafts: boolean;
       accessRole: "admin"|"viewer"|"operator"|"manager";
-      catalog: { connected: boolean; error?: string | undefined; counts: Count[]; products: Product[] };
+      catalog: { connected: boolean; countsAvailable: boolean; productsAvailable: boolean; error?: string | undefined; counts: Count[]; products: Product[] };
       operations: {
-        connected: boolean; error?: string | undefined; summary: Summary[];
+        connected: boolean; available: { summary: boolean; orders: boolean; customers: boolean; shipments: boolean }; error?: string | undefined; summary: Summary[];
         orders: OrderRow[]; customers: Count[]; shipments: Shipment[];
       };
       sodfa: { connected: boolean; error?: string | undefined;
@@ -59,8 +59,8 @@ export const getCompanyWorkspaceData = createServerFn({ method: "POST" })
       fetchedAt: new Date().toISOString(),
       accessRole:access.role,
       canWriteCatalogDrafts: access.role!=="viewer" && Boolean(process.env["CRM_DRAFT_WRITE_URL"]),
-      catalog: { connected: false, counts: [], products: [] },
-      operations: { connected: false, summary: [], orders: [], customers: [], shipments: [] },
+      catalog: { connected: false, countsAvailable:false, productsAvailable:false, counts: [], products: [] },
+      operations: { connected: false, available:{summary:false,orders:false,customers:false,shipments:false}, summary: [], orders: [], customers: [], shipments: [] },
       sodfa: { connected:false, inventorySummary:null, salesSummary:null, items:[] },
     };
     // Scope is applied to DB reads, not only the rendered interface.
@@ -125,6 +125,8 @@ export const getCompanyWorkspaceData = createServerFn({ method: "POST" })
         }
         response.catalog = {
           connected: countResult.status === "fulfilled" || productResult.status === "fulfilled",
+          countsAvailable: countResult.status === "fulfilled",
+          productsAvailable: productResult.status === "fulfilled",
           counts: countResult.status === "fulfilled" ? countResult.value as Count[] : [],
           products,
           error: countResult.status === "rejected" || productResult.status === "rejected"
@@ -169,6 +171,12 @@ export const getCompanyWorkspaceData = createServerFn({ method: "POST" })
         const okay = <T,>(x:PromiseSettledResult<T[]>)=>x.status==="fulfilled"?x.value:[];
         response.operations = {
           connected: summaryResult.status==="fulfilled" || orderResult.status==="fulfilled",
+          available: {
+            summary: summaryResult.status === "fulfilled",
+            orders: orderResult.status === "fulfilled",
+            customers: customerResult.status === "fulfilled",
+            shipments: shipmentResult.status === "fulfilled",
+          },
           summary: okay(summaryResult) as Summary[],
           orders: okay(orderResult) as OrderRow[],
           customers: okay(customerResult) as Count[],

@@ -4,26 +4,6 @@
 
 @custom-variant dark (&:is(.dark *));
 
-/* ============================================================
-   SODFA FONTS
-   ============================================================ */
-
-@font-face {
-  font-family: "Lama Sans";
-  src: url("/fonts/LamaSans-BlackItalic.ttf") format("truetype");
-  font-weight: 900;
-  font-style: italic;
-  font-display: swap;
-}
-
-@font-face {
-  font-family: "Madika Arabic";
-  src: url("/fonts/MadikaArabic-ExtraBold.ttf") format("truetype");
-  font-weight: 800;
-  font-style: normal;
-  font-display: swap;
-}
-
 /*
  * Design system definition.
  *
