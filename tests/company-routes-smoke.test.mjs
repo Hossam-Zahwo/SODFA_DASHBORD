@@ -5,7 +5,7 @@ import { setTimeout as delay } from "node:timers/promises";
 
 const port = 4186;
 const base = `http://127.0.0.1:${port}`;
-const routes = ["/","/login","/control-center","/control-center-products","/control-center-orders","/control-center-security"];
+const routes = ["/","/login","/control-center","/control-center-products","/control-center-orders","/control-center-security","/control-center-social"];
 
 test("CRM SSR routes return HTML without 500 errors", { timeout: 40000 }, async (t) => {
   const server = spawn(process.execPath, ["node_modules/vite/bin/vite.js", "dev", "--host", "127.0.0.1", "--port", String(port), "--strictPort"], {
