@@ -10,7 +10,7 @@
     "preview": "vite preview",
     "lint": "eslint .",
     "format": "prettier --write .",
-    "test:crm": "node --experimental-strip-types --test tests/company-draft-selection.test.mjs"
+    "test:crm": "node --experimental-strip-types --test tests/company-draft-selection.test.mjs tests/company-routes-smoke.test.mjs"
   },
   "dependencies": {
     "@hookform/resolvers": "^5.2.2",
