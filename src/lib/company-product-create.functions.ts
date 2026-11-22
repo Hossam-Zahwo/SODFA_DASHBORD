@@ -31,8 +31,8 @@ export const createCompanyProductDraft = createServerFn({method:"POST"})
       WHERE source_system_id='crm_manual' AND source_product_id=${data.requestId} LIMIT 1`;
   if(!existing.length)throw new Error("DRAFT_CREATION_FAILED");
   const id=Number(existing[0].id);
-  for(const channel of ["homey_web","sodfa_web"] as const){
-    const checked=data.channels.includes(channel);
+  for(const channel of Array.from(new Set(data.channels))){
+    const checked=true;
     await sql`INSERT INTO channel_listing_drafts
       (product_reference_id,channel_id,intended_visibility,proposed_price_egp,updated_by,brand_cross_listing)
       VALUES (${id},${channel},${checked},${data.proposedPrice},${actor.id},
