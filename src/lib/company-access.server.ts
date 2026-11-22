@@ -24,7 +24,7 @@ export async function requireCompanyAccess(token:string,project:Workspace,capabi
     .eq("id",user.id).maybeSingle();
   if(profileError)throw new Error("ROLE_LOOKUP_FAILED");
   const isAdmin=profile?.role==="admin";
-  if(isAdmin)return {id:user.id,role:"admin" as const,isAdmin:true};
+  if(isAdmin)return {id:user.id,role:"admin" as const,isAdmin:true,client:asUser};
   if(project==="all"||capability==="admin")throw new Error("ACCESS_DENIED");
   const pg=process.env["CRM_CATALOG_READ_URL"];
   if(!pg)throw new Error("ACCESS_POLICY_UNAVAILABLE");
@@ -33,5 +33,5 @@ export async function requireCompanyAccess(token:string,project:Workspace,capabi
   if(!rows.length)throw new Error("ACCESS_DENIED");
   const role=String(rows[0]!["responsibility"]) as WorkspaceRole;
   if((permissionLevels[role]??0)<needed[capability])throw new Error("ACCESS_DENIED");
-  return {id:user.id,role,isAdmin:false};
+  return {id:user.id,role,isAdmin:false,client:asUser};
 }
