@@ -97,6 +97,10 @@ import {
    ============================================================ */
 
 export const Route = createFileRoute("/sales")({
+  validateSearch: (search: Record<string, unknown>): { product?: string } =>
+    typeof search["product"] === "string" && search["product"].trim()
+      ? { product: search["product"].trim().slice(0, 180) }
+      : {},
   head: () => ({
     meta: [
       {
@@ -174,7 +178,8 @@ function SalesPage() {
   const sales = useSales();
 
   const [cart, setCart] = useState<CartLine[]>([]);
-  const [manual, setManual] = useState("");
+  const { product } = Route.useSearch();
+  const [manual, setManual] = useState(product ?? "");
   const [camera, setCamera] = useState(false);
 
   const [range, setRange] =

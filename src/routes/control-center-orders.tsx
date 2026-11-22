@@ -1,3 +1,4 @@
+import { companyLocation, type CompanyProject } from "@/lib/company-navigation";
 import { StagingOrderProductPicker } from "@/components/StagingOrderProductPicker";
 import { VoiceInput } from "@/components/VoiceInput";
 import { calculateOrderTotal, parseSpokenOrder } from "@/lib/inventory-planning";
@@ -8,7 +9,14 @@ import {supabase} from "@/lib/supabase";
 import {getStagingLocations,createStagingOrder,confirmStagingOrder} from "@/lib/company-orders-staging.functions";
 import {Truck,ShieldCheck,RefreshCcw} from "lucide-react";
 
-export const Route=createFileRoute("/control-center-orders")({component:OrderOperations});
+export const Route=createFileRoute("/control-center-orders")({
+ validateSearch: (search:Record<string,unknown>): { project?: CompanyProject; brand?: "homey"|"sodfa" }=>{
+  const {project}=companyLocation(search);
+  const brand=search["brand"];
+  return {...(project?{project}:{}),...(brand==="homey"||brand==="sodfa"?{brand}:{})};
+ },
+ component:OrderOperations
+});
 const css={
  card:{background:"#111114",border:"1px solid #27272A",borderRadius:16,padding:20} as const,
  input:{background:"#08080a",color:"white",border:"1px solid #4a3750",padding:"9px 12px",borderRadius:9,minWidth:100} as const,
@@ -16,7 +24,8 @@ const css={
 };
 function OrderOperations(){
  const [places,setPlaces]=useState<Record<string,string[]>>({});
- const [brand,setBrand]=useState<"homey"|"sodfa">("homey");
+ const context=Route.useSearch();
+ const [brand,setBrand]=useState<"homey"|"sodfa">(context.brand??"homey");
  const [name,setName]=useState(""),[phone,setPhone]=useState("");
  const [gov,setGov]=useState(""),[city,setCity]=useState(""),[address,setAddress]=useState("");
  const [items,setItems]=useState<Array<{name:string;quantity:number;price:number;catalogId?:string}>>([{name:"",quantity:1,price:0}]);
@@ -81,7 +90,7 @@ function OrderOperations(){
  function reset(){setSaved(null);setOrderText("");setRequestId(crypto.randomUUID());setName("");setPhone("");setItems([{name:"",quantity:1,price:0}]);setAddress("");setNotice("");setCarrier("");setShipping(0);setPrepaid(0);setDiscount(0);setSpokenTotal(undefined)}
  return <AppShell title="إضافة وتأكيد الطلبات">
   <div dir="rtl" style={{fontFamily:"Cairo,sans-serif",maxWidth:1050,margin:"0 auto",color:"white",paddingBottom:60}}>
-   <Link to="/control-center" style={{color:"#C98ADB",fontSize:12}}>مركز الشركة / الرجوع</Link>
+   <Link to="/control-center" search={{project:context.project??"orders",section:"orders"}} style={{color:"#C98ADB",fontSize:12}}>مركز الشركة / الرجوع</Link>
    <h1 style={{fontSize:26,margin:"10px 0"}}>إضافة الطلبات وتأكيدها</h1>
    <div style={{...css.card,marginBottom:16,border:"1px solid #875d33",background:"#201914"}}>
     <ShieldCheck size={18} style={{display:"inline",marginLeft:8}}/>

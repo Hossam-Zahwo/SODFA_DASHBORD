@@ -1,5 +1,6 @@
+import { companyLocation, companySections, ordersManagerUrl, type CompanyProject as Project, type CompanySection as Tab } from "@/lib/company-navigation";
 import { OrderMarginCalculator } from "@/components/OrderMarginCalculator";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { CompanyInventoryAssistant } from "@/components/CompanyInventoryAssistant";
 import { AppShell } from "@/components/AppShell";
@@ -7,15 +8,13 @@ import { supabase } from "@/lib/supabase";
 import { getCompanyWorkspaceData } from "@/lib/company-workspace.functions";
 import { saveChannelDraft } from "@/lib/company-channel-drafts.functions";
 import {
-  Activity, Boxes, Bot, Building2, ChartNoAxesCombined, ClipboardList,
-  Database, ExternalLink, LockKeyhole, Package, RefreshCw, Search,
+  Activity, Boxes, Building2, ChartNoAxesCombined, ClipboardList,
+  Database, ExternalLink, Package, RefreshCw, Search,
   ShieldCheck, ShoppingCart, Truck, Users, Warehouse, FileDown,
-  AlertTriangle, Store, CircleCheck, ArrowLeftRight,
+  AlertTriangle, Store,
 } from "lucide-react";
 
-export const Route = createFileRoute("/control-center")({ component: ControlCenter });
-type Project = "all" | "homey" | "sodfa" | "sodfa_web" | "orders";
-type Tab = "dashboard" | "products" | "orders" | "shipping" | "customers" | "finance" | "settings";
+export const Route = createFileRoute("/control-center")({ validateSearch: companyLocation, component: ControlCenter });
 type Bridge = Awaited<ReturnType<typeof getCompanyWorkspaceData>>;
 const ui = {
   bg: "#0A0A0C", card: "#111114", border: "#27272A", purple: "#823292",
@@ -47,10 +46,14 @@ function Tag({children,tone="purple"}:{children:React.ReactNode;tone?:"purple"|"
  return <span style={{display:"inline-block",color,background:tone==="green"?"#163529":tone==="amber"?"#382a16":ui.soft,borderRadius:8,padding:"3px 9px",fontSize:11}}>{children}</span>;
 }
 function ControlCenter(){
-  const [project,setProject]=useState<Project>("all");
-  const [tab,setTab]=useState<Tab>("dashboard");
+  const location=Route.useSearch();
+  const navigate=Route.useNavigate();
+  const project=location.project??"all";
   const [search,setSearch]=useState("");
-  const [bridge,setBridge]=useState<Bridge|null>(null);
+  const [loaded,setLoaded]=useState<{project:Project;data:Bridge}|null>(null);
+  const bridge=loaded?.project===project?loaded.data:null;
+  const availableSections=companySections(project,bridge?.accessRole==="viewer");
+  const tab=location.section&&availableSections.includes(location.section)?location.section:"dashboard";
   const [loading,setLoading]=useState(true);
   const [loadError,setLoadError]=useState("");
   const [lastRefresh,setLastRefresh]=useState("");
@@ -61,15 +64,15 @@ function ControlCenter(){
   useEffect(()=>{void refresh(project);},[project]);
   async function refresh(scope:Project=project){
     const sequence=++fetchSequence.current;
-    setBridge(null);
+    setLoaded(null);
     setLoading(true);setLoadError("");
     try {
       const {data:{session}}=await supabase.auth.getSession();
       if(!session?.access_token) throw new Error("سجل دخولك بحساب صدفة لإتاحة لوحة المشاريع");
       const next=await getCompanyWorkspaceData({data:{token:session.access_token,brand:scope==="homey"?"homey":scope==="sodfa"||scope==="sodfa_web"?"sodfa":"all",project:scope,query:""}});
       if(sequence!==fetchSequence.current)return;
-      setBridge(next);setLastRefresh(new Date(next.fetchedAt).toLocaleString("en-GB"));
-    }catch(e){if(sequence===fetchSequence.current){setLoadError(e instanceof Error?e.message:"فشل قراءة بيانات الربط");setBridge(null)}}
+      setLoaded({project:scope,data:next});setLastRefresh(new Date(next.fetchedAt).toLocaleString("en-GB"));
+    }catch(e){if(sequence===fetchSequence.current){setLoadError(e instanceof Error?e.message:"فشل قراءة بيانات الربط");setLoaded(null)}}
     finally{if(sequence===fetchSequence.current)setLoading(false)}
   }
   async function updateDraft(product:NonNullable<Bridge>["catalog"]["products"][number], visible:boolean){
@@ -89,7 +92,14 @@ function ControlCenter(){
     }catch(e){setDraftMessage("فشل حفظ المسودة: "+(e instanceof Error?e.message:"خطأ غير معروف"))}
     finally {setDraftBusy("")}
   }
-  const selectProject=(id:Project)=>{setSelectedOrderId("");setProject(id);setTab("dashboard");setSearch("");setDraftMessage("")};
+  function openWorkspace(nextProject:Project,nextSection:Tab){
+    setSelectedOrderId("");
+    setSearch("");
+    setDraftMessage("");
+    void navigate({search:{project:nextProject,section:nextSection}});
+  }
+  const setTab=(section:Tab)=>openWorkspace(project,section);
+  const selectProject=(next:Project)=>openWorkspace(next,companySections(next).includes(tab)?tab:"dashboard");
   const chosen=projectData.find(p=>p.id===project)!;
   const selectedBrand=project==="homey"?"homey":project==="sodfa"||project==="sodfa_web"?"sodfa":"all";
   const statuses=bridge?.operations.summary.filter(x=>selectedBrand==="all"||x.brand===selectedBrand)??[];
@@ -100,17 +110,12 @@ function ControlCenter(){
   const rowProducts=bridge?.catalog.products.filter(x=>(selectedBrand==="all"||x.brand===selectedBrand)&&x.title.toLowerCase().includes(search.toLowerCase()))??[];
   const rowOrders=bridge?.operations.orders.filter(x=>(selectedBrand==="all"||x.brand===selectedBrand)&&x.id.toLowerCase().includes(search.toLowerCase()))??[];
   const selectedOrder=bridge?.operations.orders.find(o=>o.id===selectedOrderId && (selectedBrand==="all"||o.brand===selectedBrand));
-  const inventory=bridge?.sodfa.items??[];
   const sodfaTotalSales=Number(bridge?.sodfa.salesSummary?.sales_egp??0);
   const canSeeSodfaStock=project==="sodfa"||project==="all";
   const sodfaInventoryValue=bridge?.sodfa.inventorySummary?.cost_value==null?null:Number(bridge.sodfa.inventorySummary.cost_value);
-  const stockMissing=(bridge?.catalog.products??[]).filter(x=>x.source==="sodfa_dashboard"&&x.available_units===null).length;
-  const snapshotDate=bridge?.catalog.products.reduce<string|null>((last,p)=>p.source_refreshed_at&&(!last||p.source_refreshed_at>last)?p.source_refreshed_at:last,null)??null;
-  const allowedTabsBase=project==="orders"?tabData.filter(t=>["dashboard","orders","shipping","customers","settings"].includes(t.id)):
-    project==="sodfa_web"?tabData.filter(t=>["dashboard","products","settings"].includes(t.id)):
-    project==="homey"?tabData.filter(t=>t.id!=="finance"):
-    tabData;
-  const allowedTabs=bridge?.accessRole==="viewer"?allowedTabsBase.filter(t=>t.id!=="finance"):allowedTabsBase;
+  const allowedTabs=availableSections.map(section=>tabData.find(item=>item.id===section)!);
+  const orderUrl="/control-center-orders?"+new URLSearchParams({project,...(selectedBrand==="all"?{}:{brand:selectedBrand})});
+  const catalogUrl="/control-center-products?"+new URLSearchParams({project:project==="homey"?"homey":"sodfa",workspace:project});
   const channelNotice=project==="sodfa_web"?"قائمة صدفة المعروضة هنا فهرس مخزون صدفة وليس تأكيدًا بأنها منشورة حاليًا في الموقع. ربط النشر الفعلي ما زال مطلوبًا.":project==="homey"?"منتجات هومي من الفهرس المركزي المستورد. حالة نشر كل منتج وأسعاره الحية لم تتم مزامنتها بعد.":"كل قناة لها صلاحيات نشر مستقلة، ويمكن حفظ اقتراحات العرض والإخفاء في قاعدة CRM المستقلة كمسودات؛ نشرها فعليًا على المتاجر لم يُفعّل بعد.";
   function downloadCsv(){
     const rows=tab==="products"?[["Source ID","Brand","Name","Source"],...rowProducts.map(p=>[p.id,p.brand,p.title,p.source])]:[["Order ID","Brand","Status","Created","Carrier"],...rowOrders.map(o=>[o.id,o.brand,o.status,o.created_at,o.shipping_company??""])];
@@ -121,44 +126,62 @@ function ControlCenter(){
   }
   return <AppShell title="مركز تحكم الشركة">
   <div dir="rtl" style={{fontFamily:"Cairo, sans-serif",color:"#fff",maxWidth:1550,margin:"0 auto",padding:"10px 0 50px"}}>
-    <div style={{display:"flex",alignItems:"start",justifyContent:"space-between",gap:14,flexWrap:"wrap"}}>
-      <div><div style={{fontSize:12,color:ui.light,fontWeight:700}}>SODFA · COMPANY OPERATIONS</div><h1 style={{fontSize:27,fontWeight:900,margin:"5px 0"}}>مركز إدارة الشركة</h1><div style={{fontSize:12,color:ui.muted}}>لوحات داخلية مخصصة للمشاريع، بنفس ألوان صدفة الأصلي</div></div>
-      <div style={{display:"flex",alignItems:"center",gap:10,flexWrap:"wrap"}}><Tag tone="amber"><LockKeyhole size={12} style={{display:"inline",marginLeft:5}}/>Preview · قراءة فقط</Tag><button onClick={()=>void refresh(project)} disabled={loading} style={{background:ui.soft,border:"1px solid "+ui.purple,padding:"9px 14px",borderRadius:10,color:"white",cursor:"pointer",display:"flex",gap:8,alignItems:"center"}}><RefreshCw size={15}/>{loading?"جاري التحديث":"تحديث البيانات"}</button></div>
-    </div>
-    <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(180px,1fr))",gap:10,margin:"23px 0 15px"}}>
-      {projectData.map(p=><button key={p.id} type="button" onClick={()=>selectProject(p.id)} style={{...panel,textAlign:"right",cursor:"pointer",background:p.id===project?ui.soft:ui.card,border:"1px solid "+(p.id===project?ui.purple:ui.border)}}><div style={{display:"flex",alignItems:"center",gap:10}}><p.icon size={23} color={p.id===project?"#dda9f4":ui.light}/><strong style={{fontSize:13}}>{p.name}</strong></div><div style={{fontSize:11,color:ui.muted,marginTop:8}}>{p.detail}</div></button>)}
-    </div>
-    <div style={{...panel,padding:14,marginBottom:14}}>
-      <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",flexWrap:"wrap",gap:12}}>
-        <div><strong style={{fontSize:18}}>{chosen.name}</strong><div style={{fontSize:11,color:ui.muted}}>{chosen.detail} · الإدارة الداخلية للمشروع</div></div>
-        <div style={{display:"flex",alignItems:"center",gap:8}}>{(project==="all"||project==="homey"||project==="sodfa"||project==="orders")&&<Tag tone={bridge?.operations.connected?"green":"amber"}>طلبات المشروع: {bridge?.operations.connected?"متصلة":"غير متصلة"}</Tag>}
-          {(project==="all"||project==="homey"||project==="sodfa")&&<Tag tone={bridge?.catalog.connected?"green":"amber"}>منتجات المشروع: {bridge?.catalog.connected?"متصلة":"غير متصلة"}</Tag>}
-          {(project==="all"||project==="sodfa")&&<Tag tone={bridge?.sodfa.connected?"green":"amber"}>مخزون صدفة: {bridge?.sodfa.connected?"متصل":"غير متصل"}</Tag>}</div>
+    <header className="mb-5 rounded-2xl border border-white/10 bg-[#1b1222] p-4 sm:p-6">
+      <div className="flex flex-wrap items-end justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-black sm:text-3xl">مركز إدارة المشاريع</h1>
+          <p className="mt-1 text-sm text-zinc-300">{chosen.name} / {tabData.find(item=>item.id===tab)?.name}</p>
+        </div>
+        <div className="flex max-w-full flex-wrap items-end gap-2">
+          <label className="grid gap-1 text-sm font-semibold">
+            المشروع
+            <select value={project} onChange={event=>selectProject(event.target.value as Project)}
+              className="rounded-lg border border-purple-400/40 bg-[#100c15] px-3 py-2.5 text-white">
+              {projectData.map(item=><option key={item.id} value={item.id}>{item.name}</option>)}
+            </select>
+          </label>
+          <button type="button" disabled={loading} onClick={()=>void refresh(project)}
+            className="inline-flex items-center gap-2 rounded-lg border border-white/20 px-3 py-2.5 text-sm disabled:opacity-60">
+            <RefreshCw size={16}/>{loading?"جاري التحديث":"تحديث"}
+          </button>
+        </div>
       </div>
-    </div>
-    <div style={{display:"flex",gap:8,overflowX:"auto",marginBottom:17,paddingBottom:4}}>
-      {allowedTabs.map(t=><button type="button" key={t.id} onClick={()=>{setTab(t.id);setSearch("")}} style={{display:"inline-flex",alignItems:"center",gap:7,whiteSpace:"nowrap",padding:"10px 14px",borderRadius:10,border:"1px solid "+(t.id===tab?ui.purple:ui.border),background:t.id===tab?ui.purple:ui.card,color:t.id===tab?"#fff":ui.muted,cursor:"pointer",fontSize:12}}><t.icon size={15}/>{t.name}</button>)}
-    </div>
+    </header>
+
+    <div className="grid min-w-0 gap-4 lg:grid-cols-[12rem_minmax(0,1fr)]">
+      <nav aria-label="أقسام المشروع" className="flex gap-2 overflow-x-auto pb-2 lg:sticky lg:top-4 lg:flex-col lg:self-start lg:rounded-2xl lg:border lg:border-white/10 lg:bg-[#151117] lg:p-3">
+        {allowedTabs.map(({id,name,icon:Icon})=><Link key={id} to="/control-center" search={{project,section:id}}
+          onClick={()=>{setSearch("");setSelectedOrderId("");setDraftMessage("");}}
+          aria-current={id===tab?"page":undefined}
+          className={`flex shrink-0 items-center gap-2 rounded-lg px-3 py-2.5 text-sm font-semibold ${id===tab?"bg-purple-300 text-[#25132e]":"bg-[#211926] text-zinc-200 hover:bg-[#33203d]"}`}>
+          <Icon size={17} aria-hidden="true"/>{name}
+        </Link>)}
+      </nav>
+
+      <section aria-label={tabData.find(item=>item.id===tab)?.name} className="min-w-0">
+        {(tab==="dashboard"||tab==="orders"||tab==="products"||tab==="shipping"||tab==="customers")&&
+          <div className="mb-4 flex flex-wrap gap-2">
+            {(tab==="dashboard"||tab==="orders")&&project!=="sodfa_web"&&
+              <a href={orderUrl} className="inline-flex items-center gap-2 rounded-lg bg-purple-300 px-3 py-2 text-sm font-bold text-[#25132e]"><ShoppingCart size={16}/>إضافة وتأكيد طلب تجريبي</a>}
+            {(tab==="dashboard"||tab==="products")&&project!=="orders"&&
+              <a href={catalogUrl} className="inline-flex items-center gap-2 rounded-lg border border-purple-300/45 px-3 py-2 text-sm text-purple-100"><Boxes size={16}/>الكتالوج ومسودات النشر</a>}
+            {(tab==="dashboard"||tab==="products")&&canSeeSodfaStock&&
+              <Link to="/sales" className="inline-flex items-center gap-2 rounded-lg border border-purple-300/45 px-3 py-2 text-sm text-purple-100"><ClipboardList size={16}/>مبيعات صدفة</Link>}
+            {(tab==="shipping"||tab==="customers"||tab==="orders")&&
+              <a href={ordersManagerUrl} target="_blank" rel="noreferrer" className="inline-flex items-center gap-2 rounded-lg border border-purple-300/45 px-3 py-2 text-sm text-purple-100">
+                <ExternalLink size={16}/>{tab==="shipping"?"افتح الشحن وطباعة البوالص في مدير الطلبات":tab==="customers"?"إدارة العملاء في مدير الطلبات":"افتح مدير الطلبات الفعلي"}
+              </a>}
+          </div>}
     {project!=="orders"&&project!=="sodfa_web"&&bridge?.catalog.error&&<div role="alert" style={{...panel,marginBottom:12,border:"1px solid #985e38"}}>فهرس المنتجات: {bridge.catalog.error}</div>}
     {project!=="sodfa_web"&&bridge?.operations.error&&<div role="alert" style={{...panel,marginBottom:12,border:"1px solid #985e38"}}>بيانات الطلبات والشحن: {bridge.operations.error}</div>}
     {(project==="all"||project==="sodfa")&&bridge?.sodfa.error&&<div role="alert" style={{...panel,marginBottom:12,border:"1px solid #985e38"}}>صدفة: {bridge.sodfa.error}</div>}
-    {project==="sodfa_web"&&<div role="status" style={{...panel,marginBottom:12,border:"1px solid #985e38"}}>
+    {project==="sodfa_web"&&tab!=="products"&&<div role="status" style={{...panel,marginBottom:12,border:"1px solid #985e38"}}>
       قاعدة SODFA Web الأصلية غير نشطة حالياً؛ المخزون المعروض هنا ليس دليلاً على نشر المنتجات في الموقع.
       بيانات القناة المنشورة غير متاحة لحين استرجاع قاعدة المتجر أو تهيئة مصدر منشور بديل معتمد.
     </div>}
     {loadError&&<div style={{...panel,border:"1px solid #8f5151",marginBottom:14}}><AlertTriangle size={17} style={{display:"inline",marginLeft:8}}/>تعذر جلب بيانات الربط: {loadError}. بيانات صدفة المحلية قد تظل متاحة.</div>}
-    {(project==="all"||project==="sodfa")&&(tab==="dashboard"||tab==="products")&&<CompanyInventoryAssistant key={project}/>}
+    {canSeeSodfaStock&&tab==="products"&&<CompanyInventoryAssistant key={project}/>}
     {tab==="dashboard"&&<>
-      <div style={{...panel,marginBottom:14,fontSize:12,lineHeight:2}}>
-        <b>حالة بيانات {chosen.name}:</b>
-        {project==="sodfa_web"?"قاعدة بيانات المتجر الأصلي غير نشطة؛ لا يوجد كتالوج منشور مؤكد للعرض.":<>
-          {(project==="all"||project==="homey"||project==="sodfa")&&<>المنتجات: {bridge?.catalog.connected?"متصلة":"غير متصلة"}. </>}
-          {(project==="all"||project==="homey"||project==="sodfa"||project==="orders")&&<>الطلبات: {bridge?.operations.connected?"متصلة":"غير متصلة"}. </>}
-          {(project==="all"||project==="sodfa")&&<>المخزون: {bridge?.sodfa.connected?"متصل":"غير متصل"}. </>}
-        </>}
-        {snapshotDate&&<> آخر تحديث لبيانات المنتجات المخزنة: {new Date(snapshotDate).toLocaleString("ar-EG")}.</>}
-        {stockMissing>0&&<> يوجد {stockMissing.toLocaleString("en-US")} سجل صدفة في الصفحة الحالية بدون رصيد معروف؛ لم نعتبرهم صفر.</>}
-      </div>
       <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(190px,1fr))",gap:12,marginBottom:13}}>
         {project!=="orders"&&project!=="sodfa_web"&&<Metric title="فهرس المنتجات" value={bridge?.catalog.connected?fmt(activeProductRefs):"غير متاح"} icon={Package} sub="سجلات مرجعية، ليست كل المنتجات المنشورة"/>}
         {project!=="sodfa_web"&&<Metric title="الأوردرات المسجلة" value={bridge?.operations.connected?fmt(orderTotal):"غير متاح"} icon={ShoppingCart} sub="الموجودة في قاعدة Orders Manager"/>}
@@ -168,8 +191,7 @@ function ControlCenter(){
         {canSeeSodfaStock&&<Metric title="مبيعات صدفة (السجل الحالي)" value={bridge?.sodfa.salesSummary?fmt(sodfaTotalSales)+" ج.م":"غير متاح"} icon={ChartNoAxesCombined} sub="بناءً على سجلات المبيعات في صدفة، دون دمج مع طلبات OMS"/>}
       </div>
       <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(300px,1fr))",gap:13}}>
-        {project!=="sodfa_web"&&<div style={panel}><h2 style={{fontSize:17}}>ملخص الطلبات حسب الحالة</h2>{statuses.length?statuses.map(s=><div key={s.brand+s.status} style={{display:"flex",justifyContent:"space-between",borderBottom:"1px solid "+ui.border,padding:"10px 0",fontSize:12}}><span>{s.brand==="homey"?"هومي":"صدفة"} · {s.status}</span><b>{fmt(s.count)}</b></div>):<p style={{fontSize:12,color:ui.muted}}>لا توجد بيانات متاحة</p>}<button onClick={()=>setTab("orders")} style={{marginTop:16,color:"#eacafa",background:"transparent",border:0,cursor:"pointer"}}>فتح إدارة الأوردرات داخل المركز ←</button></div>}
-        <div style={panel}><h2 style={{fontSize:17}}>أقسام المشروع</h2><div style={{display:"grid",gridTemplateColumns:"repeat(2,minmax(0,1fr))",gap:9}}>{allowedTabs.filter(x=>x.id!=="dashboard").map(x=><button key={x.id} onClick={()=>setTab(x.id)} style={{padding:12,display:"flex",gap:8,alignItems:"center",textAlign:"right",background:"#0A0A0C",border:"1px solid "+ui.border,color:"white",borderRadius:10,cursor:"pointer",fontSize:12}}><x.icon size={17} color={ui.light}/>{x.name}</button>)}</div><p style={{color:ui.muted,fontSize:11,lineHeight:2}}>موقع هومي وموقع صدفة الخارجيان لم يتم تغيير واجهاتهما. التحكم في النشر والأسعار والتعديل لا يزال معطلًا حتى تجهيز الصلاحيات وواجهات الكتابة الآمنة.</p></div>
+        {project!=="sodfa_web"&&<div style={panel}><h2 style={{fontSize:17}}>ملخص الطلبات حسب الحالة</h2>{statuses.length?statuses.map(s=><div key={s.brand+s.status} style={{display:"flex",justifyContent:"space-between",borderBottom:"1px solid "+ui.border,padding:"10px 0",fontSize:12}}><span>{s.brand==="homey"?"هومي":"صدفة"} · {s.status}</span><b>{fmt(s.count)}</b></div>):<p style={{fontSize:12,color:ui.muted}}>لا توجد بيانات متاحة</p>}<button onClick={()=>setTab("orders")} style={{marginTop:16,color:"#eacafa",background:"transparent",border:0,cursor:"pointer"}}>عرض الطلبات</button></div>}
       </div>
     </>}
     {tab==="products"&&project==="sodfa_web"&&<div style={panel}><h2>منتجات موقع صدفة</h2><p>قاعدة المتجر الأصلية غير نشطة؛ لا يمكن عرض كتالوج منشور مؤكد. لم نخلط منتجات مخزون صدفة بالمنتجات المنشورة على الموقع.</p></div>}
@@ -181,11 +203,12 @@ function ControlCenter(){
         <button onClick={downloadCsv} style={{background:ui.soft,color:"#fff",border:"1px solid "+ui.purple,padding:"10px 13px",borderRadius:10,cursor:"pointer",fontSize:12}}><FileDown size={14} style={{display:"inline",marginLeft:6}}/>تصدير CSV</button>
         </div>
       </div>
-      {tab==="orders"&&<div style={{display:"flex",gap:10,alignItems:"center",marginBottom:12}}><Link to="/control-center-orders" style={{border:"1px solid #823292",background:"#642472",borderRadius:10,padding:"11px 16px",color:"white",fontSize:13,fontWeight:800}}>فتح نموذج إضافة وتأكيد الطلبات داخل المركز — اختبار معزول</Link></div>}
-      {tab==="products"&&project!=="sodfa_web"&&<div style={{display:"flex",gap:10,alignItems:"center",marginBottom:12}}><a href={"/control-center-products?project="+(project==="homey"?"homey":"sodfa")} style={{border:"1px solid #823292",background:"#642472",borderRadius:10,padding:"11px 16px",color:"white",fontSize:13,fontWeight:800}}>فتح إدارة المنتجات الكاملة: السعر والمخزون وإضافة منتج واختيار الموقعين</a></div>}
       {draftMessage&&<div role="status" style={{padding:10,marginTop:10,background:ui.soft,borderRadius:8,fontSize:12}}>{draftMessage}</div>}
       <div style={{overflowX:"auto",marginTop:18}}>
-      {tab==="products"?<table style={{width:"100%",minWidth:650,borderCollapse:"collapse",fontSize:12}}><thead><tr style={{color:ui.light,borderBottom:"1px solid "+ui.border}}>{["المنتج","المشروع","المصدر","إعدادات العرض المقترحة (مسودة)"].map(h=><th key={h} style={{textAlign:"right",padding:12}}>{h}</th>)}</tr></thead><tbody>{rowProducts.map(p=><tr key={p.source+p.id} style={{borderBottom:"1px solid "+ui.border}}><td style={{padding:12}}>{p.title}</td><td>{p.brand==="homey"?"هومي":"صدفة"}</td><td>{p.source}</td><td><div style={{display:"flex",alignItems:"center",flexWrap:"wrap",gap:8}}>
+      {tab==="products"?<table style={{width:"100%",minWidth:650,borderCollapse:"collapse",fontSize:12}}><thead><tr style={{color:ui.light,borderBottom:"1px solid "+ui.border}}>{["المنتج","المشروع","المصدر","إعدادات العرض المقترحة (مسودة)"].map(h=><th key={h} style={{textAlign:"right",padding:12}}>{h}</th>)}</tr></thead><tbody>{rowProducts.map(p=><tr key={p.source+p.id} style={{borderBottom:"1px solid "+ui.border}}><td style={{padding:12}}>
+        <span>{p.title}</span>
+        {p.source==="sodfa_dashboard"&&<Link to="/sales" search={{product:p.id}} className="mt-1 block text-purple-200 underline">ابحث عنه في شاشة البيع</Link>}
+      </td><td>{p.brand==="homey"?"هومي":"صدفة"}</td><td>{p.source}</td><td><div style={{display:"flex",alignItems:"center",flexWrap:"wrap",gap:8}}>
         <Tag tone={p.draft_visibility===null?"amber":"purple"}>{p.draft_visibility===null?"لم تُحدد":p.draft_visibility?"مقترح للعرض":"مقترح للإخفاء"}</Tag>
         <button type="button" disabled={Boolean(draftBusy)} onClick={()=>void updateDraft(p,true)}
           style={{border:"1px solid "+ui.purple,borderRadius:8,background:ui.soft,color:"white",padding:"6px 9px",cursor:"pointer",fontSize:11}}>اقتراح عرض</button>
@@ -232,5 +255,7 @@ function ControlCenter(){
 ].map(x=><div key={x.name} style={{padding:15,background:"#0A0A0C",border:"1px solid "+ui.border,borderRadius:12}}><b>{x.name}</b><div style={{marginTop:12}}><Tag tone={x.ok?"green":"amber"}>{x.status}</Tag></div><p style={{fontSize:11,color:ui.muted,lineHeight:1.8}}>{x.detail}</p>{x.href&&<a href={x.href} style={{fontSize:12,color:"#dda5f7"}}>فتح التحكم ←</a>}</div>)}</div><p style={{color:ui.muted,fontSize:12,lineHeight:2,marginTop:16}}>كل حساب لا يحصل على صلاحيات الكتابة تلقائيًا. تُمنع بيانات التكلفة والموردين من الوصول لمواقع العملاء. فصل العلامات وقنوات النشر لا يزال قيد تطبيق سياسات الوصول قبل ربط الكتابة.</p></div>}
     {bridge?.accessRole==="viewer"&&<p style={{fontSize:12,color:"#d4a7e3"}}>دورك: مشاهد — بيانات العملاء الشخصية وتكلفة الشراء محجوبة، والتعديل غير مسموح.</p>}
     <p style={{marginTop:22,color:"#88818e",fontSize:11}}><ShieldCheck size={13} style={{display:"inline",marginLeft:6}}/> نسخة تطوير، قراءة حقيقية ومسودات وطلبات تجريبية، دون تعديل مواقع الإنتاج أو مخازنها. {lastRefresh&&"آخر تحميل "+lastRefresh}</p>
+      </section>
+    </div>
   </div></AppShell>
 }

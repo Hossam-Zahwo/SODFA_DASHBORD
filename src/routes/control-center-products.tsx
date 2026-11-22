@@ -1,3 +1,4 @@
+import { companyLocation, type CompanyProject } from "@/lib/company-navigation";
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import {createFileRoute,Link} from "@tanstack/react-router";
 import {AppShell} from "@/components/AppShell";
@@ -7,24 +8,31 @@ import {saveChannelDraft} from "@/lib/company-channel-drafts.functions";
 import {createCompanyProductDraft} from "@/lib/company-product-create.functions";
 import {Plus,RefreshCcw,Package,Lock,Search} from "lucide-react";
 
-export const Route=createFileRoute("/control-center-products")({component:CatalogAdmin});
+export const Route=createFileRoute("/control-center-products")({
+ validateSearch:(search:Record<string,unknown>):{project?:"homey"|"sodfa";workspace?:CompanyProject}=>{
+  const brand=search["project"];
+  const {project:workspace}=companyLocation({project:search["workspace"]});
+  return {...(brand==="homey"||brand==="sodfa"?{project:brand}:{}),...(workspace?{workspace}:{})};
+ },
+ component:CatalogAdmin
+});
 type Product=Awaited<ReturnType<typeof getCompanyWorkspaceData>>["catalog"]["products"][number];
 const ui={card:"#111114",background:"#09090b",purple:"#823292",violet:"#A94FBC",border:"#27272A"};
 const box={background:ui.card,border:"1px solid "+ui.border,borderRadius:14,padding:18} as const;
 const input={background:ui.background,color:"white",border:"1px solid #54435b",borderRadius:10,padding:"10px 12px"} as const;
 const btn={background:ui.purple,border:0,borderRadius:9,padding:"10px 13px",color:"white",cursor:"pointer"} as const;
 function CatalogAdmin(){
+ const context=Route.useSearch();
  const [products,setProducts]=useState<Product[]>([]);
  const [connected,setConnected]=useState(false),[loading,setLoading]=useState(true);
  const [notice,setNotice]=useState(""),[busy,setBusy]=useState(false);
- const [query,setQuery]=useState(""),[filter,setFilter]=useState<"homey"|"sodfa">("homey");
+ const [query,setQuery]=useState(""),[filter,setFilter]=useState<"homey"|"sodfa">(context.project??"homey");
  const [formVisible,setFormVisible]=useState(false);
  const [title,setTitle]=useState(""),[brand,setBrand]=useState<"homey"|"sodfa">("homey");
  const [price,setPrice]=useState(""),[homey,setHomey]=useState(true),[sodfa,setSodfa]=useState(false);
  const [reqId,setReqId]=useState(()=>crypto.randomUUID());
  const [channelPrices,setChannelPrices]=useState<Record<string,string>>({});
  const fetchSeq=useRef(0);
- useEffect(()=>{const selected=new URLSearchParams(window.location.search).get("project");if(selected==="homey"||selected==="sodfa")setFilter(selected);},[]);
  useEffect(()=>{void load(filter);},[filter]);
  async function token(){
   const {data:{session}}=await supabase.auth.getSession();
@@ -77,7 +85,7 @@ function CatalogAdmin(){
  return <AppShell title="المنتجات وقنوات البيع">
  <div dir="rtl" style={{fontFamily:"Cairo,sans-serif",color:"white",padding:"10px 0 50px"}}>
   <div style={{display:"flex",justifyContent:"space-between",gap:12,alignItems:"center",flexWrap:"wrap"}}>
-   <div><Link to="/control-center" style={{color:ui.violet,fontSize:12}}>مركز الشركة / رجوع</Link>
+   <div><Link to="/control-center" search={{project:context.workspace??filter,section:"products"}} style={{color:ui.violet,fontSize:12}}>مركز الشركة / رجوع</Link>
     <h1 style={{fontWeight:900,fontSize:26,margin:"8px 0"}}>إدارة منتجات {filter==="homey"?"هومي":"صدفة"}</h1>
     <p style={{fontSize:12,color:"#aaa"}}>المنتجات من المصادر الفعلية، وقرارات العرض محفوظة كمسودات منفصلة لكل متجر</p></div>
    <div style={{display:"flex",gap:10}}>
@@ -118,7 +126,7 @@ function CatalogAdmin(){
      {["المنتج","البراند","سعر المصدر","المخزون","حالة المصدر","مسودة هومي","مسودة صدفة"].map(x=><th key={x} style={{padding:11,textAlign:"right"}}>{x}</th>)}
     </tr></thead>
     <tbody>{filtered.map(p=><tr key={p.source+p.id} style={{borderBottom:"1px solid "+ui.border}}>
-     <td style={{padding:11}}><strong>{p.title}</strong><div style={{fontSize:10,color:"#999"}}>{p.source}</div></td>
+     <td style={{padding:11}}><strong>{p.title}</strong>{p.source==="sodfa_dashboard"&&<Link to="/sales" search={{product:p.id}} className="block text-purple-200 underline">ابحث عنه في شاشة البيع</Link>}<div style={{fontSize:10,color:"#999"}}>{p.source}</div></td>
      <td>{p.brand==="homey"?"هومي":"صدفة"}</td>
      <td>{p.min_sale_price_egp==null?"—":Number(p.min_sale_price_egp).toLocaleString("en-US")+" ج.م"}</td>
      <td>{p.available_units==null?"—":Number(p.available_units).toLocaleString("en-US")}</td>
