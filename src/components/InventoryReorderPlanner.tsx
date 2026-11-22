@@ -11,7 +11,11 @@ const fields = [
   ["reviewDays", "الفترة بين مراجعات المخزون (أيام)"],
 ] as const;
 
-export function InventoryReorderPlanner() {
+export function InventoryReorderPlanner({
+  stock,
+}: {
+  stock?: { name: string; warehouse: string; available: number | null } | null;
+}) {
   const [plan, setPlan] = useState<ReturnType<typeof planInventory> | null>(null);
   const [error, setError] = useState(false);
 
@@ -51,6 +55,14 @@ export function InventoryReorderPlanner() {
         احسب نقطة إعادة الطلب والكمية المقترحة لصنف في مستودع واحد، بافتراض ثبات متوسط الطلب ومدة
         التوريد.
       </p>
+      {stock && (
+        <p className="mb-3 text-sm text-purple-100">
+          {stock.name} · {stock.warehouse} ·{" "}
+          {stock.available === null
+            ? "الرصيد غير معروف، أدخله بعد التحقق."
+            : `رصيد نتيجة البحث ${stock.available} وحدة.`}
+        </p>
+      )}
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
         {fields.map(([name, label]) => (
           <label key={name} className="flex flex-col gap-1 text-sm">
@@ -58,6 +70,15 @@ export function InventoryReorderPlanner() {
             <input
               className="rounded-lg border border-[#53505a] bg-[#0a0a0c] px-3 py-2"
               name={name}
+              defaultValue={
+                name === "available"
+                  ? (stock?.available ?? undefined)
+                  : name === "incoming" || name === "committed" || name === "safetyStock"
+                    ? 0
+                    : name === "reviewDays"
+                      ? 7
+                      : undefined
+              }
               type="number"
               min={name === "reviewDays" ? 1 : 0}
               max={1_000_000}
@@ -79,8 +100,8 @@ export function InventoryReorderPlanner() {
           </p>
           <p className="mt-1 font-bold">
             {plan.quantity
-              ? `الكمية المقترحة للطلب ${plan.quantity} وحدة.`
-              : "الكمية المقترحة للطلب حاليًا صفر."}
+              ? `اطلب ${plan.quantity} وحدة للوصول للرصيد المستهدف.`
+              : "القرار الحالي: لا تطلب وحدات إضافية."}
           </p>
         </div>
       )}

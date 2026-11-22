@@ -689,23 +689,27 @@ function SalesPage() {
           </div>
         </div>
 
-        <VoiceInput prompt="قول: تم بيع تيشيرت أسود عدد ٣ قطع" disabled={record.isPending} onTranscript={(text) => {
-          const sale = parseSpokenSale(text);
-          if (!sale) {
-            toast.error("قول اسم المنتج والكمية، مثل: تم بيع تيشيرت أسود عدد ٣ قطع.");
-            return;
-          }
-          const matches = (inventory.data ?? []).filter((product) =>
-            product.product_name.trim().toLowerCase() === sale.name.toLowerCase(),
-          );
-          if (matches.length !== 1 || !matches[0]) {
-            setManual(sale.name);
-            toast.error("راجع نتائج البحث واختار المنتج والمستودع بنفسك.");
-            return;
-          }
-          addToCart(matches[0], sale.quantity);
-        }} />
         <SellingSection
+          onVoice={(text) => {
+            if (!/^(?:تم\s+)?بيع(?:\s|$)/u.test(text)) {
+              setManual(text);
+              return;
+            }
+            const sale = parseSpokenSale(text);
+            if (!sale) {
+              toast.error("قول اسم المنتج والكمية، مثل: تم بيع تيشيرت أسود عدد ٣ قطع.");
+              return;
+            }
+            const matches = (inventory.data ?? []).filter(
+              (product) => product.product_name.trim().toLowerCase() === sale.name.toLowerCase(),
+            );
+            if (matches.length !== 1 || !matches[0]) {
+              setManual(sale.name);
+              toast.error("راجع نتائج البحث واختار المنتج والمستودع بنفسك.");
+              return;
+            }
+            addToCart(matches[0], sale.quantity);
+          }}
           camera={camera}
           setCamera={setCamera}
           manual={manual}
@@ -1363,6 +1367,7 @@ function SellingSection({
   camera,
   setCamera,
   manual,
+  onVoice,
   setManual,
   matches,
   cart,
@@ -1381,6 +1386,7 @@ function SellingSection({
     value: boolean,
   ) => void;
   manual: string;
+  onVoice: (text: string) => void;
   setManual: (
     value: string,
   ) => void;
@@ -1502,6 +1508,7 @@ function SellingSection({
               </p>
             </div>
 
+            <div className="flex items-center gap-2">
             <Input
               value={manual}
               onChange={(e) =>
@@ -1514,6 +1521,8 @@ function SellingSection({
               )}
               className="h-12 focus-visible:ring-[#9B4BA8]"
             />
+              <VoiceInput compact disabled={recordPending} onTranscript={onVoice} prompt="قول: تم بيع تيشيرت أسود عدد ٣ قطع" />
+            </div>
 
             {matches.length > 0 && (
               <div className="mt-4 max-h-[55vh] space-y-2 overflow-y-auto pe-1">

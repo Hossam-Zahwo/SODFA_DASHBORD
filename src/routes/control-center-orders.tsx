@@ -20,6 +20,7 @@ function OrderOperations(){
  const [name,setName]=useState(""),[phone,setPhone]=useState("");
  const [gov,setGov]=useState(""),[city,setCity]=useState(""),[address,setAddress]=useState("");
  const [items,setItems]=useState<Array<{name:string;quantity:number;price:number;catalogId?:string}>>([{name:"",quantity:1,price:0}]);
+ const [orderText,setOrderText]=useState("");
  const [carrier,setCarrier]=useState("");
  const [spokenTotal,setSpokenTotal]=useState<number>();
 
@@ -77,7 +78,7 @@ function OrderOperations(){
   }catch(e){setNotice("تعذر التأكيد: "+(e instanceof Error?e.message:"خطأ"))}
   finally{setBusy(false)}
  }
- function reset(){setSaved(null);setRequestId(crypto.randomUUID());setName("");setPhone("");setItems([{name:"",quantity:1,price:0}]);setAddress("");setNotice("");setCarrier("");setShipping(0);setPrepaid(0);setDiscount(0);setSpokenTotal(undefined)}
+ function reset(){setSaved(null);setOrderText("");setRequestId(crypto.randomUUID());setName("");setPhone("");setItems([{name:"",quantity:1,price:0}]);setAddress("");setNotice("");setCarrier("");setShipping(0);setPrepaid(0);setDiscount(0);setSpokenTotal(undefined)}
  return <AppShell title="إضافة وتأكيد الطلبات">
   <div dir="rtl" style={{fontFamily:"Cairo,sans-serif",maxWidth:1050,margin:"0 auto",color:"white",paddingBottom:60}}>
    <Link to="/control-center" style={{color:"#C98ADB",fontSize:12}}>مركز الشركة / الرجوع</Link>
@@ -89,7 +90,13 @@ function OrderOperations(){
    </div>
    <div style={css.card}>
     <h2 style={{fontSize:19,marginTop:0}}>بيانات الطلب الجديد</h2>
-    <VoiceInput disabled={busy||Boolean(saved)} onTranscript={fillOrder} prompt="قول اسم العميل، العنوان، رقم الهاتف، المنتجات، تكلفة الشحن، شركة الشحن والإجمالي." />
+    <label htmlFor="order-dictation">إملاء بيانات الطلب أو كتابتها</label>
+    <div className="my-2 flex items-center gap-2">
+     <textarea id="order-dictation" value={orderText} onChange={e=>setOrderText(e.target.value)} disabled={busy||Boolean(saved)}
+      className="min-w-0 flex-1 rounded-lg border border-[#53505a] bg-[#0a0a0c] p-2" rows={2} maxLength={2500} />
+     <VoiceInput compact disabled={busy||Boolean(saved)} onTranscript={text=>setOrderText(text.slice(0,2500))} prompt="قول اسم العميل والعنوان ورقم الهاتف والمنتجات والشحن." />
+    </div>
+    <button type="button" disabled={busy||Boolean(saved)||!orderText.trim()} onClick={()=>fillOrder(orderText)}>املأ حقول الطلب</button>
     <p style={{fontSize:12}}>للأصناف قول: المنتجات تيشيرت عدد ٢ سعر ١٠٠، ومنتج بنطلون عدد ١ سعر ٢٠٠.</p>
     <form onSubmit={e=>void create(e)} style={{display:"grid",gap:15}}>
      <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(220px,1fr))",gap:12}}>

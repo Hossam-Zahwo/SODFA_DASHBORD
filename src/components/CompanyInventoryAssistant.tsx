@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from "react";
+import { useRef, useState, type FormEvent } from "react";
 import { Bot } from "lucide-react";
 import { searchCompanyInventory } from "@/lib/company-inventory-assistant.functions";
 import { supabase } from "@/lib/supabase";
@@ -11,22 +11,25 @@ type Result = Awaited<ReturnType<typeof searchCompanyInventory>>;
 
 export function CompanyInventoryAssistant() {
   const [query, setQuery] = useState("");
-  const [explain, setExplain] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [result, setResult] = useState<Result | null>(null);
 
   const [voiceMessage, setVoiceMessage] = useState("");
+  const plannerSection = useRef<HTMLDivElement>(null);
   const [plannerOpen, setPlannerOpen] = useState(false);
+  const [selectedStock, setSelectedStock] = useState<Result["rows"][number] | null>(null);
 
   function handleVoice(transcript: string) {
     const command = inventoryVoiceCommand(transcript);
     if (command.action === "plan") {
       setPlannerOpen(true);
       setVoiceMessage("اتفتحت خطة إعادة الطلب.");
+      plannerSection.current?.scrollIntoView({ block: "start" });
     } else if (command.action === "clear") {
       setQuery("");
       setResult(null);
+      setSelectedStock(null);
       setError("");
       setVoiceMessage("اتمسح البحث.");
     } else if (command.action === "order") {
@@ -34,6 +37,7 @@ export function CompanyInventoryAssistant() {
     } else if (command.query) {
       setQuery(command.query);
       setResult(null);
+      setSelectedStock(null);
       setError("");
       setVoiceMessage("راجع اسم المنتج واضغط بحث.");
     }
@@ -45,6 +49,7 @@ export function CompanyInventoryAssistant() {
     setBusy(true);
     setError("");
     setResult(null);
+    setSelectedStock(null);
     try {
       const {
         data: { session },
@@ -55,7 +60,7 @@ export function CompanyInventoryAssistant() {
       }
       setResult(
         await searchCompanyInventory({
-          data: { token: session.access_token, query, explain },
+          data: { token: session.access_token, query, explain: false },
         }),
       );
     } catch {
@@ -71,31 +76,28 @@ export function CompanyInventoryAssistant() {
         <Bot size={20} /> مساعد مخزون صدفة
       </h2>
       <form className="mt-3 flex flex-wrap items-center gap-3" onSubmit={search}>
-        <label className="flex min-w-48 flex-1 flex-col gap-1 text-sm">
-          اسم المنتج
-          <input
-            className="rounded-lg border border-[#53505a] bg-[#0a0a0c] px-3 py-2"
-            value={query}
-            onChange={(event) => setQuery(event.target.value)}
-            maxLength={100}
-            required
-            disabled={busy}
-          />
-        </label>
-        <VoiceInput
-          onTranscript={handleVoice}
-          disabled={busy}
-          prompt="جاري الاستماع… قول اسم المنتج أو أمر البحث."
-        />
-        <label className="flex items-center gap-2 text-sm">
-          <input
-            type="checkbox"
-            checked={explain}
-            disabled={busy}
-            onChange={(event) => setExplain(event.target.checked)}
-          />
-          اقتراح مراجعة بالذكاء الاصطناعي
-        </label>
+        <div className="min-w-0 flex-1">
+          <label htmlFor="inventory-query" className="block text-sm">
+            اسم المنتج
+          </label>
+          <div className="mt-1 flex items-center gap-2">
+            <input
+              id="inventory-query"
+              className="min-w-0 flex-1 rounded-lg border border-[#53505a] bg-[#0a0a0c] px-3 py-2"
+              value={query}
+              onChange={(event) => setQuery(event.target.value)}
+              maxLength={100}
+              required
+              disabled={busy}
+            />
+            <VoiceInput
+              compact
+              onTranscript={handleVoice}
+              disabled={busy}
+              prompt="قول اسم المنتج أو أمر البحث."
+            />
+          </div>
+        </div>
         <button
           className="rounded-lg bg-[#823292] px-4 py-2 text-sm font-bold disabled:opacity-50"
           disabled={busy || !query.trim()}
@@ -117,54 +119,76 @@ export function CompanyInventoryAssistant() {
             <p>مفيش نتائج مطابقة في مستودعات صدفة المتاحة لحسابك.</p>
           ) : (
             <>
-              <table className="w-full text-right">
-                <caption className="pb-2 text-right text-zinc-400">
-                  المصدر: مخزون مستودعات صدفة في Supabase
-                </caption>
-                <thead>
-                  <tr>
-                    <th scope="col">المنتج</th>
-                    <th scope="col">المستودع</th>
-                    <th scope="col">الرصيد</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {result.rows.map((row, index) => (
-                    <tr
-                      key={`${row.id}-${row.warehouse}-${index}`}
-                      className="border-t border-[#27272a]"
-                    >
-                      <td className="py-2">{row.name}</td>
-                      <td>{row.warehouse}</td>
-                      <td>{row.available ?? "غير معروف"}</td>
+              <div className="overflow-x-auto">
+                <table className="w-full min-w-80 text-right">
+                  <caption className="pb-2 text-right text-zinc-400">
+                    المصدر: مخزون مستودعات صدفة في Supabase
+                  </caption>
+                  <thead>
+                    <tr>
+                      <th scope="col">المنتج</th>
+                      <th scope="col">المستودع</th>
+                      <th scope="col">الرصيد</th>
+                      <th scope="col">قرار المخزون</th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
+                  </thead>
+                  <tbody>
+                    {result.rows.map((row, index) => (
+                      <tr
+                        key={`${row.id}-${row.warehouse}-${index}`}
+                        className="border-t border-[#27272a]"
+                      >
+                        <td className="py-2">{row.name}</td>
+                        <td>{row.warehouse}</td>
+                        <td>{row.available ?? "غير معروف"}</td>
+                        <td>
+                          <button
+                            type="button"
+                            className="rounded border border-purple-400/50 px-2 py-1 text-purple-100"
+                            onClick={() => {
+                              setSelectedStock(row);
+                              setPlannerOpen(true);
+                              plannerSection.current?.scrollIntoView({ block: "start" });
+                            }}
+                          >
+                            احسب إعادة الطلب
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
               {result.truncated && (
                 <p className="mt-2">ظهرت أول ٢٥ نتيجة. اكتب اسمًا أدق لتضييق البحث.</p>
               )}
             </>
           )}
-          {result.advice && <p className="mt-3 whitespace-pre-wrap">{result.advice}</p>}
-          {result.ai === "unconfigured" && (
-            <p className="mt-3">اقتراحات الذكاء الاصطناعي لسه مش متفعّلة.</p>
-          )}
-          {result.ai === "unavailable" && (
-            <p className="mt-3">تعذّر توليد الاقتراح. نتائج المخزون متاحة فوق.</p>
-          )}
         </div>
       )}
-      <div className="mt-4 border-t border-[#27272a] pt-4">
+      <div ref={plannerSection} className="mt-4 scroll-mt-20 border-t border-[#27272a] pt-4">
         <button
           type="button"
           aria-expanded={plannerOpen}
           onClick={() => setPlannerOpen(!plannerOpen)}
           className="text-sm font-bold text-purple-200"
         >
-          خطة إعادة طلب المخزون
+          بحوث العمليات · قرار إعادة الطلب
         </button>
-        {plannerOpen && <InventoryReorderPlanner />}
+        {plannerOpen && (
+          <InventoryReorderPlanner
+            key={
+              selectedStock
+                ? JSON.stringify([
+                    selectedStock.id,
+                    selectedStock.warehouse,
+                    selectedStock.available,
+                  ])
+                : "manual"
+            }
+            stock={selectedStock}
+          />
+        )}
       </div>
     </section>
   );

@@ -21,11 +21,13 @@ function speechConstructor() {
 
 export function VoiceInput({
   onTranscript,
+  compact = false,
   disabled = false,
   prompt = "جاري الاستماع…",
 }: {
   onTranscript: (text: string) => void;
   disabled?: boolean;
+  compact?: boolean;
   prompt?: string;
 }) {
   const recognition = useRef<Recognition | null>(null);
@@ -80,21 +82,30 @@ export function VoiceInput({
   }
 
   return (
-    <div>
+    <div className={compact ? "relative shrink-0" : undefined}>
       {voiceAvailable && (
         <button
           type="button"
           onClick={toggleVoice}
           aria-pressed={listening}
+          aria-label={listening ? "إيقاف الاستماع" : "إملاء صوتي"}
+          title={listening ? "إيقاف الاستماع" : "إملاء صوتي"}
           disabled={disabled}
           className="flex items-center gap-2 rounded-lg border border-[#53505a] px-3 py-2 text-sm"
         >
           {listening ? <Square size={16} /> : <Mic size={16} />}
-          {listening ? "إيقاف الاستماع" : "إملاء صوتي"}
+          {!compact && (listening ? "إيقاف الاستماع" : "إملاء صوتي")}
         </button>
       )}
       {(listening || voiceMessage) && (
-        <p className="mt-3 text-sm" role="status">
+        <p
+          className={
+            compact
+              ? "absolute end-0 top-full z-10 mt-1 w-56 rounded-lg border border-zinc-600 bg-zinc-900 p-2 text-sm text-white"
+              : "mt-3 text-sm"
+          }
+          role="status"
+        >
           {voiceMessage || prompt}
         </p>
       )}
