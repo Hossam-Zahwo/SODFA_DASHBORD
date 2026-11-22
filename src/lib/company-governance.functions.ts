@@ -9,7 +9,7 @@ export const getCompanyGovernance=createServerFn({method:"POST"})
 .validator(z.object({token:z.string().min(16).max(8192)}))
 .handler(async({data})=>{
  await requireCompanyAccess(data.token,"all","admin");
- const url=process.env.CRM_CATALOG_READ_URL;
+ const url=process.env["CRM_CATALOG_READ_URL"];
  if(!url)throw new Error("POLICY_DB_UNAVAILABLE");
  const db=neon(url);
  const [assignments,backups,approvals]=await Promise.all([
@@ -28,7 +28,7 @@ export const assignCompanyResponsibility=createServerFn({method:"POST"})
 .handler(async({data})=>{
  const actor=await requireCompanyAccess(data.token,"all","admin");
  if(actor.id===data.userId)throw new Error("SELF_ROLE_EDIT_NOT_ALLOWED");
- const url=process.env.CRM_DRAFT_WRITE_URL;
+ const url=process.env["CRM_DRAFT_WRITE_URL"];
  if(!url)throw new Error("POLICY_WRITE_UNAVAILABLE");
  const db=neon(url);
  const before=await db`SELECT responsibility FROM workspace_permissions
