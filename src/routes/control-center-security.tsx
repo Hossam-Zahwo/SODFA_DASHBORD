@@ -54,7 +54,7 @@ function SecurityAndResponsibilities(){
    <div style={{overflowX:"auto",marginTop:16}}>
     <table style={{width:"100%",minWidth:600,borderCollapse:"collapse",fontSize:12}}>
     <thead><tr style={{color:"#d3a6e3",borderBottom:"1px solid #363038"}}>{["المستخدم","المشروع","الوظيفة","آخر تعديل"].map(h=><th key={h} style={{textAlign:"right",padding:10}}>{h}</th>)}</tr></thead>
-    <tbody>{(data?.assignments??[]).map((x,i)=><tr key={i} style={{borderBottom:"1px solid #262229"}}><td style={{padding:10,fontFamily:"monospace"}}>{String(x.user_id)}</td><td>{String(x.project_id)}</td><td>{String(x.responsibility)}</td><td>{String(x.updated_at).slice(0,16)}</td></tr>)}</tbody>
+    <tbody>{(data?.assignments??[]).map((x,i)=><tr key={i} style={{borderBottom:"1px solid #262229"}}><td style={{padding:10,fontFamily:"monospace"}}>{String(x["user_id"])}</td><td>{String(x["project_id"])}</td><td>{String(x["responsibility"])}</td><td>{String(x["updated_at"]).slice(0,16)}</td></tr>)}</tbody>
     </table>
     {data?.assignments.length===0&&<p style={{color:"#aaa",fontSize:12}}>مفيش أدوار إضافية اتمنحت. الوصول الافتراضي مقفول، إلا لحسابات Admin الموجودة بالفعل.</p>}
    </div>
@@ -64,7 +64,7 @@ function SecurityAndResponsibilities(){
    <div style={{overflowX:"auto"}}>
     <table style={{width:"100%",minWidth:690,borderCollapse:"collapse",fontSize:12}}>
     <thead><tr style={{color:"#d3a6e3",borderBottom:"1px solid #363038"}}>{["المصدر","النوع","الحالة","نسخة خارج الخدمة","اختبار استرجاع كامل","آخر تحقق"].map(h=><th key={h} style={{textAlign:"right",padding:10}}>{h}</th>)}</tr></thead>
-    <tbody>{(data?.backups??[]).map((x,i)=><tr key={i} style={{borderBottom:"1px solid #262229"}}><td style={{padding:10}}>{String(x.source_system)}</td><td>{String(x.backup_method)}</td><td style={{color:"#d8b5e9"}}>{String(x.status)}</td><td>{x.is_offsite?"نعم":"لا"}</td><td>{x.restore_tested?"نعم":"لم يكتمل"}</td><td>{String(x.checked_at).slice(0,16)}</td></tr>)}</tbody>
+    <tbody>{(data?.backups??[]).map((x,i)=><tr key={i} style={{borderBottom:"1px solid #262229"}}><td style={{padding:10}}>{String(x["source_system"])}</td><td>{String(x["backup_method"])}</td><td style={{color:"#d8b5e9"}}>{String(x["status"])}</td><td>{x["is_offsite"]?"نعم":"لا"}</td><td>{x["restore_tested"]?"نعم":"لم يكتمل"}</td><td>{String(x.checked_at).slice(0,16)}</td></tr>)}</tbody>
     </table>
     {data?.backups.length===0&&<p>لا يوجد سجل نسخ متحقق منه في مركز التحكم.</p>}
    </div>
