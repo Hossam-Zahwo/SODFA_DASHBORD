@@ -43,12 +43,12 @@ export const getCompanyWorkspaceData = createServerFn({ method: "POST" })
     const response: {
       fetchedAt: string;
       accessRole: "admin"|"viewer"|"operator"|"manager";
-      catalog: { connected: boolean; error?: string; counts: Count[]; products: Product[] };
+      catalog: { connected: boolean; error?: string | undefined; counts: Count[]; products: Product[] };
       operations: {
-        connected: boolean; error?: string; summary: Summary[];
+        connected: boolean; error?: string | undefined; summary: Summary[];
         orders: OrderRow[]; customers: Count[]; shipments: Shipment[];
       };
-      sodfa: { connected: boolean; error?: string;
+      sodfa: { connected: boolean; error?: string | undefined;
         inventorySummary: { sku_rows: number; units: number; cost_value: number | null; warehouses: number } | null;
         salesSummary: { count_sales: number; sales_egp: number; first_date: string | null; last_date: string | null } | null;
         items: {product_id: string; product_name: string; warehouse: string; remaining_qty: number; purchase_price: number; sale_price: number}[];
