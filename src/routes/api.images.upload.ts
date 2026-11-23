@@ -25,11 +25,19 @@ async function uploadImage(request: Request) {
     }
     if (!profile.ok) return Response.json({ error: "Could not verify access" }, { status: 503 });
 
-    const cloud = process.env["CLOUDINARY_CLOUD_NAME"];
-    const key = process.env["CLOUDINARY_API_KEY"];
-    const secret = process.env["CLOUDINARY_API_SECRET"];
-    if (!cloud || !/^[a-z0-9_-]+$/i.test(cloud) || !key || !secret) {
-      return Response.json({ error: "Cloudinary storage is not connected yet" }, { status: 503 });
+    const cloud = process.env["CLOUDINARY_CLOUD_NAME"]?.trim();
+    const key = process.env["CLOUDINARY_API_KEY"]?.trim();
+    const secret = process.env["CLOUDINARY_API_SECRET"]?.trim();
+    const invalidSettings = [
+      !cloud || !/^[a-z0-9_-]+$/i.test(cloud) ? "CLOUDINARY_CLOUD_NAME" : null,
+      !key ? "CLOUDINARY_API_KEY" : null,
+      !secret ? "CLOUDINARY_API_SECRET" : null,
+    ].filter(Boolean);
+    if (!cloud || !key || !secret || invalidSettings.length) {
+      return Response.json(
+        { error: `Cloudinary configuration missing or invalid: ${invalidSettings.join(", ")}` },
+        { status: 503 },
+      );
     }
 
     if (request.headers.get("Content-Type") !== "image/webp" || !request.body) {
