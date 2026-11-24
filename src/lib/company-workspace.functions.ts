@@ -24,6 +24,7 @@ type Product = { images?: CatalogImage[]; id: string; title: string; brand: stri
   source_refreshed_at: string | null;
 };
 type OrderRow = {
+  waybill_id?: string;
   id: string; brand: string; created_at: string; status: string;
   shipping_company: string | null; source: string | null;
   customer_name: string; phone: string; city: string | null; governorate: string | null;
@@ -169,6 +170,22 @@ export const getCompanyWorkspaceData = createServerFn({ method: "POST" })
              ORDER BY o.brand, state`,
         ]);
         const okay = <T,>(x:PromiseSettledResult<T[]>)=>x.status==="fulfilled"?x.value:[];
+        const orders = okay(orderResult) as OrderRow[];
+        if (access.role !== "viewer" && orders.length) {
+          try {
+            const waybills=await db`SELECT DISTINCT ON (w.order_id) w.order_id::text AS order_id,w.id::text AS id
+              FROM waybills w JOIN orders o ON o.id=w.order_id AND o.brand=w.brand
+              WHERE w.order_id=ANY(${orders.map(order=>order.id)}::uuid[])
+              ORDER BY w.order_id,w.created_at DESC,w.id DESC`;
+            const byOrder=new Map(waybills.map(row=>[String(row["order_id"]),String(row["id"])]));
+            for(const order of orders){
+              const id=byOrder.get(order.id);
+              if(id)order.waybill_id=id;
+            }
+          } catch {
+            // An unavailable waybill view must not block the order list.
+          }
+        }
         response.operations = {
           connected: summaryResult.status==="fulfilled" || orderResult.status==="fulfilled",
           available: {
@@ -178,7 +195,7 @@ export const getCompanyWorkspaceData = createServerFn({ method: "POST" })
             shipments: shipmentResult.status === "fulfilled",
           },
           summary: okay(summaryResult) as Summary[],
-          orders: okay(orderResult) as OrderRow[],
+          orders,
           customers: okay(customerResult) as Count[],
           shipments: okay(shipmentResult) as Shipment[],
           error: [summaryResult,orderResult,customerResult,shipmentResult]

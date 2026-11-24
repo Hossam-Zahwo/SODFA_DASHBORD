@@ -32,3 +32,20 @@ export function companyLocation(search: Record<string, unknown>): {
 }
 
 export const ordersManagerUrl = "https://homey-sodfa-orders-manager.vercel.app";
+
+const homeyAdmin = "https://www.homeyegypt.com/admin";
+const homeySections = { products: "products", orders: "orders", customers: "customers" } as const;
+
+export function homeyAdminUrl(section: CompanySection) {
+  if (section === "dashboard" || section === "settings") return homeyAdmin;
+  if (section === "products" || section === "orders" || section === "customers") {
+    return `${homeyAdmin}/${homeySections[section]}`;
+  }
+  return null;
+}
+
+export function orderWaybillUrl(id: string | null | undefined) {
+  return id && /^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i.test(id)
+    ? `${ordersManagerUrl}/waybills/${id}`
+    : null;
+}

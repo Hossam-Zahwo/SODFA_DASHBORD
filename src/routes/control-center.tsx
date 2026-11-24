@@ -1,6 +1,6 @@
 import { companyCsv } from "@/lib/company-csv";
 import { CatalogProductPhotos } from "@/components/CatalogProductPhotos";
-import { companyLocation, companySections, ordersManagerUrl, type CompanyProject as Project, type CompanySection as Tab } from "@/lib/company-navigation";
+import { companyLocation, companySections, homeyAdminUrl, orderWaybillUrl, ordersManagerUrl, type CompanyProject as Project, type CompanySection as Tab } from "@/lib/company-navigation";
 import { OrderMarginCalculator } from "@/components/OrderMarginCalculator";
 import { useEffect, useRef, useState } from "react";
 import { createFileRoute, Link } from "@tanstack/react-router";
@@ -120,6 +120,8 @@ function ControlCenter(){
     [order.id,order.source_order_id].some(id=>id?.toLowerCase().includes(orderQuery))
   )??[];
   const selectedOrder=bridge?.operations.orders.find(o=>o.id===selectedOrderId && (selectedBrand==="all"||o.brand===selectedBrand));
+  const waybillUrl=orderWaybillUrl(selectedOrder?.waybill_id);
+  const homeyUrl=project==="homey"?homeyAdminUrl(tab):null;
   const sodfaTotalSales=Number(bridge?.sodfa.salesSummary?.sales_egp??0);
   const canSeeSodfaStock=project==="sodfa"||project==="all";
   const sodfaInventoryValue=bridge?.sodfa.inventorySummary?.cost_value==null?null:Number(bridge.sodfa.inventorySummary.cost_value);
@@ -169,8 +171,13 @@ function ControlCenter(){
       </nav>
 
       <section aria-label={tabData.find(item=>item.id===tab)?.name} className="min-w-0">
-        {(tab==="dashboard"||tab==="orders"||tab==="products"||tab==="shipping"||tab==="customers")&&
+        {(tab==="dashboard"||tab==="orders"||tab==="products"||tab==="shipping"||tab==="customers"||homeyUrl)&&
           <div className="mb-4 flex flex-wrap gap-2">
+            {homeyUrl&&<a href={homeyUrl} target="_blank" rel="noreferrer" className="inline-flex items-center gap-2 rounded-lg bg-purple-300 px-3 py-2 text-sm font-bold text-[#25132e]">
+              <ExternalLink size={16}/>فتح الإدارة الأصلية لهومي
+            </a>}
+            {(tab==="dashboard"||tab==="products")&&canSeeSodfaStock&&
+              <Link to="/inventory" className="inline-flex items-center gap-2 rounded-lg border border-purple-300/45 px-3 py-2 text-sm text-purple-100"><Warehouse size={16}/>إدارة مخزون صدفة</Link>}
             {(tab==="dashboard"||tab==="orders")&&project!=="sodfa_web"&&
               <a href={orderUrl} className="inline-flex items-center gap-2 rounded-lg bg-purple-300 px-3 py-2 text-sm font-bold text-[#25132e]"><ShoppingCart size={16}/>إضافة وتأكيد طلب تجريبي</a>}
             {(tab==="dashboard"||tab==="products")&&project!=="orders"&&
@@ -247,6 +254,9 @@ function ControlCenter(){
           <div><span style={{color:ui.muted}}>المدفوع مقدمًا</span><div>{fmt(selectedOrder.prepaid??0)} ج.م</div></div>
           <div><span style={{color:ui.muted}}>المستلم من الشحن</span><div>{selectedOrder.carrier_received==null?"غير مسجل":fmt(selectedOrder.carrier_received)+" ج.م"}</div></div>
         </div>
+        {waybillUrl&&<a href={waybillUrl} target="_blank" rel="noreferrer" className="mt-4 inline-flex items-center gap-2 rounded-lg bg-purple-300 px-3 py-2 text-sm font-bold text-[#25132e]">
+          <ExternalLink size={16}/>افتح آخر بوليصة للطباعة
+        </a>}
         <h4 style={{margin:"18px 0 6px"}}>الأصناف داخل الطلب</h4>
         {(selectedOrder.items??[]).map((item,i)=><div key={i} style={{display:"flex",justifyContent:"space-between",gap:10,padding:"8px 0",borderBottom:"1px solid "+ui.border,fontSize:12}}>
           <span>{item.name} × {fmt(item.quantity)}</span><span>{fmt(Number(item.price||0)*Number(item.quantity||0))} ج.م</span>
