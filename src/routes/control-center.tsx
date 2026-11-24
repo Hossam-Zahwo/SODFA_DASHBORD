@@ -1,3 +1,5 @@
+import { calculateOrderTotal } from "@/lib/inventory-planning";
+import { orderStatusLabel, scopedCount } from "@/lib/company-dashboard";
 import { companyCsv } from "@/lib/company-csv";
 import { CatalogProductPhotos } from "@/components/CatalogProductPhotos";
 import { companyLocation, companySections, homeyAdminUrl, orderWaybillUrl, ordersManagerUrl, type CompanyProject as Project, type CompanySection as Tab } from "@/lib/company-navigation";
@@ -59,7 +61,6 @@ function ControlCenter(){
   const tab=location.section&&availableSections.includes(location.section)?location.section:"dashboard";
   const [loading,setLoading]=useState(true);
   const [loadError,setLoadError]=useState("");
-  const [lastRefresh,setLastRefresh]=useState("");
   const [selectedOrderId,setSelectedOrderId]=useState("");
   const [draftBusy,setDraftBusy]=useState("");
   const [draftMessage,setDraftMessage]=useState("");
@@ -74,13 +75,14 @@ function ControlCenter(){
       if(!session?.access_token) throw new Error("سجل دخولك بحساب صدفة لإتاحة لوحة المشاريع");
       const next=await getCompanyWorkspaceData({data:{token:session.access_token,brand:scope==="homey"?"homey":scope==="sodfa"||scope==="sodfa_web"?"sodfa":"all",project:scope,query:""}});
       if(sequence!==fetchSequence.current)return;
-      setLoaded({project:scope,data:next});setLastRefresh(new Date(next.fetchedAt).toLocaleString("en-GB"));
+      setLoaded({project:scope,data:next});
     }catch(e){if(sequence===fetchSequence.current){setLoadError(e instanceof Error?e.message:"فشل قراءة بيانات الربط");setLoaded(null)}}
     finally{if(sequence===fetchSequence.current)setLoading(false)}
   }
   async function updateDraft(product:NonNullable<Bridge>["catalog"]["products"][number], visible:boolean){
     const source=product.source==="homey_store"?"homey_store":product.source==="sodfa_dashboard"?"sodfa_dashboard":null;
     if(!source){setDraftMessage("هذا المنتج مصدره غير مدعوم حالياً");return;}
+    const sequence=fetchSequence.current;
     setDraftBusy(product.id);setDraftMessage("");
     try {
       const {data:{session}}=await supabase.auth.getSession();
@@ -90,9 +92,10 @@ function ControlCenter(){
         channel:source==="homey_store"?"homey_web":"sodfa_web",
         intendedVisibility:visible,price:product.draft_price??null
       }});
+      if(sequence!==fetchSequence.current)return;
       setDraftMessage("تم حفظ إعداد العرض كمسودة داخل الـCRM، ولم يتم تغيير أي موقع خارجي");
       await refresh(project);
-    }catch(e){setDraftMessage("فشل حفظ المسودة: "+(e instanceof Error?e.message:"خطأ غير معروف"))}
+    }catch(e){if(sequence===fetchSequence.current)setDraftMessage("فشل حفظ المسودة: "+(e instanceof Error?e.message:"خطأ غير معروف"))}
     finally {setDraftBusy("")}
   }
   function openWorkspace(nextProject:Project,nextSection:Tab){
@@ -107,10 +110,16 @@ function ControlCenter(){
   const chosen=projectData.find(p=>p.id===project)!;
   const selectedBrand=project==="homey"?"homey":project==="sodfa"||project==="sodfa_web"?"sodfa":"all";
   const statuses=bridge?.operations.summary.filter(x=>selectedBrand==="all"||x.brand===selectedBrand)??[];
-  const orderTotal=statuses.reduce((a,b)=>a+Number(b.count),0);
-  const shipped=statuses.filter(x=>/deliver|shipping|shipped|transit|تم التسليم|قيد الشحن/i.test(x.status)).reduce((a,b)=>a+Number(b.count),0);
-  const activeProductRefs=bridge?.catalog.counts.filter(x=>selectedBrand==="all"||x.brand===selectedBrand).reduce((a,b)=>a+Number(b.count),0)??0;
-  const customers=bridge?.operations.customers.filter(x=>selectedBrand==="all"||x.brand===selectedBrand).reduce((a,b)=>a+Number(b.count),0)??0;
+  const orderTotal=scopedCount(bridge?.operations.summary,selectedBrand,bridge?.operations.available.summary);
+  const shipped=scopedCount(bridge?.operations.summary,selectedBrand,bridge?.operations.available.summary,
+    row=>row.status==="shipped"||row.status==="delivered");
+  const activeProductRefs=scopedCount(bridge?.catalog.counts,selectedBrand,bridge?.catalog.countsAvailable);
+  const customers=scopedCount(bridge?.operations.customers,selectedBrand,bridge?.operations.available.customers);
+  const inventoryRows=bridge?.sodfa.inventorySummary?.sku_rows??null;
+  const lastRefresh=bridge?new Intl.DateTimeFormat("ar-EG",{
+    dateStyle:"medium",timeStyle:"short",timeZone:"Africa/Cairo",
+  }).format(new Date(bridge.fetchedAt)):null;
+  const metric=(value:number|null)=>value===null?(loading?"جاري التحميل":"غير متاح"):fmt(value);
   const rowProducts=bridge?.catalog.products.filter(x=>(selectedBrand==="all"||x.brand===selectedBrand)&&x.title.toLowerCase().includes(search.toLowerCase()))??[];
   const orderQuery=search.trim().toLowerCase();
   const orderStatuses=[...new Set((bridge?.operations.orders??[]).map(order=>order.status))].sort();
@@ -122,7 +131,9 @@ function ControlCenter(){
   const selectedOrder=bridge?.operations.orders.find(o=>o.id===selectedOrderId && (selectedBrand==="all"||o.brand===selectedBrand));
   const waybillUrl=orderWaybillUrl(selectedOrder?.waybill_id);
   const homeyUrl=project==="homey"?homeyAdminUrl(tab):null;
-  const sodfaTotalSales=Number(bridge?.sodfa.salesSummary?.sales_egp??0);
+  const sodfaTotalSales=bridge?.sodfa.salesSummary?.sales_egp??null;
+  const salesPeriod=bridge?.sodfa.salesSummary;
+  const salesRange=salesPeriod?.first_date&&salesPeriod.last_date?`من ${salesPeriod.first_date.slice(0,10)} إلى ${salesPeriod.last_date.slice(0,10)}`:null;
   const canSeeSodfaStock=project==="sodfa"||project==="all";
   const sodfaInventoryValue=bridge?.sodfa.inventorySummary?.cost_value==null?null:Number(bridge.sodfa.inventorySummary.cost_value);
   const allowedTabs=availableSections.map(section=>tabData.find(item=>item.id===section)!);
@@ -139,6 +150,7 @@ function ControlCenter(){
   return <AppShell title="مركز تحكم الشركة">
   <div dir="rtl" style={{fontFamily:"Cairo, sans-serif",color:"#fff",maxWidth:1550,margin:"0 auto",padding:"10px 0 50px"}}>
     <header className="mb-5 rounded-2xl border border-white/10 bg-[#1b1222] p-4 sm:p-6">
+      {lastRefresh&&<p className="mb-2 text-xs text-zinc-300">آخر قراءة لبيانات {chosen.name} · {lastRefresh} بتوقيت القاهرة</p>}
       <div className="flex flex-wrap items-end justify-between gap-4">
         <div>
           <h1 className="text-2xl font-black sm:text-3xl">مركز إدارة المشاريع</h1>
@@ -200,26 +212,26 @@ function ControlCenter(){
     {canSeeSodfaStock&&tab==="products"&&<CompanyInventoryAssistant key={project}/>}
     {tab==="dashboard"&&<>
       <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(190px,1fr))",gap:12,marginBottom:13}}>
-        {project!=="orders"&&project!=="sodfa_web"&&<Metric title="فهرس المنتجات" value={bridge?.catalog.countsAvailable?fmt(activeProductRefs):"غير متاح"} icon={Package} sub="سجلات مرجعية، ليست كل المنتجات المنشورة"/>}
-        {project!=="sodfa_web"&&<Metric title="الأوردرات المسجلة" value={bridge?.operations.available.summary?fmt(orderTotal):"غير متاح"} icon={ShoppingCart} sub="الموجودة في قاعدة Orders Manager"/>}
-        {project!=="sodfa_web"&&<Metric title="العملاء المسجلون" value={bridge?.operations.available.customers?fmt(customers):"غير متاح"} icon={Users} sub="أعداد فقط بدون بيانات شخصية"/>}
-        {project!=="sodfa_web"&&<Metric title="طلبات بتصنيفات شحن/تسليم" value={bridge?.operations.available.summary?fmt(shipped):"غير متاح"} icon={Truck} sub="وفق الحالات الأصلية المسجلة"/>}
-        {canSeeSodfaStock&&<Metric title="أصناف مخزون صدفة" value={bridge?.sodfa.inventorySummary?fmt(bridge.sodfa.inventorySummary.sku_rows):"غير متاح"} icon={Boxes} sub="صفوف عرض المخزون في Neon، لا تشمل بالضرورة كل المستودعات"/>}
-        {canSeeSodfaStock&&<Metric title="مبيعات صدفة (السجل الحالي)" value={bridge?.sodfa.salesSummary?fmt(sodfaTotalSales)+" ج.م":"غير متاح"} icon={ChartNoAxesCombined} sub="بناءً على سجلات المبيعات في صدفة، دون دمج مع طلبات OMS"/>}
+        {project!=="orders"&&project!=="sodfa_web"&&<Metric title="فهرس المنتجات" value={metric(activeProductRefs)} icon={Package} sub="فهرس CRM · سجلات المشروع"/>}
+        {project!=="sodfa_web"&&<Metric title="الأوردرات المسجلة" value={metric(orderTotal)} icon={ShoppingCart} sub="مدير الطلبات · كل الفترات"/>}
+        {project!=="sodfa_web"&&<Metric title="العملاء المسجلون" value={metric(customers)} icon={Users} sub="مدير الطلبات · سجلات العملاء"/>}
+        {project!=="sodfa_web"&&<Metric title="طلبات مشحونة أو مسلّمة" value={metric(shipped)} icon={Truck} sub="مدير الطلبات · الحالة الحالية"/>}
+        {canSeeSodfaStock&&<Metric title="سجلات مخزون الويب" value={metric(inventoryRows)} icon={Boxes} sub="Neon · عرض مخزون صدفة المخصص للويب"/>}
+        {canSeeSodfaStock&&<Metric title="إجمالي سجل مبيعات صدفة" value={sodfaTotalSales===null?metric(null):fmt(sodfaTotalSales)+" ج.م"} icon={ChartNoAxesCombined} sub={salesRange? "Neon · "+salesRange:"Neon · سجل مبيعات صدفة"}/>}
       </div>
       <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(300px,1fr))",gap:13}}>
-        {project!=="sodfa_web"&&<div style={panel}><h2 style={{fontSize:17}}>ملخص الطلبات حسب الحالة</h2>{statuses.length?statuses.map(s=><div key={s.brand+s.status} style={{display:"flex",justifyContent:"space-between",borderBottom:"1px solid "+ui.border,padding:"10px 0",fontSize:12}}><span>{s.brand==="homey"?"هومي":"صدفة"} · {s.status}</span><b>{fmt(s.count)}</b></div>):<p style={{fontSize:12,color:ui.muted}}>لا توجد بيانات متاحة</p>}<button onClick={()=>setTab("orders")} style={{marginTop:16,color:"#eacafa",background:"transparent",border:0,cursor:"pointer"}}>عرض الطلبات</button></div>}
+        {project!=="sodfa_web"&&<div style={panel}><h2 style={{fontSize:17}}>ملخص الطلبات حسب الحالة</h2>{statuses.length?statuses.map(s=><div key={s.brand+s.status} style={{display:"flex",justifyContent:"space-between",borderBottom:"1px solid "+ui.border,padding:"10px 0",fontSize:12}}><span>{s.brand==="homey"?"هومي":"صدفة"} · {orderStatusLabel(s.status)}</span><b>{fmt(s.count)}</b></div>):<p style={{fontSize:12,color:ui.muted}}>لا توجد بيانات متاحة</p>}<button onClick={()=>setTab("orders")} style={{marginTop:16,color:"#eacafa",background:"transparent",border:0,cursor:"pointer"}}>عرض الطلبات</button></div>}
       </div>
     </>}
     {tab==="products"&&project==="sodfa_web"&&<div style={panel}><h2>منتجات موقع صدفة</h2><p>قاعدة المتجر الأصلية غير نشطة؛ لا يمكن عرض كتالوج منشور مؤكد. لم نخلط منتجات مخزون صدفة بالمنتجات المنشورة على الموقع.</p></div>}
     {((tab==="products"&&project!=="sodfa_web")||tab==="orders")&&<div style={panel}>
       <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:15,flexWrap:"wrap"}}>
-        <div><h2 style={{margin:0,fontSize:19}}>{tab==="products"?"منتجات "+chosen.name:"أوردرات "+chosen.name}</h2><p style={{color:ui.muted,fontSize:12}}>{tab==="products"?channelNotice:"طلبات حقيقية من قاعدة إدارة الطلبات، بدون بيانات العملاء الشخصية في هذه المرحلة."}</p></div>
+        <div><h2 style={{margin:0,fontSize:19}}>{tab==="products"?"منتجات "+chosen.name:"أوردرات "+chosen.name}</h2><p style={{color:ui.muted,fontSize:12}}>{tab==="products"?channelNotice:"طلبات من مدير الطلبات. تفاصيل العميل حسب صلاحية الحساب."}</p></div>
         <div style={{display:"flex",gap:8,alignItems:"center",flexWrap:"wrap"}}>
         <div style={{display:"flex",alignItems:"center",gap:5,background:"#08080A",border:"1px solid #39333c",padding:"4px 9px",borderRadius:10}}><Search size={15} color={ui.muted}/><input value={search} onChange={e=>setSearch(e.target.value)} aria-label={tab==="products"?"ابحث عن منتج":"ابحث برقم الطلب أو رقم المصدر"} placeholder={tab==="products"?"ابحث عن منتج":"رقم الطلب أو المصدر"} style={{background:"transparent",color:"white",padding:8,outline:0,border:0,fontSize:12}}/></div>
         {tab==="orders"&&<select aria-label="حالة الطلب" value={orderStatus} onChange={event=>{setOrderStatus(event.target.value);setSelectedOrderId("");}} className="rounded-lg border border-white/20 bg-[#100c15] px-3 py-2 text-sm">
           <option value="">كل الحالات</option>
-          {orderStatuses.map(status=><option key={status} value={status}>{status}</option>)}
+          {orderStatuses.map(status=><option key={status} value={status}>{orderStatusLabel(status)}</option>)}
         </select>}
         <button type="button" disabled={tab==="products"?!rowProducts.length:!rowOrders.length} onClick={downloadCsv} style={{background:ui.soft,color:"#fff",border:"1px solid "+ui.purple,padding:"10px 13px",borderRadius:10,cursor:"pointer",fontSize:12}}><FileDown size={14} style={{display:"inline",marginLeft:6}}/>تصدير CSV</button>
         </div>
@@ -235,7 +247,7 @@ function ControlCenter(){
           style={{border:"1px solid "+ui.purple,borderRadius:8,background:ui.soft,color:"white",padding:"6px 9px",cursor:"pointer",fontSize:11}}>اقتراح عرض</button>
         <button type="button" disabled={!bridge?.canWriteCatalogDrafts||Boolean(draftBusy)} onClick={()=>void updateDraft(p,false)}
           style={{border:"1px solid "+ui.border,borderRadius:8,background:"#111114",color:"white",padding:"6px 9px",cursor:"pointer",fontSize:11}}>اقتراح إخفاء</button>
-      </div></td></tr>)}</tbody></table>:<table style={{width:"100%",minWidth:700,borderCollapse:"collapse",fontSize:12}}><thead><tr style={{color:ui.light,borderBottom:"1px solid "+ui.border}}>{["رقم الطلب","البراند","العميل","الإجمالي","تاريخ التسجيل","حالة الطلب","شركة الشحن","تفاصيل"].map(h=><th key={h} style={{textAlign:"right",padding:12}}>{h}</th>)}</tr></thead><tbody>{rowOrders.map(o=><tr key={o.id} style={{borderBottom:"1px solid "+ui.border}}><td style={{padding:12,fontFamily:"monospace"}}>{o.id.slice(0,12)}</td><td>{o.brand==="homey"?"هومي":"صدفة"}</td><td>{o.customer_name}</td><td>{fmt(o.manual_total??((o.items??[]).reduce((a,i)=>a+Number(i.quantity||0)*Number(i.price||0),0)+Number(o.shipping||0)-Number(o.discount||0)))} ج.م</td><td>{o.created_at?.slice(0,10)??"—"}</td><td><Tag>{o.status}</Tag></td><td>{o.shipping_company??"غير محدد"}</td><td><button type="button" onClick={()=>setSelectedOrderId(o.id)} style={{border:"1px solid "+ui.purple,color:"white",background:ui.soft,padding:"6px 10px",borderRadius:8,cursor:"pointer"}}>تفاصيل الطلب</button></td></tr>)}</tbody></table>}
+      </div></td></tr>)}</tbody></table>:<table style={{width:"100%",minWidth:700,borderCollapse:"collapse",fontSize:12}}><thead><tr style={{color:ui.light,borderBottom:"1px solid "+ui.border}}>{["رقم الطلب","البراند","العميل","الإجمالي","تاريخ التسجيل","حالة الطلب","شركة الشحن","تفاصيل"].map(h=><th key={h} style={{textAlign:"right",padding:12}}>{h}</th>)}</tr></thead><tbody>{rowOrders.map(o=><tr key={o.id} style={{borderBottom:"1px solid "+ui.border}}><td style={{padding:12,fontFamily:"monospace"}}>{o.id.slice(0,12)}</td><td>{o.brand==="homey"?"هومي":"صدفة"}</td><td>{o.customer_name}</td><td>{bridge?.accessRole==="viewer"?"محجوب":fmt(o.manual_total??calculateOrderTotal(o.items??[],o.shipping??0,o.discount??0))+" ج.م"}</td><td>{o.created_at?.slice(0,10)??"—"}</td><td><Tag>{orderStatusLabel(o.status)}</Tag></td><td>{o.shipping_company??"غير محدد"}</td><td><button type="button" onClick={()=>setSelectedOrderId(o.id)} style={{border:"1px solid "+ui.purple,color:"white",background:ui.soft,padding:"6px 10px",borderRadius:8,cursor:"pointer"}}>تفاصيل الطلب</button></td></tr>)}</tbody></table>}
       </div>
       {tab==="orders"&&selectedOrder&&<div style={{...panel,marginTop:18,background:"#1b1420",border:"1px solid "+ui.purple}}>
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:10}}>
@@ -247,7 +259,7 @@ function ControlCenter(){
           <div><span style={{color:ui.muted}}>رقم الهاتف</span><div dir="ltr" style={{textAlign:"right"}}>{selectedOrder.phone}</div></div>
           <div><span style={{color:ui.muted}}>المحافظة والمدينة</span><div>{selectedOrder.governorate??"—"} · {selectedOrder.city??"—"}</div></div>
           <div><span style={{color:ui.muted}}>العنوان</span><div>{selectedOrder.address??"—"}</div></div>
-          <div><span style={{color:ui.muted}}>حالة الطلب</span><div>{selectedOrder.status}</div></div>
+          <div><span style={{color:ui.muted}}>حالة الطلب</span><div>{orderStatusLabel(selectedOrder.status)}</div></div>
           <div><span style={{color:ui.muted}}>شركة الشحن</span><div>{selectedOrder.shipping_company??"غير محدد"}</div></div>
           <div><span style={{color:ui.muted}}>طريقة الدفع</span><div>{selectedOrder.payment_method??"غير محدد"}</div></div>
           <div><span style={{color:ui.muted}}>المصدر</span><div>{selectedOrder.source??"—"} · {selectedOrder.source_order_id?"مرتبط بأصل الطلب":"غير مرتبط بمعرّف الطلب الأصلي"}</div></div>
@@ -261,14 +273,14 @@ function ControlCenter(){
         {(selectedOrder.items??[]).map((item,i)=><div key={i} style={{display:"flex",justifyContent:"space-between",gap:10,padding:"8px 0",borderBottom:"1px solid "+ui.border,fontSize:12}}>
           <span>{item.name} × {fmt(item.quantity)}</span><span>{fmt(Number(item.price||0)*Number(item.quantity||0))} ج.م</span>
         </div>)}
-        <p style={{fontSize:11,color:ui.muted,marginTop:12}}>البيانات دي للمدير المسجل فقط. تحديث حالة الطلب والتحصيل والشحن لسه لازم يمر من API مدير الطلبات الأصلي.</p>
+        <p style={{fontSize:11,color:ui.muted,marginTop:12}}>تفاصيل الطلب حسب صلاحية الحساب. تعديل الحالة والتحصيل من مدير الطلبات.</p>
       </div>}
       {!loading&&((tab==="products"&&!rowProducts.length)||(tab==="orders"&&!rowOrders.length))&&<p style={{color:ui.muted}}>{(tab==="products"?bridge?.catalog.productsAvailable:bridge?.operations.available.orders)?"مفيش نتائج للفلاتر الحالية.":"بيانات القائمة غير متاحة حاليًا."}</p>}
-      <p style={{color:ui.muted,fontSize:11}}>عرض بحد أقصى {tab==="products"?"500 منتج":"500 طلب"}؛ البيانات من مصادرها الحقيقية وصلاحيات الصفحة للمدير.</p>
+      {(tab==="products"?bridge?.catalog.productsAvailable:bridge?.operations.available.orders)&&<p style={{color:ui.muted,fontSize:11}}>{tab==="products"?"المنتجات المعروضة":"الطلبات المعروضة"} {fmt(tab==="products"?rowProducts.length:rowOrders.length)} من {fmt(tab==="products"?(bridge?.catalog.products.length??0):(bridge?.operations.orders.length??0))} سجل محمّل. الحد الأقصى 500 سجل؛ إجمالي المشروع في النظرة العامة.</p>}
     </div>}
-    {tab==="shipping"&&<div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(290px,1fr))",gap:13}}><div style={panel}><h2>حالات الشحن حسب المشروع</h2>{(bridge?.operations.shipments??[]).filter(s=>selectedBrand==="all"||s.brand===selectedBrand).map(s=><div key={s.brand+s.state} style={{display:"flex",justifyContent:"space-between",padding:"11px 0",borderBottom:"1px solid "+ui.border}}><span>{s.brand==="homey"?"هومي":"صدفة"} · {s.state}</span><b>{fmt(s.count)}</b></div>)}{!bridge?.operations.available.shipments&&<p>ربط الشحن غير متاح حاليًا</p>}</div><div style={panel}><h2>إدارة عمليات الشحن</h2><p style={{fontSize:12,lineHeight:2,color:ui.muted}}>ده ملخص مباشر من جداول تالا المسجلة في مدير الطلبات. إنشاء الشحنة، طباعة البوليصة، تحصيل الأموال وتحديث الحالة تحتاج واجهة كتابة آمنة بنفس صلاحيات مدير الطلبات. مش هنشغلها بتعديل مباشر في قاعدة البيانات.</p><Tag tone="amber">الإجراءات مؤجلة لحين التحقق من التفويض</Tag></div></div>}
-    {tab==="customers"&&<div style={panel}><h2>عملاء {chosen.name}</h2><div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(200px,1fr))",gap:12,marginBottom:14}}><Metric title="عدد العملاء المسجلين" value={bridge?.operations.available.customers?fmt(customers):"غير متاح"} icon={Users}/><Metric title="عدد طلبات المشروع" value={bridge?.operations.available.summary?fmt(orderTotal):"غير متاح"} icon={ShoppingCart}/></div><p style={{color:ui.muted,fontSize:12}}>الدمج الآمن لسجلات العملاء والوصول لأرقام الهاتف وإرسال واتساب يتطلب ربط صلاحيات هومي وصدفة قبل عرض بيانات شخصية داخل المركز.</p></div>}
-    {tab==="finance"&&bridge?.accessRole!=="viewer"&&<div style={panel}><h2>تقارير {chosen.name}</h2>{canSeeSodfaStock&&<div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(200px,1fr))",gap:12,marginBottom:14}}><Metric title="قيمة تكلفة مخزون الويب المسجل" value={bridge?.sodfa.inventorySummary?(sodfaInventoryValue===null?"محجوب":fmt(sodfaInventoryValue)+" ج.م"):"غير متاح"} icon={Database}/><Metric title="إجمالي قيمة المبيعات بسجل صدفة" value={bridge?.sodfa.salesSummary?fmt(sodfaTotalSales)+" ج.م":"غير متاح"} icon={ChartNoAxesCombined}/></div>}<p style={{color:ui.muted,fontSize:12,lineHeight:2}}>لم يتم دمج المبيعات بالأوردرات ماليًا بعد، حفاظًا على عدم تكرار الإيرادات. صافي الربح والتكلفة والتحصيل النهائي يحتاجون مطابقة سعر البيع التاريخي وتكلفة البضاعة والشحن والمرتجعات.</p></div>}
+    {tab==="shipping"&&<div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(290px,1fr))",gap:13}}><div style={panel}><h2>حالات الشحن حسب المشروع</h2>{(bridge?.operations.shipments??[]).filter(s=>selectedBrand==="all"||s.brand===selectedBrand).map(s=><div key={s.brand+s.state} style={{display:"flex",justifyContent:"space-between",padding:"11px 0",borderBottom:"1px solid "+ui.border}}><span>{s.brand==="homey"?"هومي":"صدفة"} · {s.state}</span><b>{fmt(s.count)}</b></div>)}{!bridge?.operations.available.shipments&&<p>ربط الشحن غير متاح حاليًا</p>}</div><div style={panel}><h2>إدارة عمليات الشحن</h2><p style={{fontSize:12,lineHeight:2,color:ui.muted}}>الملخص من حالات تالا المسجلة في مدير الطلبات. افتح مدير الطلبات لإنشاء الشحنات والتحصيل، أو افتح البوليصة المرتبطة من تفاصيل الطلب.</p></div></div>}
+    {tab==="customers"&&<div style={panel}><h2>عملاء {chosen.name}</h2><div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(200px,1fr))",gap:12,marginBottom:14}}><Metric title="عدد العملاء المسجلين" value={metric(customers)} icon={Users}/><Metric title="عدد طلبات المشروع" value={metric(orderTotal)} icon={ShoppingCart}/></div><p style={{color:ui.muted,fontSize:12}}>الدمج الآمن لسجلات العملاء والوصول لأرقام الهاتف وإرسال واتساب يتطلب ربط صلاحيات هومي وصدفة قبل عرض بيانات شخصية داخل المركز.</p></div>}
+    {tab==="finance"&&bridge?.accessRole!=="viewer"&&<div style={panel}><h2>تقارير {chosen.name}</h2>{canSeeSodfaStock&&<div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(200px,1fr))",gap:12,marginBottom:14}}><Metric title="قيمة تكلفة مخزون الويب المسجل" value={bridge?.sodfa.inventorySummary?(sodfaInventoryValue===null?"محجوب":fmt(sodfaInventoryValue)+" ج.م"):"غير متاح"} icon={Database}/><Metric title="إجمالي قيمة المبيعات بسجل صدفة" value={sodfaTotalSales===null?metric(null):fmt(sodfaTotalSales)+" ج.م"} icon={ChartNoAxesCombined}/></div>}<p style={{color:ui.muted,fontSize:12,lineHeight:2}}>لم يتم دمج المبيعات بالأوردرات ماليًا بعد، حفاظًا على عدم تكرار الإيرادات. صافي الربح والتكلفة والتحصيل النهائي يحتاجون مطابقة سعر البيع التاريخي وتكلفة البضاعة والشحن والمرتجعات.</p></div>}
     {tab==="finance"&&bridge&&bridge.accessRole!=="viewer"&&<OrderMarginCalculator/>}
     {tab==="settings"&&<div style={panel}><h2>الربط والصلاحيات</h2><p><Link to="/control-center-security" style={{display:"inline-flex",padding:"12px 18px",border:"1px solid "+ui.purple,borderRadius:10,color:"#f6d4ff",background:ui.soft,fontWeight:700}}>إدارة مسؤوليات الموظفين والنسخ الاحتياطية وسجل الموافقات ←</Link></p><div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(200px,1fr))",gap:12}}>{[
 {name:"قاعدة CRM المركزية",status:bridge?.catalog.connected?"متصلة للقراءة":"غير متصلة",ok:bridge?.catalog.connected,detail:"قراءة بيانات المنتجات والمخزون المرجعي"},
@@ -278,7 +290,6 @@ function ControlCenter(){
 {name:"الطلبات وتالا",status:"تجربة إضافة وتأكيد مفعّلة",ok:true,detail:"عمليات الكتابة على قاعدة الاختبار فقط؛ تعديل الإنتاج وتالا لم يتصلا بعد",href:"/control-center-orders"},
 ].map(x=><div key={x.name} style={{padding:15,background:"#0A0A0C",border:"1px solid "+ui.border,borderRadius:12}}><b>{x.name}</b><div style={{marginTop:12}}><Tag tone={x.ok?"green":"amber"}>{x.status}</Tag></div><p style={{fontSize:11,color:ui.muted,lineHeight:1.8}}>{x.detail}</p>{x.href&&<a href={x.href} style={{fontSize:12,color:"#dda5f7"}}>فتح التحكم ←</a>}</div>)}</div><p style={{color:ui.muted,fontSize:12,lineHeight:2,marginTop:16}}>كل حساب لا يحصل على صلاحيات الكتابة تلقائيًا. تُمنع بيانات التكلفة والموردين من الوصول لمواقع العملاء. فصل العلامات وقنوات النشر لا يزال قيد تطبيق سياسات الوصول قبل ربط الكتابة.</p></div>}
     {bridge?.accessRole==="viewer"&&<p style={{fontSize:12,color:"#d4a7e3"}}>دورك: مشاهد — بيانات العملاء الشخصية وتكلفة الشراء محجوبة، والتعديل غير مسموح.</p>}
-    <p style={{marginTop:22,color:"#88818e",fontSize:11}}><ShieldCheck size={13} style={{display:"inline",marginLeft:6}}/> نسخة تطوير، قراءة حقيقية ومسودات وطلبات تجريبية، دون تعديل مواقع الإنتاج أو مخازنها. {lastRefresh&&"آخر تحميل "+lastRefresh}</p>
       </section>
     </div>
   </div></AppShell>
