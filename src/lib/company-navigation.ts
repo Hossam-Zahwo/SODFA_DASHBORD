@@ -3,6 +3,7 @@ export const sections = [
   "dashboard",
   "orders",
   "products",
+  "categories",
   "shipping",
   "customers",
   "finance",
@@ -17,9 +18,8 @@ export function companySections(
 ): readonly CompanySection[] {
   if (project === "sodfa_web") return ["dashboard", "products", "settings"];
   if (project === "orders") return ["dashboard", "orders", "shipping", "customers", "settings"];
-  return project === "homey" || viewer
-    ? sections.filter((section) => section !== "finance")
-    : sections;
+  if (project === "homey") return sections.filter((section) => section !== "finance");
+  return sections.filter((section) => section !== "categories" && (!viewer || section !== "finance"));
 }
 
 export function companyLocation(search: Record<string, unknown>): {
@@ -34,11 +34,12 @@ export function companyLocation(search: Record<string, unknown>): {
 export const ordersManagerUrl = "https://homey-sodfa-orders-manager.vercel.app";
 
 const homeyAdmin = "https://www.homeyegypt.com/admin";
-const homeySections = { products: "products", orders: "orders", customers: "customers" } as const;
+const homeySections = { categories: "categories", products: "products", orders: "orders", customers: "customers" } as const;
 
 export function homeyAdminUrl(section: CompanySection) {
-  if (section === "dashboard" || section === "settings") return homeyAdmin;
-  if (section === "products" || section === "orders" || section === "customers") {
+  if (section === "dashboard") return homeyAdmin;
+  if (section === "settings") return `${homeyAdmin}/settings`;
+  if (section === "categories" || section === "products" || section === "orders" || section === "customers") {
     return `${homeyAdmin}/${homeySections[section]}`;
   }
   return null;

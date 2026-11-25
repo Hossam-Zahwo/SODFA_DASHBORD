@@ -7,6 +7,8 @@ import { OrderMarginCalculator } from "@/components/OrderMarginCalculator";
 import { useEffect, useRef, useState } from "react";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { CompanyInventoryAssistant } from "@/components/CompanyInventoryAssistant";
+import { HomeyCategories } from "@/components/HomeyCategories";
+import { OrdersManagerPanel } from "@/components/OrdersManagerPanel";
 import { AppShell } from "@/components/AppShell";
 import { supabase } from "@/lib/supabase";
 import { getCompanyWorkspaceData } from "@/lib/company-workspace.functions";
@@ -15,7 +17,7 @@ import {
   Activity, Boxes, Building2, ChartNoAxesCombined, ClipboardList,
   Database, ExternalLink, Package, RefreshCw, Search,
   ShieldCheck, ShoppingCart, Truck, Users, Warehouse, FileDown,
-  AlertTriangle, Store,
+  AlertTriangle, Store, Tags,
 } from "lucide-react";
 
 export const Route = createFileRoute("/control-center")({ validateSearch: companyLocation, component: ControlCenter });
@@ -34,6 +36,7 @@ const projectData: {id: Project; name: string; detail: string; icon: typeof Pack
 const tabData: {id:Tab;name:string;icon:typeof Package}[] = [
   {id:"dashboard",name:"لوحة الأداء",icon:Activity},
   {id:"products",name:"المنتجات",icon:Boxes},
+  {id:"categories",name:"الأقسام",icon:Tags},
   {id:"orders",name:"الأوردرات",icon:ShoppingCart},
   {id:"shipping",name:"الشحن والتحصيل",icon:Truck},
   {id:"customers",name:"العملاء",icon:Users},
@@ -68,7 +71,6 @@ function ControlCenter(){
   useEffect(()=>{void refresh(project);},[project]);
   async function refresh(scope:Project=project){
     const sequence=++fetchSequence.current;
-    setLoaded(null);
     setLoading(true);setLoadError("");
     try {
       const {data:{session}}=await supabase.auth.getSession();
@@ -131,6 +133,9 @@ function ControlCenter(){
   const selectedOrder=bridge?.operations.orders.find(o=>o.id===selectedOrderId && (selectedBrand==="all"||o.brand===selectedBrand));
   const waybillUrl=orderWaybillUrl(selectedOrder?.waybill_id);
   const homeyUrl=project==="homey"?homeyAdminUrl(tab):null;
+  const homeyOrdersManagerUrl=import.meta.env["VITE_ORDERS_MANAGER_URL"] ||
+    (import.meta.env.DEV?"http://127.0.0.1:3001/orders-manager":undefined);
+  const showHomeyOrders=project==="homey"&&tab==="orders"&&homeyOrdersManagerUrl&&bridge&&bridge.accessRole!=="viewer";
   const sodfaTotalSales=bridge?.sodfa.salesSummary?.sales_egp??null;
   const salesPeriod=bridge?.sodfa.salesSummary;
   const salesRange=salesPeriod?.first_date&&salesPeriod.last_date?`من ${salesPeriod.first_date.slice(0,10)} إلى ${salesPeriod.last_date.slice(0,10)}`:null;
@@ -186,11 +191,11 @@ function ControlCenter(){
         {(tab==="dashboard"||tab==="orders"||tab==="products"||tab==="shipping"||tab==="customers"||homeyUrl)&&
           <div className="mb-4 flex flex-wrap gap-2">
             {homeyUrl&&<a href={homeyUrl} target="_blank" rel="noreferrer" className="inline-flex items-center gap-2 rounded-lg bg-purple-300 px-3 py-2 text-sm font-bold text-[#25132e]">
-              <ExternalLink size={16}/>فتح الإدارة الأصلية لهومي
+              <ExternalLink size={16}/>الإدارة الأصلية لهومي
             </a>}
             {(tab==="dashboard"||tab==="products")&&canSeeSodfaStock&&
               <Link to="/inventory" className="inline-flex items-center gap-2 rounded-lg border border-purple-300/45 px-3 py-2 text-sm text-purple-100"><Warehouse size={16}/>إدارة مخزون صدفة</Link>}
-            {(tab==="dashboard"||tab==="orders")&&project!=="sodfa_web"&&
+            {(tab==="dashboard"||tab==="orders")&&project!=="sodfa_web"&&!showHomeyOrders&&
               <a href={orderUrl} className="inline-flex items-center gap-2 rounded-lg bg-purple-300 px-3 py-2 text-sm font-bold text-[#25132e]"><ShoppingCart size={16}/>إضافة وتأكيد طلب تجريبي</a>}
             {(tab==="dashboard"||tab==="products")&&project!=="orders"&&
               <a href={catalogUrl} className="inline-flex items-center gap-2 rounded-lg border border-purple-300/45 px-3 py-2 text-sm text-purple-100"><Boxes size={16}/>الكتالوج ومسودات النشر</a>}
@@ -210,6 +215,17 @@ function ControlCenter(){
     </div>}
     {loadError&&<div style={{...panel,border:"1px solid #8f5151",marginBottom:14}}><AlertTriangle size={17} style={{display:"inline",marginLeft:8}}/>تعذر جلب بيانات الربط: {loadError}. بيانات صدفة المحلية قد تظل متاحة.</div>}
     {canSeeSodfaStock&&tab==="products"&&<CompanyInventoryAssistant key={project}/>}
+    {project==="homey"&&tab==="categories"&&bridge&&<HomeyCategories/>}
+    {showHomeyOrders&&<OrdersManagerPanel url={homeyOrdersManagerUrl} brand="homey"/>}
+    {project==="homey"&&tab==="dashboard"&&<div className="mb-4 grid gap-2 sm:grid-cols-3">
+      {(["products","categories","orders"] as const).map(section=>{
+        const item=tabData.find(entry=>entry.id===section)!;
+        return <Link key={section} to="/control-center" search={{project:"homey",section}}
+          className="flex min-h-12 items-center gap-2 rounded-xl border border-white/10 bg-[#1b1222] px-4 py-3 text-sm font-bold hover:bg-[#2a1530]">
+          <item.icon size={18} className="text-purple-300"/>{item.name}
+        </Link>;
+      })}
+    </div>}
     {tab==="dashboard"&&<>
       <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(190px,1fr))",gap:12,marginBottom:13}}>
         {project!=="orders"&&project!=="sodfa_web"&&<Metric title="فهرس المنتجات" value={metric(activeProductRefs)} icon={Package} sub="فهرس CRM · سجلات المشروع"/>}
@@ -224,7 +240,7 @@ function ControlCenter(){
       </div>
     </>}
     {tab==="products"&&project==="sodfa_web"&&<div style={panel}><h2>منتجات موقع صدفة</h2><p>قاعدة المتجر الأصلية غير نشطة؛ لا يمكن عرض كتالوج منشور مؤكد. لم نخلط منتجات مخزون صدفة بالمنتجات المنشورة على الموقع.</p></div>}
-    {((tab==="products"&&project!=="sodfa_web")||tab==="orders")&&<div style={panel}>
+    {((tab==="products"&&project!=="sodfa_web")||(tab==="orders"&&!showHomeyOrders))&&<div style={panel}>
       <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:15,flexWrap:"wrap"}}>
         <div><h2 style={{margin:0,fontSize:19}}>{tab==="products"?"منتجات "+chosen.name:"أوردرات "+chosen.name}</h2><p style={{color:ui.muted,fontSize:12}}>{tab==="products"?channelNotice:"طلبات من مدير الطلبات. تفاصيل العميل حسب صلاحية الحساب."}</p></div>
         <div style={{display:"flex",gap:8,alignItems:"center",flexWrap:"wrap"}}>
@@ -282,6 +298,19 @@ function ControlCenter(){
     {tab==="customers"&&<div style={panel}><h2>عملاء {chosen.name}</h2><div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(200px,1fr))",gap:12,marginBottom:14}}><Metric title="عدد العملاء المسجلين" value={metric(customers)} icon={Users}/><Metric title="عدد طلبات المشروع" value={metric(orderTotal)} icon={ShoppingCart}/></div><p style={{color:ui.muted,fontSize:12}}>الدمج الآمن لسجلات العملاء والوصول لأرقام الهاتف وإرسال واتساب يتطلب ربط صلاحيات هومي وصدفة قبل عرض بيانات شخصية داخل المركز.</p></div>}
     {tab==="finance"&&bridge?.accessRole!=="viewer"&&<div style={panel}><h2>تقارير {chosen.name}</h2>{canSeeSodfaStock&&<div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(200px,1fr))",gap:12,marginBottom:14}}><Metric title="قيمة تكلفة مخزون الويب المسجل" value={bridge?.sodfa.inventorySummary?(sodfaInventoryValue===null?"محجوب":fmt(sodfaInventoryValue)+" ج.م"):"غير متاح"} icon={Database}/><Metric title="إجمالي قيمة المبيعات بسجل صدفة" value={sodfaTotalSales===null?metric(null):fmt(sodfaTotalSales)+" ج.م"} icon={ChartNoAxesCombined}/></div>}<p style={{color:ui.muted,fontSize:12,lineHeight:2}}>لم يتم دمج المبيعات بالأوردرات ماليًا بعد، حفاظًا على عدم تكرار الإيرادات. صافي الربح والتكلفة والتحصيل النهائي يحتاجون مطابقة سعر البيع التاريخي وتكلفة البضاعة والشحن والمرتجعات.</p></div>}
     {tab==="finance"&&bridge&&bridge.accessRole!=="viewer"&&<OrderMarginCalculator/>}
+    {project==="homey"&&tab==="settings"&&<div className="mb-4 rounded-2xl border border-white/10 bg-[#111114] p-4">
+      <h2 className="text-lg font-bold">أدوات متجر هومي الأصلية</h2>
+      <div className="mt-3 flex flex-wrap gap-2">
+        {([
+          { label:"إدارة التقييمات",path:"reviews" },
+          { label:"محتوى وتصميم المتجر",path:"content" },
+          { label:"إعدادات المتجر والشحن",path:"settings" },
+        ] as const).map(({label,path})=><a key={path} href={`https://www.homeyegypt.com/admin/${path}`}
+          target="_blank" rel="noreferrer" className="inline-flex min-h-11 items-center gap-2 rounded-lg border border-purple-300/40 px-3 py-2 text-sm">
+          <ExternalLink size={15}/>{label}
+        </a>)}
+      </div>
+    </div>}
     {tab==="settings"&&<div style={panel}><h2>الربط والصلاحيات</h2><p><Link to="/control-center-security" style={{display:"inline-flex",padding:"12px 18px",border:"1px solid "+ui.purple,borderRadius:10,color:"#f6d4ff",background:ui.soft,fontWeight:700}}>إدارة مسؤوليات الموظفين والنسخ الاحتياطية وسجل الموافقات ←</Link></p><div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(200px,1fr))",gap:12}}>{[
 {name:"قاعدة CRM المركزية",status:bridge?.catalog.connected?"متصلة للقراءة":"غير متصلة",ok:bridge?.catalog.connected,detail:"قراءة بيانات المنتجات والمخزون المرجعي"},
 {name:"قاعدة إدارة الطلبات",status:bridge?.operations.connected?"متصلة للقراءة":"غير متصلة",ok:bridge?.operations.connected,detail:"عرض حالات وتفاصيل الأوردرات الحالية"},
