@@ -8,6 +8,7 @@ import '@fontsource/ibm-plex-sans-arabic/arabic-700.css';
 import './globals.css';
 import './workspace.css';
 import './waybill-layout.css';
+import './sodfa-embedded.css';
 import {LanguageProvider} from './language';
 
 export const metadata: Metadata = {

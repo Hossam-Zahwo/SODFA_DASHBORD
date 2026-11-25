@@ -4,7 +4,7 @@ import {
   createStagingOrder,
   getStagingLocations,
   getStagingWorkspaceAccess,
-  listStagingOrders,
+  listWorkspaceOrders,
 } from "@/lib/company-orders-staging.functions";
 import { supabase } from "@/lib/supabase";
 import type { Order } from "../../apps/orders-manager/lib/types";
@@ -57,7 +57,7 @@ export function OrdersManagerPanel({ url, brand }: { url: string; brand: Order["
         case "access":
           return getStagingWorkspaceAccess({ data: context });
         case "orders":
-          return listStagingOrders({ data: context });
+          return listWorkspaceOrders({ data: context });
         case "locations":
           return getStagingLocations({ data: { token } });
         case "create": {
@@ -94,7 +94,7 @@ export function OrdersManagerPanel({ url, brand }: { url: string; brand: Order["
       src={`${url}?embedded=1&brand=${brand}`}
       referrerPolicy="origin"
       title="إدارة طلبات هومي وصدفة"
-      className="h-[calc(100dvh-12rem)] min-h-[32rem] w-full rounded-xl border border-purple-400/40"
+      className="h-[calc(100dvh-12rem)] min-h-[32rem] w-full rounded-xl border border-[#27272a]"
     />
   );
 }

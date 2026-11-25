@@ -96,7 +96,7 @@ function OrderOperations(){
  }
  function reset(){setSaved(null);setOrderText("");setRequestId(crypto.randomUUID());setName("");setPhone("");setItems([{name:"",quantity:1,price:0}]);setAddress("");setNotice("");setCarrier("");setShipping(0);setPrepaid(0);setDiscount(0);setSpokenTotal(undefined)}
  return <AppShell title="إضافة وتأكيد الطلبات">
-  <div dir="rtl" style={{fontFamily:"Cairo,sans-serif",maxWidth:1050,margin:"0 auto",color:"white",paddingBottom:60}}>
+  <div dir="rtl" style={{fontFamily:"Cairo,sans-serif",maxWidth:showManager?undefined:1050,margin:"0 auto",color:"white",paddingBottom:60}}>
    <Link to="/control-center" search={{project:context.project??"orders",section:"orders"}} style={{color:"#C98ADB",fontSize:12}}>مركز الشركة / الرجوع</Link>
    <h1 style={{fontSize:26,margin:"10px 0"}}>إضافة الطلبات وتأكيدها</h1>
    {ordersManagerUrl && <div className="mb-4 flex flex-wrap gap-2" role="group" aria-label="خيارات الطلبات">
@@ -105,6 +105,13 @@ function OrderOperations(){
     <button type="button" className="rounded-lg border border-purple-400 px-3 py-2 aria-pressed:bg-purple-900"
      aria-pressed={!showManager} onClick={() => setShowManager(false)}>نموذج الإضافة التجريبي</button>
    </div>}
+   {showManager && ordersManagerUrl && <nav aria-label="المتجر" className="mb-3 flex flex-wrap gap-2">
+    {(["homey","sodfa"] as const).map(store=><Link key={store} to="/control-center-orders"
+     search={{project:context.project??"orders",brand:store}} aria-current={workspaceBrand===store?"page":undefined}
+     className="rounded-lg border border-[#27272a] px-3 py-2 text-sm aria-[current=page]:border-[#a94fbc] aria-[current=page]:bg-[#2a1530]">
+     {store==="homey"?"هومي":"صدفة"}
+    </Link>)}
+   </nav>}
    {showManager && ordersManagerUrl && <OrdersManagerPanel key={workspaceBrand} url={ordersManagerUrl} brand={workspaceBrand} />}
    <div hidden={showManager}>
    <div style={{...css.card,marginBottom:16,border:"1px solid #875d33",background:"#201914"}}>

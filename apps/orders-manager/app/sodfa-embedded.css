@@ -1,0 +1,188 @@
+@import url("https://fonts.googleapis.com/css2?family=Cairo:wght@400;500;600;700;800&display=swap");
+
+html:has(.app[data-embedded]),
+body:has(.app[data-embedded]) {
+  background: #0a0a0c;
+  color: #ededed;
+  color-scheme: dark;
+}
+
+.app[data-embedded] {
+  --canvas: #0a0a0c;
+  --ink: #ededed;
+  --muted: #a1a1aa;
+  --line: #27272a;
+  --border: #27272a;
+  --shadow: none;
+  --shadow-strong: 0 16px 40px #0009;
+  display: block;
+  min-height: 100dvh;
+  font-family: Cairo, Tahoma, sans-serif;
+  color: var(--ink);
+  background: var(--canvas);
+}
+
+.app[data-embedded] .main {
+  padding: 16px clamp(12px, 2vw, 28px) 24px;
+  max-width: none;
+}
+.app[data-embedded] .sidebar {
+  display: contents;
+}
+.app[data-embedded] .sidebar :is(.brand, .sidebar-mobile-header, .sidebar-bottom),
+.app[data-embedded] :is(.mobile-nav-trigger, .mobile-nav-backdrop) {
+  display: none;
+}
+.app[data-embedded] .nav {
+  display: flex;
+  flex-direction: row;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 12px clamp(12px, 2vw, 28px);
+  background: #08080a;
+  border-bottom: 1px solid var(--border);
+}
+.app[data-embedded] .sidebar .nav button {
+  padding: 7px 12px;
+  color: var(--muted);
+}
+.app[data-embedded] .sidebar .nav button.active {
+  color: #fff;
+  background: #2a1530;
+  box-shadow: inset 0 -2px #a94fbc;
+}
+.app[data-embedded] .sidebar .nav button .label {
+  display: inline;
+}
+.app[data-embedded] .header {
+  padding-bottom: 12px;
+  margin-bottom: 14px;
+  border-color: var(--border);
+}
+
+.app[data-embedded]
+  :is(
+    .panel,
+    .stat,
+    .periodbar,
+    .modal,
+    .city-popup,
+    .order-form-section,
+    .order-more,
+    .order-summary-group,
+    .selected-finance-summary,
+    .selected-finance-metrics > div,
+    .report-row,
+    .dashboard-intro
+  ) {
+  color: var(--ink);
+  background: #111114;
+  border-color: var(--border);
+  box-shadow: none;
+}
+.app[data-embedded]
+  :is(
+    h1,
+    h2,
+    h3,
+    label,
+    legend,
+    strong,
+    .stat b,
+    .periodbar strong,
+    .sectionhead h2,
+    .order-ref,
+    .order-name-link,
+    .order-summary-money dd
+  ) {
+  color: var(--ink);
+}
+.app[data-embedded]
+  :is(.muted, .stat span, .empty, .tracking-order-detail, .source-note, .header .muted) {
+  color: var(--muted);
+}
+
+.app[data-embedded]
+  :is(
+    .field,
+    .tracking-select,
+    .btn.secondary,
+    .table th,
+    .table td,
+    .tracking-card,
+    .order-item-details,
+    .city-results button,
+    .order-manual-total
+  ) {
+  background: #161419;
+  color: var(--ink);
+  border-color: var(--border);
+  box-shadow: none;
+}
+.app[data-embedded] .table tbody tr:hover td {
+  background: #201a23;
+}
+.app[data-embedded] .field:focus {
+  border-color: #a94fbc;
+}
+.app[data-embedded] .btn:not(.secondary):not(.danger) {
+  background: #823292;
+  color: #fff;
+}
+.app[data-embedded] .btn.secondary:hover:not(:disabled) {
+  background: #2a1530;
+  border-color: #823292;
+}
+.app[data-embedded] .source-note {
+  font-size: 11px;
+  display: block;
+  margin-top: 3px;
+}
+.app[data-embedded] .source-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 14px;
+}
+.app[data-embedded] .source-filters button[aria-pressed="true"] {
+  background: #2a1530;
+  border-color: #a94fbc;
+}
+
+@media (max-width: 640px) {
+  .app[data-embedded] .nav {
+    justify-content: flex-start;
+  }
+  .app[data-embedded] .sidebar .nav button {
+    flex: 0 1 auto;
+    min-height: 40px;
+    font-size: 12px;
+  }
+  .app[data-embedded] .table {
+    width: max-content;
+    min-width: 100%;
+  }
+}
+
+@media print {
+  html:has(.app[data-embedded]),
+  body:has(.app[data-embedded]) {
+    background: white;
+    color-scheme: light;
+  }
+}
+
+.app[data-embedded] .sidebar .nav button:is(:hover, :focus-visible),
+.app[data-embedded] .sidebar .nav button.active:is(:hover, :focus-visible) {
+  background: #2a1530;
+  color: #fff;
+}
+
+.app[data-embedded] :is(.order-details-heading, .order-detail-actions, .modalfooter) {
+  background: #111114;
+  border-color: var(--border);
+}
+
+.app[data-embedded] .order-summary-group :is(dt, dd, a) {
+  color: var(--ink);
+}

@@ -10,6 +10,7 @@ import {statusLabels,totalOf,type Order} from '@/lib/types';
 
 type Props = {
  order:Order;
+ cachedTracking?:boolean;
  close:()=>void;
  edit?:()=>void;
  print:()=>void;
@@ -38,7 +39,7 @@ function TalaOrderStatus({code,brand}:{code:string;brand:Order['brand']}){
  return <span role="status">{result?.key!==key?t('جاري قراءة حالة تالا…'):result.status||t('حالة تالا غير متاحة حاليًا')}</span>;
 }
 
-export function OrderDetails({order,close,edit,print,prepare}:Props){
+export function OrderDetails({order,close,edit,print,prepare,cachedTracking=false}:Props){
  const t=useTranslation();
  const number=new Intl.NumberFormat('en-US',{maximumFractionDigits:2});
  const money=(value:number)=>number.format(value)+' '+t('ج.م');
@@ -59,9 +60,12 @@ export function OrderDetails({order,close,edit,print,prepare}:Props){
      <dt>{t('رقم التليفون')}</dt><dd><a href={'tel:'+order.phone} dir="ltr">{order.phone}</a>{order.alternatePhone&&<> · <a href={'tel:'+order.alternatePhone} dir="ltr">{order.alternatePhone}</a></>}</dd>
      <dt>{t('العنوان')}</dt><dd>{[t(order.governorate),order.city,order.address].filter(Boolean).join(' · ')||'—'}</dd>
      {order.talaTrackingCode&&<><dt>{t('رقم التتبع')}</dt><dd><bdi>{order.talaTrackingCode}</bdi></dd>
-      <dt>{t('الحالة عند تالا')}</dt><dd><TalaOrderStatus code={order.talaTrackingCode} brand={order.brand}/></dd></>}
+      <dt>{t('الحالة عند تالا')}</dt><dd>{cachedTracking?(order.talaStatusName||'—'):<TalaOrderStatus code={order.talaTrackingCode} brand={order.brand}/>}</dd></>}
      {order.talaDispatchState&&order.talaDispatchState!=='sent'&&<><dt>{t('ربط شركات الشحن')}</dt><dd>{t('راجع حالة الإرسال في تالا')}</dd></>}
      <dt>{t('شركة الشحن')}</dt><dd>{t(order.shippingCompany||'توصيل بنفسي')}</dd>
+     {cachedTracking&&<><dt>طريقة الدفع</dt><dd>{order.paymentMethod||'—'}</dd>
+      <dt>المسؤول عن المتابعة</dt><dd>{order.assignedTo||'—'}</dd>
+      <dt>تاريخ الطلب</dt><dd>{new Date(order.createdAt).toLocaleDateString('ar-EG',{timeZone:'Africa/Cairo'})}</dd></>}
     </dl>
    </section>
    <section className="order-summary-group">
@@ -77,6 +81,7 @@ export function OrderDetails({order,close,edit,print,prepare}:Props){
     {financialWarnings(order).length>0&&<div className="finance-review-box" role="status"><strong>مراجعة مالية مطلوبة</strong><ul>{financialWarnings(order).map((warning,index)=><li key={index}>{warning}</li>)}</ul><small>البيانات الأصلية لم تتغير؛ راجع أسعار المنتجات ومبلغ التحصيل ورسوم الشحن قبل التسوية.</small></div>}
     <dl>
      <dt>{t('تكلفة الشحن')}</dt><dd>{money(order.shipping)}{order.shippingCompany==='تالا إكسبريس'&&order.talaDeliveryFees!=null&&<small className="muted"> (حسب تالا)</small>}</dd>
+     {cachedTracking&&<><dt>المدفوع مقدمًا</dt><dd>{money(order.prepaid)}</dd><dt>الخصم</dt><dd>{money(order.discount)}</dd></>}
      <dt>{t('الإجمالي')}</dt><dd>{money(totalOf(order))}</dd>
      <dt>{t('التحصيل من العميل')}</dt><dd>{missingFinancialAmount(order)?'غير معروف — يحتاج مراجعة':money(collectionFromCustomer(order))}</dd>
      {order.shippingCompany==='تالا إكسبريس'&&order.talaCustomerDue!=null&&<><dt>صافي المستحق حسب تالا</dt><dd>{money(order.talaCustomerDue)}</dd></>}

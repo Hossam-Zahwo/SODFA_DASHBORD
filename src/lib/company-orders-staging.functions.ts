@@ -40,15 +40,63 @@ export const getStagingWorkspaceAccess = createServerFn({ method: "POST" })
     };
   });
 
-export const listStagingOrders = createServerFn({ method: "POST" })
+export const listWorkspaceOrders = createServerFn({ method: "POST" })
   .validator(workspaceSchema)
   .handler(async ({ data }) => {
     await requireCompanyAccess(data.token, "orders", "read");
     await requireCompanyAccess(data.token, data.brand, "read");
-    const rows = await stage()`SELECT * FROM orders WHERE brand=${data.brand}
+
+    const manager = async () => {
+      const url = process.env["CRM_ORDERS_READ_URL"];
+      if (!url) throw new Error("OMS_READ_NOT_CONFIGURED");
+      const db = neon(url);
+      const rows = await db`SELECT id::text, brand, created_at, updated_at, customer_name,
+        phone, alternate_phone, governorate, city, address, source, payment_method,
+        items, status, shipping_company, shipping, discount, prepaid, manual_total,
+        manual_collection, carrier_received, notes, assigned_to, version
+        FROM orders WHERE brand=${data.brand} AND deleted_at IS NULL
+        AND source IS DISTINCT FROM 'central-control-center-staging'
+        ORDER BY created_at DESC, id DESC LIMIT 501`;
+      const ids = rows.slice(0, 500).map((row) => String(row["id"]));
+      if (!ids.length) return rows;
+      const shipments = await db`SELECT order_id::text AS order_id,
+        tracking_code AS tala_tracking_code, state AS tala_dispatch_state,
+        to_jsonb(s)->>'provider_status_code' AS tala_status_code,
+        to_jsonb(s)->>'provider_status_name' AS tala_status_name,
+        to_jsonb(s)->>'provider_delivery_fees' AS tala_delivery_fees,
+        to_jsonb(s)->>'provider_customer_due' AS tala_customer_due,
+        to_jsonb(s)->>'provider_delivered_amount' AS tala_delivered_amount,
+        to_jsonb(s)->>'provider_collected_amount' AS tala_collected_amount,
+        to_jsonb(s)->>'provider_pending_collection_amount' AS tala_pending_collection_amount,
+        to_jsonb(s)->>'provider_collected_fees' AS tala_collected_fees
+        FROM tala_order_shipments s WHERE order_id=ANY(${ids}::uuid[])`.catch(() => []);
+      const byOrder = new Map(shipments.map(({ order_id, ...details }) => [order_id, details]));
+      return rows.map((row) => ({ ...row, ...byOrder.get(row["id"]) }));
+    };
+    const preview = async () => stage()`SELECT * FROM orders WHERE brand=${data.brand}
       AND source='central-control-center-staging' AND deleted_at IS NULL
-      ORDER BY created_at DESC, id DESC LIMIT 500`;
-    return rows.map(mapOrderRow);
+      ORDER BY created_at DESC, id DESC LIMIT 501`;
+
+    const [managerResult, previewResult] = await Promise.allSettled([manager(), preview()]);
+    const managerRows = managerResult.status === "fulfilled" ? managerResult.value : [];
+    const previewRows = previewResult.status === "fulfilled" ? previewResult.value : [];
+    const previewIds = new Set(previewRows.map((row) => String(row["id"])));
+    return {
+      orders: [
+        ...managerRows
+          .slice(0, 500)
+          .filter((row) => !previewIds.has(String(row["id"])))
+          .map((row) => ({ ...mapOrderRow(row), workspaceSource: "manager" as const })),
+        ...previewRows
+          .slice(0, 500)
+          .map((row) => ({ ...mapOrderRow(row), workspaceSource: "preview" as const })),
+      ].sort((a, b) => b.createdAt.localeCompare(a.createdAt)),
+      available: {
+        manager: managerResult.status === "fulfilled",
+        preview: previewResult.status === "fulfilled",
+      },
+      limited: managerRows.length > 500 || previewRows.length > 500,
+    };
   });
 
 function catalog() {

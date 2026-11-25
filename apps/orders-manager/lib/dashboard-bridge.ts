@@ -1,8 +1,15 @@
 import type { Order } from "./types";
 
+export type WorkspaceSource = "manager" | "preview";
+export type WorkspaceOrder = Order & { workspaceSource?: WorkspaceSource };
+
 type WorkspaceResponses = {
   access: { create: boolean; confirm: boolean };
-  orders: Order[];
+  orders: {
+    orders: WorkspaceOrder[];
+    available: Record<WorkspaceSource, boolean>;
+    limited: boolean;
+  };
   locations: Record<string, string[]>;
   create: { id: string; version: number };
   confirm: Pick<Order, "id" | "status" | "version">;
