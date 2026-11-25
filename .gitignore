@@ -30,3 +30,7 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Generated Homey admin bundle
+/public/homey-admin/
+/apps/homey-admin/src/routeTree.gen.ts

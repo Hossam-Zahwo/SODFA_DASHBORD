@@ -1,6 +1,7 @@
 export const projects = ["all", "homey", "sodfa_web", "sodfa", "orders"] as const;
 export const sections = [
   "dashboard",
+  "store-admin",
   "orders",
   "products",
   "categories",
@@ -19,7 +20,7 @@ export function companySections(
   if (project === "sodfa_web") return ["dashboard", "products", "settings"];
   if (project === "orders") return ["dashboard", "orders", "shipping", "customers", "settings"];
   if (project === "homey") return sections.filter((section) => section !== "finance");
-  return sections.filter((section) => section !== "categories" && (!viewer || section !== "finance"));
+  return sections.filter((section) => section !== "categories" && section !== "store-admin" && (!viewer || section !== "finance"));
 }
 
 export function companyLocation(search: Record<string, unknown>): {

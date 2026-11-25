@@ -11,7 +11,8 @@
     "lint": "eslint .",
     "format": "prettier --write .",
     "test:crm": "node --experimental-strip-types --test tests/*.test.mjs",
-    "dev:orders": "npm --prefix apps/orders-manager run dev -- --hostname 127.0.0.1 --port 3001"
+    "dev:orders": "npm --prefix apps/orders-manager run dev -- --hostname 127.0.0.1 --port 3001",
+    "build:homey-admin": "npm --prefix apps/homey-admin run build -- --outDir ../../public/homey-admin --emptyOutDir"
   },
   "dependencies": {
     "@hookform/resolvers": "^5.2.2",

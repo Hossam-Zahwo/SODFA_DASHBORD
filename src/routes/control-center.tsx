@@ -35,6 +35,7 @@ const projectData: {id: Project; name: string; detail: string; icon: typeof Pack
 ];
 const tabData: {id:Tab;name:string;icon:typeof Package}[] = [
   {id:"dashboard",name:"لوحة الأداء",icon:Activity},
+  {id:"store-admin",name:"لوحة تحكم هومي",icon:Store},
   {id:"products",name:"المنتجات",icon:Boxes},
   {id:"categories",name:"الأقسام",icon:Tags},
   {id:"orders",name:"الأوردرات",icon:ShoppingCart},
@@ -215,10 +216,15 @@ function ControlCenter(){
     </div>}
     {loadError&&<div style={{...panel,border:"1px solid #8f5151",marginBottom:14}}><AlertTriangle size={17} style={{display:"inline",marginLeft:8}}/>تعذر جلب بيانات الربط: {loadError}. بيانات صدفة المحلية قد تظل متاحة.</div>}
     {canSeeSodfaStock&&tab==="products"&&<CompanyInventoryAssistant key={project}/>}
+    {project==="homey"&&tab==="store-admin"&&bridge&&<iframe
+      src="/homey-admin/index.html#/admin"
+      title="لوحة تحكم متجر هومي"
+      className="h-[calc(100dvh-11rem)] min-h-[32rem] w-full rounded-xl border border-[#27272a] bg-white"
+    />}
     {project==="homey"&&tab==="categories"&&bridge&&<HomeyCategories/>}
     {showHomeyOrders&&<OrdersManagerPanel url={homeyOrdersManagerUrl} brand="homey"/>}
-    {project==="homey"&&tab==="dashboard"&&<div className="mb-4 grid gap-2 sm:grid-cols-3">
-      {(["products","categories","orders"] as const).map(section=>{
+    {project==="homey"&&tab==="dashboard"&&<div className="mb-4 grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
+      {(["store-admin","products","categories","orders"] as const).map(section=>{
         const item=tabData.find(entry=>entry.id===section)!;
         return <Link key={section} to="/control-center" search={{project:"homey",section}}
           className="flex min-h-12 items-center gap-2 rounded-xl border border-white/10 bg-[#1b1222] px-4 py-3 text-sm font-bold hover:bg-[#2a1530]">
