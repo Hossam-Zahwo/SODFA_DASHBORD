@@ -186,3 +186,44 @@ body:has(.app[data-embedded]) {
 .app[data-embedded] .order-summary-group :is(dt, dd, a) {
   color: var(--ink);
 }
+
+.app[data-embedded] .order-quick-search {
+  margin-bottom: 14px;
+  max-width: 540px;
+}
+
+.app[data-embedded] .order-search-field {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.app[data-embedded] .order-search-field > svg {
+  position: absolute;
+  inset-inline-start: 13px;
+  color: var(--muted);
+  pointer-events: none;
+}
+
+.app[data-embedded] .order-search-field input {
+  width: 100%;
+  min-height: 46px;
+  padding-inline: 40px 53px;
+  font-size: 16px;
+}
+
+.app[data-embedded] .order-search-field input::-webkit-search-cancel-button {
+  display: none;
+}
+
+.app[data-embedded] .order-search-field button {
+  position: absolute;
+  inset-inline-end: 6px;
+  min-width: 40px;
+  min-height: 38px;
+}
+
+.app[data-embedded] .order-quick-search [role="status"] {
+  display: block;
+  margin-top: 4px;
+}

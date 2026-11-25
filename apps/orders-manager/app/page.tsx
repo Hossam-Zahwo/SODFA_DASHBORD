@@ -1,4 +1,5 @@
 'use client';
+import { matchesOrderSearch } from '@/lib/order-search';
 import { dashboardRequest, type WorkspaceOrder, type WorkspaceSource } from '@/lib/dashboard-bridge';
 import { ordersManagerPath } from "@/lib/app-path";
 import {useTranslation,LanguageSwitch} from '@/app/language';
@@ -17,7 +18,7 @@ import {OrderLocationFields} from './order-location-fields';
 import {ProductPicker} from './product-picker';
 import {WaybillPrintSheets} from '@/components/waybill-print-sheets';
 import {useEffect,useState} from 'react';
-import {LayoutDashboard,Package,Users,Settings,LogOut,Plus,Download,Trash2,Pencil,RefreshCcw,ShoppingBag,CheckCircle2,Printer,FileText,FileDown,XCircle,ArrowUpLeft,ShieldCheck,Menu,X,Truck,ChartNoAxesCombined,ChevronDown} from 'lucide-react';
+import {LayoutDashboard,Package,Users,Settings,LogOut,Plus,Download,Trash2,Pencil,RefreshCcw,ShoppingBag,CheckCircle2,Printer,FileText,FileDown,XCircle,ArrowUpLeft,ShieldCheck,Menu,X,Truck,ChartNoAxesCombined,ChevronDown,Search} from 'lucide-react';
 import type {Brand,Order,Customer,Item,Waybill,Status} from '@/lib/types';
 import {statuses,statusLabels,govs,calculatedTotal,totalOf} from '@/lib/types';
 import {HomeyLogo} from '@/components/homey-logo';
@@ -179,7 +180,7 @@ const response=await fetch(ordersManagerPath('/api/whoami'),{credentials:'same-o
  const reportSource=embedded&&tab!=='orders'&&sourceFilter==='all'?'manager':sourceFilter;
  const periodOrders=brandOrders.filter(o=>inPeriod(o.enteredAt||o.createdAt)&&(!embedded||reportSource==='all'||o.workspaceSource===reportSource));
  const matchesCarrier=(o:Order)=>!carrierFilter||displayCarrier(o.shippingCompany)===carrierFilter;
- const visible=periodOrders.filter(o=>matchesCarrier(o)&&(collectionFilter==='all'||collectionState(o)===collectionFilter)&&(tab!=='orders'||!unprintedOnly||!printed.has('order:'+o.id))&&(filter==='all'||(filter==='active'?o.status!=='cancelled':o.status===filter))&&[o.customerName,o.phone,o.id,o.address,o.items.map(i=>i.name).join(' ')].join(' ').toLowerCase().includes(search.toLowerCase()));
+ const visible=periodOrders.filter(o=>matchesCarrier(o)&&(collectionFilter==='all'||collectionState(o)===collectionFilter)&&(tab!=='orders'||!unprintedOnly||!printed.has('order:'+o.id))&&(filter==='all'||(filter==='active'?o.status!=='cancelled':o.status===filter))&&matchesOrderSearch(o,search));
  const registeredCompanies=[...shippingCompanies].sort((a,b)=>a.localeCompare(b,'ar'));
  const carrierNames=[...new Set([...registeredCompanies,...brandOrders.map(o=>displayCarrier(o.shippingCompany))])].sort((a,b)=>a.localeCompare(b,'ar'));
  const reportOrders=periodOrders.filter(matchesCarrier);
@@ -516,7 +517,20 @@ const response=await fetch(ordersManagerPath('/api/whoami'),{credentials:'same-o
    (tab==='orders'||key!=='all')&&<button key={key} type="button" className="btn secondary" aria-pressed={reportSource===key}
     onClick={()=>{setSourceFilter(key);setSelected([])}}>{label}</button>)}
  </div>}
- {tab==='orders'&&<section className="panel"><div className="sectionhead"><h2>{t("الطلبات (")}{number(visible.length)})</h2><div className="toolbar">{printFilter}<input className="field" placeholder={t("ابحث بالاسم أو رقم التليفون أو المنتج")} value={search} onChange={e=>{setSearch(e.target.value);setSelected([])}}/><select className="field" aria-label={t("فلتر حالة الشحن")} value={filter} onChange={e=>{setFilter(e.target.value);setSelected([])}}><option value="all">{t("كل الحالات")}</option><option value="active">{t("كل الطلبات غير الملغية")}</option>{statuses.map(s=><option key={s} value={s}>{t(statusLabels[s])}</option>)}</select><select className="field" aria-label={t("فلتر حالة التحصيل")} value={collectionFilter} onChange={e=>{setCollectionFilter(e.target.value as CollectionState|'all');setSelected([])}}><option value="all">{t("كل حالات التحصيل")}</option>{collectionStates.map(state=><option key={state} value={state}>{t(collectionLabels[state])}</option>)}</select>{carrierSelect()}<button className="btn secondary" onClick={()=>exportCsv(visible)}><Download size={16}/> CSV</button><button className="btn" disabled={embedded&&!permissions.create} onClick={()=>{setErr('');setDeliveryChosen(embedded);setEditing(newOrder(brand))}}><Plus size={16}/>{t("أوردر جديد")}</button></div></div>{selectedOrders.length>0&&<div className="selected-finance-summary" role="status" aria-live="polite">
+ {tab==='orders'&&embedded&&<div className="order-quick-search" role="search" aria-label="البحث في الطلبات">
+  <div className="order-search-field">
+   <Search size={18} aria-hidden="true"/>
+   <input className="field" type="search" aria-label="ابحث في الطلبات"
+    placeholder="رقم الطلب، التليفون أو اسم العميل" value={search}
+    onChange={e=>{setSearch(e.target.value);setSelected([])}}/>
+   {search&&<button type="button" className="btn secondary tiny" aria-label="مسح البحث"
+    onClick={()=>{setSearch('');setSelected([])}}><X size={16}/></button>}
+  </div>
+  {search.trim()&&loaded&&<span className="muted" role="status">
+   {visible.length ? `النتائج: ${number(visible.length)}` : 'مفيش طلبات مطابقة. جرّب كلمة تانية أو راجع الفلاتر.'}
+  </span>}
+ </div>}
+ {tab==='orders'&&<section className="panel"><div className="sectionhead"><h2>{t("الطلبات (")}{number(visible.length)})</h2><div className="toolbar">{printFilter}{!embedded&&<input className="field" placeholder={t("ابحث بالاسم أو رقم التليفون أو المنتج")} value={search} onChange={e=>{setSearch(e.target.value);setSelected([])}}/>}<select className="field" aria-label={t("فلتر حالة الشحن")} value={filter} onChange={e=>{setFilter(e.target.value);setSelected([])}}><option value="all">{t("كل الحالات")}</option><option value="active">{t("كل الطلبات غير الملغية")}</option>{statuses.map(s=><option key={s} value={s}>{t(statusLabels[s])}</option>)}</select><select className="field" aria-label={t("فلتر حالة التحصيل")} value={collectionFilter} onChange={e=>{setCollectionFilter(e.target.value as CollectionState|'all');setSelected([])}}><option value="all">{t("كل حالات التحصيل")}</option>{collectionStates.map(state=><option key={state} value={state}>{t(collectionLabels[state])}</option>)}</select>{carrierSelect()}<button className="btn secondary" onClick={()=>exportCsv(visible)}><Download size={16}/> CSV</button><button className="btn" disabled={embedded&&!permissions.create} onClick={()=>{setErr('');setDeliveryChosen(embedded);setEditing(newOrder(brand))}}><Plus size={16}/>{t("أوردر جديد")}</button></div></div>{selectedOrders.length>0&&<div className="selected-finance-summary" role="status" aria-live="polite">
   <strong className="selected-finance-heading">إجمالي {number(selectedOrders.length)} أوردر محدد</strong>
   <div className="selected-finance-metrics">
    <div><span>العميل هيدفع</span><strong>{money(selectedFinance.cod)}</strong>{selectedFinance.codMissing>0&&<small>{number(selectedFinance.codMissing)} طلب ناقص مبلغ التحصيل</small>}</div>
