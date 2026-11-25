@@ -1,3 +1,4 @@
+import { OrdersManagerPanel } from "@/components/OrdersManagerPanel";
 import { companyLocation, type CompanyProject } from "@/lib/company-navigation";
 import { StagingOrderProductPicker } from "@/components/StagingOrderProductPicker";
 import { VoiceInput } from "@/components/VoiceInput";
@@ -17,12 +18,17 @@ export const Route=createFileRoute("/control-center-orders")({
  },
  component:OrderOperations
 });
+const ordersManagerUrl =
+ import.meta.env["VITE_ORDERS_MANAGER_URL"] ||
+ (import.meta.env.DEV ? "http://127.0.0.1:3001" : undefined);
+
 const css={
  card:{background:"#111114",border:"1px solid #27272A",borderRadius:16,padding:20} as const,
  input:{background:"#08080a",color:"white",border:"1px solid #4a3750",padding:"9px 12px",borderRadius:9,minWidth:100} as const,
  button:{background:"#823292",color:"white",border:0,borderRadius:9,padding:"11px 16px",cursor:"pointer"} as const,
 };
 function OrderOperations(){
+ const [showManager, setShowManager] = useState(Boolean(ordersManagerUrl));
  const [places,setPlaces]=useState<Record<string,string[]>>({});
  const context=Route.useSearch();
  const [brand,setBrand]=useState<"homey"|"sodfa">(context.brand??"homey");
@@ -92,6 +98,14 @@ function OrderOperations(){
   <div dir="rtl" style={{fontFamily:"Cairo,sans-serif",maxWidth:1050,margin:"0 auto",color:"white",paddingBottom:60}}>
    <Link to="/control-center" search={{project:context.project??"orders",section:"orders"}} style={{color:"#C98ADB",fontSize:12}}>مركز الشركة / الرجوع</Link>
    <h1 style={{fontSize:26,margin:"10px 0"}}>إضافة الطلبات وتأكيدها</h1>
+   {ordersManagerUrl && <div className="mb-4 flex flex-wrap gap-2" role="group" aria-label="خيارات الطلبات">
+    <button type="button" className="rounded-lg border border-purple-400 px-3 py-2 aria-pressed:bg-purple-900"
+     aria-pressed={showManager} onClick={() => setShowManager(true)}>إدارة الطلبات</button>
+    <button type="button" className="rounded-lg border border-purple-400 px-3 py-2 aria-pressed:bg-purple-900"
+     aria-pressed={!showManager} onClick={() => setShowManager(false)}>نموذج الإضافة التجريبي</button>
+   </div>}
+   {showManager && ordersManagerUrl && <OrdersManagerPanel url={ordersManagerUrl} />}
+   <div hidden={showManager}>
    <div style={{...css.card,marginBottom:16,border:"1px solid #875d33",background:"#201914"}}>
     <ShieldCheck size={18} style={{display:"inline",marginLeft:8}}/>
     <b>وضع الاختبار الآمن</b>
@@ -151,6 +165,7 @@ function OrderOperations(){
      <button onClick={reset} style={{...css.button,background:"#332838"}}><RefreshCcw size={14} style={{display:"inline",marginLeft:7}}/>طلب جديد</button>
     </div>
    </div>}
+   </div>
   </div>
  </AppShell>
 }

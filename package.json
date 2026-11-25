@@ -10,7 +10,8 @@
     "preview": "vite preview",
     "lint": "eslint .",
     "format": "prettier --write .",
-    "test:crm": "node --experimental-strip-types --test tests/*.test.mjs"
+    "test:crm": "node --experimental-strip-types --test tests/*.test.mjs",
+    "dev:orders": "npm --prefix apps/orders-manager run dev -- --hostname 127.0.0.1 --port 3001"
   },
   "dependencies": {
     "@hookform/resolvers": "^5.2.2",

@@ -1,0 +1,230 @@
+@media screen {
+ html { font-family: "Inter Variable", "IBM Plex Sans Arabic", Arial, sans-serif; }
+ html[lang="ar"] { font-family: "IBM Plex Sans Arabic", "Inter Variable", Arial, sans-serif; }
+ body { font-family: inherit; }
+ .app,
+ .login { color: #243026; }
+ .app {
+  --workspace-border: #dedfd5;
+  --workspace-surface: #fff;
+  --workspace-radius: 16px;
+  background: #f3f3ed;
+ }
+ .app .main { padding-block-start: clamp(20px, 3vw, 42px); }
+ .app .header {
+  border: 0;
+  padding: 0 0 16px;
+  margin: 0 0 16px;
+  border-block-end: 1px solid var(--workspace-border);
+ }
+ .app .header h1 {
+  margin: 0;
+  font-size: clamp(28px, 3.2vw, 40px);
+  font-weight: 700;
+  letter-spacing: -.036em;
+  line-height: 1.18;
+ }
+ html[lang="ar"] .app .header h1 { letter-spacing: normal; }
+ .app .sidebar { padding-inline: 15px; }
+ .app .sidebar .nav :is(button, .label) { text-align: start; }
+ .app .sidebar .nav button { padding-inline: 13px; border-radius: 10px; }
+ .app .sidebar .nav button.active { box-shadow: none; }
+ .app .nav { margin-block-start: 20px; }
+ .app .top-actions { column-gap: 7px; }
+ .app .top-actions > .btn { min-height: 38px; }
+ .app .periodbar { min-height: auto; padding: 8px 12px; margin-block-end: 16px; border-radius: 12px; }
+ .app .panel {
+  background: var(--workspace-surface);
+  border: 1px solid var(--workspace-border);
+  border-radius: var(--workspace-radius);
+  box-shadow: 0 2px 5px #22281508;
+  padding: clamp(14px, 2vw, 24px);
+ }
+ .app .panel h2 { margin-block: 0; font-size: clamp(17px, 2vw, 22px); font-weight: 700; }
+ .app .sectionhead { gap: 12px; }
+ .app .field,.app .tracking-select,.app .btn { letter-spacing: normal; font-family: inherit; }
+ .app .field { min-height: 42px; border-color: #d8ddd1; border-radius: 8px; }
+ .app .btn { border-radius: 8px; }
+ .app .field:focus-visible { outline-offset: 1px; }
+ .app .table thead { background: #f1f2eb; }
+ .app .table thead th { color: #495244; }
+ .app .table td { border-block-end-color: #eef0e9; }
+ .app .table tbody tr:hover { background: #f8f9f4; }
+ .app .tracking-card { box-shadow: none; border-radius: 12px; }
+ .order-name-link {
+  display: inline;
+  padding: 0;
+  border: 0;
+  color: var(--primary);
+  background: transparent;
+  text-align: start;
+  font-weight: 700;
+ }
+ .order-name-link:hover { text-decoration: underline; }
+ .order-editor .order-form-section {
+  margin-block: 0 14px;
+  padding: 14px;
+  border: 1px solid #e2e6dc;
+  border-radius: 12px;
+  background: #fff;
+ }
+ .order-editor .order-form-section .editor-section-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 14px;
+  padding: 0;
+  border: 0;
+  color: var(--primary);
+  font-size: 16px;
+ }
+ .order-editor .order-form-section .formgrid { margin-block: 0; }
+ .order-editor .order-form-section .order-product-row + .order-product-row { margin-block-start: 10px; }
+ .order-editor .order-form-section .order-product-row ~ .btn { margin-block-start: 12px; }
+ .order-editor .order-payment-section { margin-block-start: 14px; background: var(--soft); }
+ .order-editor .order-payment-section .editor-total { margin: 0; background: transparent; }
+ .order-editor .modalfooter {
+  position: sticky;
+  inset-block-end: 0;
+  z-index: 2;
+  background: #fff;
+  padding-block: 12px 4px;
+ }
+ .modalshade.order-detail-shade {
+  padding: 0;
+  display: flex;
+  justify-content: flex-end;
+ }
+ .modal.order-details {
+  width: min(100vw, 530px);
+  height: 100dvh;
+  max-width: 100vw;
+  max-height: 100dvh;
+  padding: clamp(16px, 3vw, 28px);
+  border: 0;
+  border-radius: 0;
+  background: #fff;
+  overflow: auto;
+ }
+ .order-details-heading,.order-detail-actions,.order-detail-status {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+ }
+ .order-details-heading { justify-content: space-between; align-items: flex-start; }
+ .order-details-heading h2 { margin: 4px 0 10px; overflow-wrap: anywhere; font-size: 24px; }
+ .icon-button { min-width: 40px; padding: 8px; }
+ .order-detail-status,.order-detail-actions { flex-wrap: wrap; }
+ .status-pill { display: inline-flex; padding: 4px 10px; border-radius: 20px; font-size: 13px; font-weight: 600; }
+ .status-pill.neutral { gap: 5px; align-items: center; background: #eff1eb; color: #414c3a; }
+ .order-summary-group { margin-block-start: 16px; border-block-start: 1px solid #e6e9e1; }
+ .order-summary-group h3 {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin-block: 12px 8px;
+  padding: 0;
+  border: 0;
+  font-size: 16px;
+ }
+ .order-summary-group dl {
+  display: grid;
+  grid-template-columns: minmax(95px, 1fr) 2fr;
+  gap: 7px 12px;
+  margin: 0;
+ }
+ .order-summary-group :is(dd, p) { margin: 0; overflow-wrap: anywhere; }
+ .order-summary-group dt { color: #53604f; }
+ .order-summary-items > div {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 7px 0;
+  border-block-end: 1px solid #eef0e9;
+ }
+ .order-summary-items small { margin-inline-start: 8px; color: #53604f; white-space: nowrap; }
+ .order-summary-money dd { font-weight: 700; }
+ .order-detail-actions { margin-block-start: 22px; }
+ .shipment-workspace h2 { display: flex; align-items: center; gap: 8px; }
+ .shipment-workspace > .toolbar { margin-block-end: 12px; }
+ .integration-help summary { cursor: pointer; font-weight: 700; }
+ .tala-settings .tala-connection-details { background: #f4f6ef; border: 1px solid #e3e8dc; padding: 14px; border-radius: 10px; }
+ .tala-settings .tracking-settings { border: 1px solid #dee4d8; border-radius: 12px; padding: 12px; background: #fafbf8; margin-block: 12px; }
+ .tala-settings .tracking-settings fieldset { min-width: 0; border: 1px solid #dee4d8; border-radius: 8px; margin-block: 10px; }
+ .tala-settings .tracking-settings legend { padding-inline: 5px; font-weight: 600; }
+ .tala-settings .tracking-settings .field { width: 100%; min-width: 0; }
+ .tala-settings .tala-connection-actions { margin-block: 12px; }
+ @media (max-width: 1100px) {
+  html[dir="ltr"] .app[data-brand] .sidebar { right: auto; left: 0; transform: translateX(-110%); }
+  html[dir="ltr"] .app[data-brand] .sidebar.sidebar-open { transform: translateX(0); }
+ }
+ @media (max-width: 640px) {
+  .app .header { gap: 8px; }
+  .app .header-heading { gap: 7px; }
+  .app .header h1 { font-size: clamp(21px, 6vw, 28px); }
+  .app .main { padding-inline: 12px; }
+  .app .periodbar .muted { margin-inline-start: 0; }
+  .tala-settings .tala-connection-details { grid-template-columns: 1fr; }
+  .tala-settings .tracking-settings .formgrid { grid-template-columns: 1fr; }
+  .tala-settings .toolbar label { max-width: 100%; }
+ }
+}
+
+.tala-live-shipments { margin-block: 1.25rem; padding-block-start: 1rem; border-block-start: 1px solid #e2e6dc; }
+.tala-live-shipments h3 { margin: 0; }
+.tala-live-shipments > .toolbar { margin-block: .75rem; }
+.tala-live-shipments .tracking-card[aria-pressed="true"] { outline: 2px solid var(--primary); outline-offset: -2px; }
+
+.tala-destination { min-width: 0; border: 1px solid #dce3d5; border-radius: 8px; padding: .75rem; }
+.tala-destination legend { font-weight: 700; }
+.city-results .city-add-option { font-weight: 700; color: var(--primary); border-block-start: 1px solid #e2e6dc; }
+
+@media screen and (max-width: 640px) {
+ .order-city-fields .city-popup { position: static; box-shadow: none; }
+ .order-city-fields .city-popup input[type="search"] { width: 100%; min-width: 0; font-size: 16px; }
+ .order-city-fields .city-results { overscroll-behavior: contain; touch-action: pan-y; }
+ .order-city-fields .city-results button { min-height: 44px; }
+}
+
+@media screen {
+ .app .tala-command-panel {
+  background: linear-gradient(140deg,#edf4e8 2%,#fcfdf9 49%,#edf2e5);
+  box-shadow: 0 10px 34px #293d2513;
+  border-color: #dce6d5;
+ }
+ .tala-panel-title,.tala-refresh-time,.tala-search {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+ }
+ .tala-panel-icon {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 44px;
+  height: 44px;
+  border: 1px solid #d1dfc9;
+  border-radius: 12px;
+  color: #375430;
+  background: #fff9;
+ }
+ .tala-panel-actions,.tala-shipments-toolbar { flex-wrap: wrap; }
+ .tala-command-panel .tracking-card {
+  background: #ffffffbc;
+  border-color: #dce7d7;
+  color: #283e27;
+  min-width: 0;
+ }
+ .tala-command-panel .tracking-card[aria-pressed="true"] { background: #e4efdf; outline: 2px solid var(--primary); outline-offset: -2px; }
+ .tala-shipments-toolbar { margin-block: 14px 9px; }
+ .tala-search { flex: 1 1 220px; }
+ .tala-search .field { width: 100%; }
+ .tala-shipments-table { min-width: 660px; }
+ .tala-shipments-table .status-pill { white-space: normal; }
+ .tala-shipment-detail { display: flex; flex-wrap: wrap; gap: 8px 30px; margin: 0; padding: 9px; background: #f2f6ee; }
+ .tala-shipment-detail dd { margin: 0; font-weight: 700; }
+ @media(max-width: 640px) {
+  .tala-command-panel .tracking-shipping { grid-template-columns: repeat(2,minmax(0,1fr)); }
+  .tala-panel-actions > * { flex: 1 1 auto; }
+ }
+}
