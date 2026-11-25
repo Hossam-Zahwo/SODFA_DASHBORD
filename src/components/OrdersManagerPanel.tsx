@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import {
   confirmStagingOrder,
   createStagingOrder,
+  editStagingOrder,
   getStagingLocations,
   getStagingWorkspaceAccess,
   listWorkspaceOrders,
@@ -32,6 +33,8 @@ export function OrdersManagerPanel({ url, brand }: { url: string; brand: Order["
         .catch((error: unknown) => {
           const code = error instanceof Error ? error.message : "";
           const messages: Record<string, string> = {
+            ORDER_EDIT_CONFLICT:
+              "الطلب اتغيّر من مكان تاني. اقفل النموذج وحدّث القائمة قبل التعديل من جديد.",
             ACCESS_DENIED: "حسابك ما عندوش صلاحية للعملية دي في قسم الطلبات.",
             UNAUTHORIZED: "جلسة صدفة انتهت. افتح الداشبورد وسجّل دخولك.",
             INVALID_ORDER_LOCATION: "اختار المحافظة والمنطقة الصحيحة.",
@@ -60,16 +63,15 @@ export function OrdersManagerPanel({ url, brand }: { url: string; brand: Order["
           return listWorkspaceOrders({ data: context });
         case "locations":
           return getStagingLocations({ data: { token } });
-        case "create": {
+        case "create":
+        case "edit": {
           const order = body as Order;
-          return createStagingOrder({
-            data: {
-              ...order,
-              ...context,
-              creationRequestId: order.creationRequestId ?? "",
-              carrier: order.shippingCompany ?? "",
-            },
-          });
+          const data = { ...order, ...context, carrier: order.shippingCompany ?? "" };
+          return operation === "edit"
+            ? editStagingOrder({ data })
+            : createStagingOrder({
+                data: { ...data, creationRequestId: order.creationRequestId ?? "" },
+              });
         }
         case "confirm": {
           const { id, version } = body as Pick<Order, "id" | "version">;

@@ -116,9 +116,8 @@ export const searchStagingOrderProducts = createServerFn({ method: "POST" })
     return rows.map((row) => ({ id: String(row["id"]), name: String(row["title"]) }));
   });
 
-const CreateSchema = z.object({
+const OrderFieldsSchema = z.object({
   token: z.string().min(16).max(8192),
-  creationRequestId: z.string().uuid(),
   brand: z.enum(["homey", "sodfa"]),
   customerName: z.string().trim().min(2).max(200),
   phone: z.string().min(8).max(30),
@@ -134,6 +133,11 @@ const CreateSchema = z.object({
           .regex(/^\d{1,20}$/)
           .optional(),
         sku: z.string().max(100).default(""),
+        imageUrl: z.union([z.literal(""), z.url({ protocol: /^https?$/ })]).optional(),
+        imageUrls: z
+          .array(z.url({ protocol: /^https?$/ }))
+          .max(12)
+          .optional(),
         quantity: z.number().int().min(1).max(999),
         price: z.number().min(0).max(1_000_000),
       }),
@@ -147,46 +151,53 @@ const CreateSchema = z.object({
   assignedTo: z.string().trim().max(120).default(""),
   courier: z.string().trim().max(120).default(""),
   manualCollection: z.number().min(0).max(1_000_000).nullable().optional(),
+  manualTotal: z.number().min(0).max(1_000_000).nullable().optional(),
   shipping: z.number().min(0).max(100_000).default(0),
   prepaid: z.number().min(0).max(1_000_000).default(0),
   discount: z.number().min(0).max(100_000).default(0),
 });
+async function prepareStagingOrder(
+  data: z.infer<typeof OrderFieldsSchema>,
+  db: ReturnType<typeof stage>,
+) {
+  const phone = data.phone
+    .normalize("NFKC")
+    .replace(/[٠-٩۰-۹]/g, (d) =>
+      String(d.charCodeAt(0) - (d.charCodeAt(0) >= 0x6f0 ? 0x6f0 : 0x660)),
+    )
+    .replace(/[\s().-]/g, "");
+  if (!/^\+?\d{8,15}$/.test(phone)) throw new Error("PHONE_INVALID");
+  const place =
+    await db`SELECT 1 FROM address_localities WHERE governorate=${data.governorate} AND name=${data.city} LIMIT 1`;
+  if (!place.length) throw new Error("INVALID_ORDER_LOCATION");
+  const amount = calculateOrderTotal(data.items, data.shipping, data.discount);
+  if (data.prepaid > amount) throw new Error("PREPAID_EXCEEDS_TOTAL");
+  const ids = [...new Set(data.items.flatMap((item) => (item.catalogId ? [item.catalogId] : [])))];
+  const refs = new Map<string, { name: string; sourceProductId: string }>();
+  if (ids.length) {
+    const catalogRows =
+      await catalog()`SELECT id::text AS id,title,source_product_id FROM product_references
+    WHERE brand_id=${data.brand} AND id::text=ANY(${ids}::text[])`;
+    for (const row of catalogRows)
+      refs.set(String(row["id"]), {
+        name: String(row["title"]),
+        sourceProductId: String(row["source_product_id"]),
+      });
+    if (refs.size !== ids.length) throw new Error("ORDER_PRODUCT_NOT_AVAILABLE");
+  }
+  const items = data.items.map((item) => ({
+    ...item,
+    ...(item.catalogId ? refs.get(item.catalogId) : undefined),
+  }));
+  return { phone, items };
+}
+
 export const createStagingOrder = createServerFn({ method: "POST" })
-  .validator(CreateSchema)
+  .validator(OrderFieldsSchema.extend({ creationRequestId: z.string().uuid() }))
   .handler(async ({ data }) => {
     const actor = await requireCompanyAccess(data.token, "orders", "staging_order", data.brand);
-    const phone = data.phone
-      .normalize("NFKC")
-      .replace(/[٠-٩۰-۹]/g, (d) =>
-        String(d.charCodeAt(0) - (d.charCodeAt(0) >= 0x6f0 ? 0x6f0 : 0x660)),
-      )
-      .replace(/[\s().-]/g, "");
-    if (!/^\+?\d{8,15}$/.test(phone)) throw new Error("PHONE_INVALID");
     const db = stage();
-    const place =
-      await db`SELECT 1 FROM address_localities WHERE governorate=${data.governorate} AND name=${data.city} LIMIT 1`;
-    if (!place.length) throw new Error("INVALID_ORDER_LOCATION");
-    const amount = calculateOrderTotal(data.items, data.shipping, data.discount);
-    if (data.prepaid > amount) throw new Error("PREPAID_EXCEEDS_TOTAL");
-    const ids = [
-      ...new Set(data.items.flatMap((item) => (item.catalogId ? [item.catalogId] : []))),
-    ];
-    const refs = new Map<string, { name: string; sourceProductId: string }>();
-    if (ids.length) {
-      const catalogRows =
-        await catalog()`SELECT id::text AS id,title,source_product_id FROM product_references
-    WHERE brand_id=${data.brand} AND id::text=ANY(${ids}::text[])`;
-      for (const row of catalogRows)
-        refs.set(String(row["id"]), {
-          name: String(row["title"]),
-          sourceProductId: String(row["source_product_id"]),
-        });
-      if (refs.size !== ids.length) throw new Error("ORDER_PRODUCT_NOT_AVAILABLE");
-    }
-    const items = data.items.map((item) => ({
-      ...item,
-      ...(item.catalogId ? refs.get(item.catalogId) : undefined),
-    }));
+    const { phone, items } = await prepareStagingOrder(data, db);
     // The order and its audit event commit together. A retry never emits another event.
     const rows = await db`WITH inserted AS (
    INSERT INTO orders(id,brand,created_at,customer_name,phone,alternate_phone,
@@ -222,6 +233,33 @@ export const createStagingOrder = createServerFn({ method: "POST" })
       order: { ...mapOrderRow(order), workspaceSource: "preview" as const },
     };
   });
+export const editStagingOrder = createServerFn({ method: "POST" })
+  .validator(
+    OrderFieldsSchema.extend({ id: z.string().uuid(), version: z.number().int().positive() }),
+  )
+  .handler(async ({ data }) => {
+    const actor = await requireCompanyAccess(data.token, "orders", "staging_order", data.brand);
+    const db = stage();
+    const { phone, items } = await prepareStagingOrder(data, db);
+    const [order] = await db`WITH updated AS (
+      UPDATE orders SET customer_name=${data.customerName},phone=${phone},
+       alternate_phone=${data.alternatePhone},governorate=${data.governorate},city=${data.city},
+       address=${data.address},payment_method=${data.paymentMethod},prepaid=${data.prepaid},
+       shipping=${data.shipping},discount=${data.discount},items=${JSON.stringify(items)}::jsonb,
+       shipping_company=${data.carrier},notes=${data.notes},assigned_to=${data.assignedTo},
+       courier=${data.courier},manual_total=${data.manualTotal ?? null},
+       manual_collection=${data.manualCollection ?? null},updated_at=now(),version=version+1
+      WHERE id=${data.id}::uuid AND version=${data.version} AND brand=${data.brand}
+       AND source='central-control-center-staging' AND deleted_at IS NULL
+      RETURNING *
+    ), audited AS (
+      INSERT INTO audit_log(actor,action,entity,entity_id,brand,details)
+      SELECT ${actor.id},'update','order',id::text,brand,'control-center staging order edit' FROM updated
+    ) SELECT * FROM updated`;
+    if (!order) throw new Error("ORDER_EDIT_CONFLICT");
+    return { order: { ...mapOrderRow(order), workspaceSource: "preview" as const } };
+  });
+
 export const confirmStagingOrder = createServerFn({ method: "POST" })
   .validator(
     z.object({

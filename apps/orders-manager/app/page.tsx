@@ -7,6 +7,7 @@ import {useTranslation,LanguageSwitch} from '@/app/language';
 import {customerPrintKey,printKeys,printDocuments} from '@/lib/print-history';
 import {talaExpress,talaRate} from '@/lib/tala-shipping';
 import {OrderDetails} from './order-details';
+import {OrderInvoice} from '@/components/order-invoice';
 import {TalaDestinationFields} from './tala-destination-fields';
 import {TalaShipments} from './tala-shipments';
 import {TalaSettings} from './tala-settings';
@@ -74,7 +75,7 @@ export default function Page(){
  const [permissions,setPermissions]=useState({create:false,confirm:false});
  const t=useTranslation();
  const money=(n:number)=>number(n)+' '+t('ج.م');
- const [auth,setAuth]=useState<boolean|null>(null),[email,setEmail]=useState(''),[brand,setBrand]=useState<Brand>('homey'),[tab,setTab]=useState<Tab>('dashboard'),[orders,setOrders]=useState<WorkspaceOrder[]>([]),[customers,setCustomers]=useState<Customer[]>([]),[waybills,setWaybills]=useState<Waybill[]>([]),[search,setSearch]=useState(''),[filter,setFilter]=useState('all'),[editing,setEditing]=useState<Order|null>(null),[editCustomer,setEditCustomer]=useState<Customer|null>(null),[busy,setBusy]=useState(false),[err,setErr]=useState(''),[notice,setNotice]=useState(''),[loaded,setLoaded]=useState(false);
+ const [auth,setAuth]=useState<boolean|null>(null),[email,setEmail]=useState(''),[brand,setBrand]=useState<Brand>('homey'),[tab,setTab]=useState<Tab>('dashboard'),[orders,setOrders]=useState<WorkspaceOrder[]>([]),[customers,setCustomers]=useState<Customer[]>([]),[waybills,setWaybills]=useState<Waybill[]>([]),[search,setSearch]=useState(''),[filter,setFilter]=useState('all'),[editing,setEditing]=useState<WorkspaceOrder|null>(null),[editCustomer,setEditCustomer]=useState<Customer|null>(null),[busy,setBusy]=useState(false),[err,setErr]=useState(''),[notice,setNotice]=useState(''),[loaded,setLoaded]=useState(false);
  const [deliveryChosen,setDeliveryChosen]=useState(false);
  const [orderLocations,setOrderLocations]=useState<Record<string,string[]>>({});
  const [orderLocationError,setOrderLocationError]=useState('');
@@ -102,6 +103,7 @@ export default function Page(){
  const [collectionFilter,setCollectionFilter]=useState<CollectionState|'all'>('all');
  const [carrierFilter,setCarrierFilter]=useState('');
  const [detailOrderId,setDetailOrderId]=useState('');
+ const [invoiceOrderId,setInvoiceOrderId]=useState('');
  const [shipmentDraft,setShipmentDraft]=useState<{brand:Brand;company:string;ids:string[]} | null>(null);
  const [shippingCompanies,setShippingCompanies]=useState<string[]>([]);
  const [companyName,setCompanyName]=useState('');
@@ -215,6 +217,12 @@ const response=await fetch(ordersManagerPath('/api/whoami'),{credentials:'same-o
  const inPeriod=(date:string)=>{if(period==='all')return true;const parsed=new Date(date);if(Number.isNaN(parsed.getTime()))return false;const d=cairoDay.format(parsed),today=new Date(cairoDay.format(new Date())+'T00:00:00');if(!/^\d{4}-\d{2}-\d{2}$/.test(d))return false;const dt=new Date(d+'T12:00:00');if(Number.isNaN(dt.getTime()))return false;if(period==='today')return dt.toDateString()===today.toDateString();if(period==='week'){const start=new Date(today);start.setDate(today.getDate()-((today.getDay()+6)%7));return dt>=start&&dt<=new Date(today.getTime()+86400000)}if(period==='month')return dt.getFullYear()===today.getFullYear()&&dt.getMonth()===today.getMonth();return (!fromDate||d>=fromDate)&&(!toDate||d<=toDate)};
  const brandOrders=orders.filter(o=>o.brand===brand).sort((a,b)=>Date.parse(b.enteredAt||b.createdAt)-Date.parse(a.enteredAt||a.createdAt));
  const detailOrder=brandOrders.find(order=>order.id===detailOrderId);
+ const invoiceOrder=brandOrders.find(order=>order.id===invoiceOrderId);
+ const canEditOrder=(order:WorkspaceOrder)=>!embedded||(permissions.create&&order.workspaceSource==='preview');
+ function openOrderEditor(order:WorkspaceOrder){
+  setDetailOrderId('');setErr('');setEditing({...order});
+ }
+
  const talaOrders=brandOrders.filter(order=>order.shippingCompany===talaExpress);
  const talaOrderIds=new Set(talaOrders.map(order=>order.id));
  const talaTrackingOrders=new Map(talaOrders.flatMap(order=>order.talaTrackingCode?[[order.talaTrackingCode,order.id] as const]:[]));
@@ -497,17 +505,20 @@ const response=await fetch(ordersManagerPath('/api/whoami'),{credentials:'same-o
  }
  async function saveOrder(e:React.FormEvent<HTMLFormElement>){e.preventDefault();if(!editing||busy)return;
   if(embedded){
-   if(!permissions.create||editing.id)return;
+   if(!permissions.create||(editing.id&&!canEditOrder(editing)))return;
    setBusy(true);setErr('');
    try{
-    const {order}=await dashboardRequest('create',editing);
+    const isEditing=Boolean(editing.id);
+    const {order}=await dashboardRequest(isEditing?'edit':'create',editing);
     writeGeneration.current++;
-    setOrders(current=>[order,...current.filter(existing=>existing.id!==order.id)]);
+    setOrders(current=>isEditing?current.map(existing=>existing.id===order.id?order:existing):[order,...current.filter(existing=>existing.id!==order.id)]);
     setLoaded(true);
     setEditing(null);
-    setSourceFilter('preview');setPeriod('all');setSearch('');setSelected([]);
-    setFilter('all');setCarrierFilter('');setCollectionFilter('all');setUnprintedOnly(false);
-    setNotice('تم حفظ الطلب التجريبي');
+    if(!isEditing){
+     setSourceFilter('preview');setPeriod('all');setSearch('');setSelected([]);
+     setFilter('all');setCarrierFilter('');setCollectionFilter('all');setUnprintedOnly(false);
+    }
+    setNotice(isEditing?'تم حفظ تعديلات الطلب':'تم حفظ الطلب التجريبي');
    }catch(error){setErr((error as Error).message)}
    finally{setBusy(false)}
    return;
@@ -540,6 +551,9 @@ const response=await fetch(ordersManagerPath('/api/whoami'),{credentials:'same-o
  <label>{t("كلمة المرور")}<div className="password-wrap"><input id="staff-password" name="password" autoComplete="current-password" type={showPassword?'text':'password'} className="field" placeholder={t("اكتب كلمة المرور")} dir="ltr" value={password} onChange={e=>setPassword(e.target.value)} required/><button type="button" className="password-toggle" aria-controls="staff-password" aria-label={showPassword?t("إخفاء كلمة المرور"):t("إظهار كلمة المرور")} aria-pressed={showPassword} onClick={()=>setShowPassword(v=>!v)}>{showPassword?t("إخفاء"):t("إظهار")}</button></div></label>
  <button className="btn login-submit" disabled={busy}>{busy?t("جاري تسجيل الدخول…"):t("دخول إلى لوحة التحكم")} <ArrowUpLeft size={17}/></button><InstallApp/><div className="login-foot"><ShieldCheck size={15}/>{t("دخول آمن لحسابات الإدارة المصرّح لها فقط")}</div></form>
  </section></div>;
+ if(embedded&&invoiceOrder)return <OrderInvoice order={invoiceOrder}
+  onBack={()=>setInvoiceOrderId('')}
+  onPrint={()=>{window.print();setPrinted(current=>new Set([...current,...printKeys([invoiceOrder])]))}}/>;
  const nav:[Tab,string,React.ReactNode][]=[['dashboard','الرئيسية',<LayoutDashboard size={19} key="a"/>],['orders','الأوردرات',<Package size={19} key="b"/>],['carriers','شركات الشحن',<Truck size={19}/>],['shipping-integrations','ربط شركات الشحن',<Truck size={19}/>],['customers','العملاء',<Users size={19} key="c"/>],['reports','التقارير',<ChartNoAxesCombined size={19}/>],['settings','الإعدادات',<Settings size={19} key="d"/>]];
  return <div className="app" data-embedded={embedded||undefined} data-brand={brand} data-waybill-print={printOrders.length>0?'active':undefined} style={theme}>
  {navigationOpen&&<button type="button" className="mobile-nav-backdrop" aria-label={t("إغلاق قائمة التنقل")} onClick={()=>setNavigationOpen(false)}/>}
@@ -666,7 +680,8 @@ const response=await fetch(ordersManagerPath('/api/whoami'),{credentials:'same-o
  <div className="shipping-preview"><WaybillPrintSheets waybills={printOrders.map(printable)} perPage={4} printDate={printDate} printDates={printDates}/></div>
  </section></div>}
  {detailOrder&&<OrderDetails order={detailOrder} cachedTracking={embedded} close={()=>setDetailOrderId('')}
-  edit={embedded?undefined:()=>{setDetailOrderId('');setErr('');setEditing({...detailOrder})}}
+  edit={canEditOrder(detailOrder)?()=>openOrderEditor(detailOrder):undefined}
+  invoice={embedded?()=>setInvoiceOrderId(detailOrder.id):undefined}
   print={()=>{setDetailOrderId('');preview([detailOrder])}}
   prepare={embedded?undefined:()=>{setDetailOrderId('');openShippingIntegration(detailOrder.shippingCompany,[detailOrder])}}/>}
  {editing&&<div className="modalshade"  onClick={e=>{if(e.target===e.currentTarget)setEditing(null)}}>
@@ -818,6 +833,9 @@ const response=await fetch(ordersManagerPath('/api/whoami'),{credentials:'same-o
      <div><dt>التاريخ</dt><dd><bdi>{dateEN(o.createdAt)}</bdi></dd></div></dl>
     <div className="mobile-order-actions">
      <button type="button" className="btn secondary" onClick={()=>setDetailOrderId(o.id)}>تفاصيل الطلب</button>
+     <button type="button" className="btn secondary" onClick={()=>setInvoiceOrderId(o.id)}>عرض الفاتورة</button>
+     {canEditOrder(o)&&<button type="button" className="btn secondary" disabled={busy}
+      onClick={()=>openOrderEditor(o)}>تعديل أوردر</button>}
      {o.workspaceSource==='preview'&&permissions.confirm&&(o.status==='new'||o.status==='contacted')&&
       <button type="button" className="btn" title={t("تأكيد الطلب")} disabled={busy} onClick={()=>updateOrders([o],'confirmed')}>{t("تأكيد الطلب")}</button>}
     </div>
@@ -833,5 +851,5 @@ const response=await fetch(ordersManagerPath('/api/whoami'),{credentials:'same-o
  <td className="numeric-value order-finance-cell">{orderRowFinance(o).cod===null?<span className="finance-review">غير مسجل</span>:money(orderRowFinance(o).cod!)}</td>
  <td className="numeric-value order-finance-cell">{orderRowFinance(o).fee===null?<span className="finance-review">غير محدد</span>:money(orderRowFinance(o).fee!)}{orderRowFinance(o).feeSource==='estimated'&&<small className="finance-fee-estimate">تقديري حسب المنطقة</small>}{orderRowFinance(o).feeSource==='tala'&&<small className="finance-fee-provider">حسب تالا</small>}</td>
  <td className="numeric-value order-finance-cell">{orderRowFinance(o).net===null?<span className="finance-review">غير معروف</span>:<strong>{money(orderRowFinance(o).net!)}</strong>}{orderRowFinance(o).confirmedNet&&<small className="finance-fee-provider">مستحق حسب تالا</small>}</td>
- <td>{missingFinancialAmount(o)?<span className="finance-review" title="بيانات التحصيل أو سعر المنتج ناقصة">يحتاج مراجعة</span>:money(carrierAmounts(o).due)}{financialWarnings(o).length>0&&<span className="finance-warning" title={financialWarnings(o).join("؛ ")}>راجع الحساب</span>}</td><td>{money(carrierAmounts(o).received)}</td><td>{missingFinancialAmount(o)?<span className="finance-review">غير معروف</span>:money(carrierAmounts(o).remaining)}</td><td dir="ltr" className="numeric-value">{englishDigits(o.phone)}</td><td className="tracking-order-detail">{[t(o.governorate),o.city,o.address].filter(Boolean).join('، ')||'—'}</td><td className="tracking-order-detail">{o.items.map(i=>i.name+' × '+number(i.quantity)).join('، ')}</td><td className="numeric-value">{dateEN(o.createdAt)}</td><td className="numeric-value">{formatEntryDate(o.enteredAt||o.createdAt)}</td><td className="order-actions"><div className="links">{!embedded&&canPrepareShipment(o)&&<button className="btn tiny secondary" title={t("تجهيز ملف الشحن")} aria-label={t("تجهيز ملف الشحن")} onClick={()=>openShippingIntegration(o.shippingCompany,[o])}><Truck size={15}/></button>}{!embedded&&<a className="btn tiny secondary" title={t("طباعة فاتورة PDF")} href={ordersManagerPath('/orders/')+o.id+'/invoice'} target="_blank" rel="noopener noreferrer"><FileText size={15}/></a>}<button className="btn tiny secondary" title={t("طباعة البوليصة")} onClick={()=>preview([o])}><Printer size={15}/>{t("طباعة")}</button>{!embedded&&<button className="btn tiny secondary" title={t("تعديل")} onClick={()=>{setErr('');setEditing({...o})}}><Pencil size={15}/></button>}{(embedded?o.workspaceSource==='preview'&&permissions.confirm&&(o.status==='new'||o.status==='contacted'):o.status!=='confirmed')&&<button className="btn tiny secondary" title={t("تأكيد الطلب")} disabled={busy} onClick={()=>updateOrders([o],'confirmed')}><CheckCircle2 size={15}/></button>}{!embedded&&o.status!=='cancelled'&&<button className="btn tiny secondary" title={t("إلغاء الطلب")} disabled={busy} onClick={()=>updateOrders([o],'cancelled')}><XCircle size={15}/></button>}{!embedded&&<button className="btn tiny danger" title={t("حذف")} disabled={busy} onClick={()=>updateOrders([o],'delete')}><Trash2 size={15}/></button>}</div></td></tr>)}</tbody></table>{rows.length===0&&<div className="empty">{!loaded?t("جاري تحميل البيانات…"):t("مفيش أوردرات مطابقة حالياً. اضغط إضافة أوردر للبدء.")}</div>}</div>}
+ <td>{missingFinancialAmount(o)?<span className="finance-review" title="بيانات التحصيل أو سعر المنتج ناقصة">يحتاج مراجعة</span>:money(carrierAmounts(o).due)}{financialWarnings(o).length>0&&<span className="finance-warning" title={financialWarnings(o).join("؛ ")}>راجع الحساب</span>}</td><td>{money(carrierAmounts(o).received)}</td><td>{missingFinancialAmount(o)?<span className="finance-review">غير معروف</span>:money(carrierAmounts(o).remaining)}</td><td dir="ltr" className="numeric-value">{englishDigits(o.phone)}</td><td className="tracking-order-detail">{[t(o.governorate),o.city,o.address].filter(Boolean).join('، ')||'—'}</td><td className="tracking-order-detail">{o.items.map(i=>i.name+' × '+number(i.quantity)).join('، ')}</td><td className="numeric-value">{dateEN(o.createdAt)}</td><td className="numeric-value">{formatEntryDate(o.enteredAt||o.createdAt)}</td><td className="order-actions"><div className="links">{!embedded&&canPrepareShipment(o)&&<button className="btn tiny secondary" title={t("تجهيز ملف الشحن")} aria-label={t("تجهيز ملف الشحن")} onClick={()=>openShippingIntegration(o.shippingCompany,[o])}><Truck size={15}/></button>}{embedded?<button type="button" className="btn tiny secondary" title="عرض الفاتورة" aria-label="عرض الفاتورة" onClick={()=>setInvoiceOrderId(o.id)}><FileText size={15}/></button>:<a className="btn tiny secondary" title={t("طباعة فاتورة PDF")} href={ordersManagerPath('/orders/')+o.id+'/invoice'} target="_blank" rel="noopener noreferrer"><FileText size={15}/></a>}<button className="btn tiny secondary" title={t("طباعة البوليصة")} onClick={()=>preview([o])}><Printer size={15}/>{t("طباعة")}</button>{canEditOrder(o)&&<button className="btn tiny secondary" title={t("تعديل")} aria-label={t("تعديل")} disabled={busy} onClick={()=>openOrderEditor(o)}><Pencil size={15}/></button>}{(embedded?o.workspaceSource==='preview'&&permissions.confirm&&(o.status==='new'||o.status==='contacted'):o.status!=='confirmed')&&<button className="btn tiny secondary" title={t("تأكيد الطلب")} disabled={busy} onClick={()=>updateOrders([o],'confirmed')}><CheckCircle2 size={15}/></button>}{!embedded&&o.status!=='cancelled'&&<button className="btn tiny secondary" title={t("إلغاء الطلب")} disabled={busy} onClick={()=>updateOrders([o],'cancelled')}><XCircle size={15}/></button>}{!embedded&&<button className="btn tiny danger" title={t("حذف")} disabled={busy} onClick={()=>updateOrders([o],'delete')}><Trash2 size={15}/></button>}</div></td></tr>)}</tbody></table>{rows.length===0&&<div className="empty">{!loaded?t("جاري تحميل البيانات…"):t("مفيش أوردرات مطابقة حالياً. اضغط إضافة أوردر للبدء.")}</div>}</div>}
 }

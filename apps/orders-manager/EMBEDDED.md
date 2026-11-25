@@ -15,3 +15,11 @@ In a separate terminal, start the dashboard with
 The embedded app uses `ORDERS_MANAGER_DATABASE_URL` for its isolated database.
 Use separate staff accounts and a separate signing secret. See `.env.example`
 for its server configuration.
+
+The dashboard's embedded edit action uses `CRM_ORDERS_STAGING_URL` and checks the
+store, source, and current order version before saving. The staging role needs
+column-level UPDATE privileges on `orders` for customer and address fields,
+payment and shipping amounts, line items, carrier, notes, assignee, courier,
+manual totals, `updated_at` and `version`. Apply those grants on the isolated
+preview branch. The manager source uses `CRM_ORDERS_READ_URL` for order and
+invoice previews.

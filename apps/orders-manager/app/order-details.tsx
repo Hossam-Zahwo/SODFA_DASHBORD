@@ -1,7 +1,7 @@
 'use client';
 import { ordersManagerPath } from "@/lib/app-path";
 
-import {Edit3,Package,Printer,Truck,X} from 'lucide-react';
+import {Edit3,FileText,Package,Printer,Truck,X} from 'lucide-react';
 import {useEffect,useState} from 'react';
 import {useLanguage,useTranslation} from './language';
 import {carrierAmounts,collectionFromCustomer,collectionLabels,collectionState,financialWarnings,missingFinancialAmount} from '@/lib/carrier-tracking';
@@ -13,6 +13,7 @@ type Props = {
  cachedTracking?:boolean;
  close:()=>void;
  edit?:()=>void;
+ invoice?:()=>void;
  print:()=>void;
  prepare?:()=>void;
 };
@@ -39,7 +40,7 @@ function TalaOrderStatus({code,brand}:{code:string;brand:Order['brand']}){
  return <span role="status">{result?.key!==key?t('جاري قراءة حالة تالا…'):result.status||t('حالة تالا غير متاحة حاليًا')}</span>;
 }
 
-export function OrderDetails({order,close,edit,print,prepare,cachedTracking=false}:Props){
+export function OrderDetails({order,close,edit,invoice,print,prepare,cachedTracking=false}:Props){
  const t=useTranslation();
  const number=new Intl.NumberFormat('en-US',{maximumFractionDigits:2});
  const money=(value:number)=>number.format(value)+' '+t('ج.م');
@@ -92,6 +93,7 @@ export function OrderDetails({order,close,edit,print,prepare,cachedTracking=fals
    {order.notes&&<section className="order-summary-group"><h3>{t('ملاحظات الأوردر')}</h3><p>{order.notes}</p></section>}
    <footer className="order-detail-actions">
     {edit&&<button type="button" className="btn" onClick={edit}><Edit3 size={16}/>{t('تعديل أوردر')}</button>}
+    {invoice&&<button type="button" className="btn secondary" onClick={invoice}><FileText size={16}/>عرض الفاتورة</button>}
     <button type="button" className="btn secondary" onClick={print}><Printer size={16}/>{t('طباعة البوليصة')}</button>
     {prepare&&canPrepareShipment(order)&&<button type="button" className="btn secondary" onClick={prepare}><Truck size={16}/>{t('تجهيز ملف الشحن')}</button>}
    </footer>
