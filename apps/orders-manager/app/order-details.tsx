@@ -11,9 +11,9 @@ import {statusLabels,totalOf,type Order} from '@/lib/types';
 type Props = {
  order:Order;
  close:()=>void;
- edit:()=>void;
+ edit?:()=>void;
  print:()=>void;
- prepare:()=>void;
+ prepare?:()=>void;
 };
 
 function TalaOrderStatus({code,brand}:{code:string;brand:Order['brand']}){
@@ -86,9 +86,9 @@ export function OrderDetails({order,close,edit,print,prepare}:Props){
    </section>
    {order.notes&&<section className="order-summary-group"><h3>{t('ملاحظات الأوردر')}</h3><p>{order.notes}</p></section>}
    <footer className="order-detail-actions">
-    <button type="button" className="btn" onClick={edit}><Edit3 size={16}/>{t('تعديل أوردر')}</button>
+    {edit&&<button type="button" className="btn" onClick={edit}><Edit3 size={16}/>{t('تعديل أوردر')}</button>}
     <button type="button" className="btn secondary" onClick={print}><Printer size={16}/>{t('طباعة البوليصة')}</button>
-    {canPrepareShipment(order)&&<button type="button" className="btn secondary" onClick={prepare}><Truck size={16}/>{t('تجهيز ملف الشحن')}</button>}
+    {prepare&&canPrepareShipment(order)&&<button type="button" className="btn secondary" onClick={prepare}><Truck size={16}/>{t('تجهيز ملف الشحن')}</button>}
    </footer>
   </section>
  </div>;

@@ -31,7 +31,8 @@ function OrderOperations(){
  const [showManager, setShowManager] = useState(Boolean(ordersManagerUrl));
  const [places,setPlaces]=useState<Record<string,string[]>>({});
  const context=Route.useSearch();
- const [brand,setBrand]=useState<"homey"|"sodfa">(context.brand??"homey");
+ const workspaceBrand=context.brand??(context.project==="sodfa"?"sodfa":"homey");
+ const [brand,setBrand]=useState<"homey"|"sodfa">(workspaceBrand);
  const [name,setName]=useState(""),[phone,setPhone]=useState("");
  const [gov,setGov]=useState(""),[city,setCity]=useState(""),[address,setAddress]=useState("");
  const [items,setItems]=useState<Array<{name:string;quantity:number;price:number;catalogId?:string}>>([{name:"",quantity:1,price:0}]);
@@ -58,7 +59,7 @@ function OrderOperations(){
  }
  const [requestId,setRequestId]=useState(()=>crypto.randomUUID());
  const [notice,setNotice]=useState(""),[busy,setBusy]=useState(false);
- const [saved,setSaved]=useState<{id:string;status:string;version:number;amount:number}|null>(null);
+ const [saved,setSaved]=useState<{id:string;status:string;version:number;amount:number;brand:"homey"|"sodfa"}|null>(null);
  useEffect(()=>{void loadLocations();},[]);
  async function getToken(){
   const {data:{session}}=await supabase.auth.getSession();
@@ -78,7 +79,7 @@ function OrderOperations(){
     items:items.map(item=>({...item,name:item.name.trim(),sku:""})),
     shipping,prepaid,discount,carrier
    }});
-   setSaved(result);
+   setSaved({...result,brand});
    setNotice("تم إنشاء أوردر في قاعدة التجربة المعزولة فقط. لم يُرسل أي طلب إلى تالا أو موقع العميل.");
   }catch(e){setNotice("تعذر حفظ الطلب التجريبي: "+(e instanceof Error?e.message:"خطأ"))}
   finally{setBusy(false)}
@@ -87,7 +88,7 @@ function OrderOperations(){
   if(!saved)return;
   setBusy(true);
   try{
-   const result=await confirmStagingOrder({data:{token:await getToken(),id:saved.id,version:saved.version}});
+   const result=await confirmStagingOrder({data:{token:await getToken(),id:saved.id,version:saved.version,brand:saved.brand}});
    setSaved(x=>x?{...x,status:result.status,version:result.version}:null);
    setNotice("تم تأكيد الطلب داخل قاعدة التجربة فقط؛ الإنتاج وحالات تالا لم يتغيروا.");
   }catch(e){setNotice("تعذر التأكيد: "+(e instanceof Error?e.message:"خطأ"))}
@@ -104,7 +105,7 @@ function OrderOperations(){
     <button type="button" className="rounded-lg border border-purple-400 px-3 py-2 aria-pressed:bg-purple-900"
      aria-pressed={!showManager} onClick={() => setShowManager(false)}>نموذج الإضافة التجريبي</button>
    </div>}
-   {showManager && ordersManagerUrl && <OrdersManagerPanel url={ordersManagerUrl} />}
+   {showManager && ordersManagerUrl && <OrdersManagerPanel key={workspaceBrand} url={ordersManagerUrl} brand={workspaceBrand} />}
    <div hidden={showManager}>
    <div style={{...css.card,marginBottom:16,border:"1px solid #875d33",background:"#201914"}}>
     <ShieldCheck size={18} style={{display:"inline",marginLeft:8}}/>

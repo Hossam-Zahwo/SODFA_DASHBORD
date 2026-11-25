@@ -1,3 +1,4 @@
+import { mapOrderRow } from "../../apps/orders-manager/lib/database";
 import { calculateOrderTotal } from "./inventory-planning";
 import { createServerFn } from "@tanstack/react-start";
 import { requireCompanyAccess } from "./company-access.server";
@@ -26,6 +27,29 @@ export const getStagingLocations = createServerFn({ method: "POST" })
   });
 const brandSchema = z.enum(["homey", "sodfa"]);
 const readToken = z.string().min(16).max(8192);
+const workspaceSchema = z.object({ token: readToken, brand: brandSchema });
+
+export const getStagingWorkspaceAccess = createServerFn({ method: "POST" })
+  .validator(workspaceSchema)
+  .handler(async ({ data }) => {
+    await requireCompanyAccess(data.token, data.brand, "read");
+    const { role } = await requireCompanyAccess(data.token, "orders", "read");
+    return {
+      create: role === "operator" || role === "manager" || role === "admin",
+      confirm: role === "admin" || role === "manager",
+    };
+  });
+
+export const listStagingOrders = createServerFn({ method: "POST" })
+  .validator(workspaceSchema)
+  .handler(async ({ data }) => {
+    await requireCompanyAccess(data.token, "orders", "read");
+    await requireCompanyAccess(data.token, data.brand, "read");
+    const rows = await stage()`SELECT * FROM orders WHERE brand=${data.brand}
+      AND source='central-control-center-staging' AND deleted_at IS NULL
+      ORDER BY created_at DESC, id DESC LIMIT 500`;
+    return rows.map(mapOrderRow);
+  });
 
 function catalog() {
   const url = process.env["CRM_CATALOG_READ_URL"];
@@ -71,6 +95,12 @@ const CreateSchema = z.object({
     .min(1)
     .max(50),
   carrier: z.string().trim().max(100).default(""),
+  alternatePhone: z.string().trim().max(30).default(""),
+  paymentMethod: z.string().trim().max(100).default("الدفع عند الاستلام"),
+  notes: z.string().trim().max(3000).default(""),
+  assignedTo: z.string().trim().max(120).default(""),
+  courier: z.string().trim().max(120).default(""),
+  manualCollection: z.number().min(0).max(1_000_000).nullable().optional(),
   shipping: z.number().min(0).max(100_000).default(0),
   prepaid: z.number().min(0).max(1_000_000).default(0),
   discount: z.number().min(0).max(100_000).default(0),
@@ -79,6 +109,7 @@ export const createStagingOrder = createServerFn({ method: "POST" })
   .validator(CreateSchema)
   .handler(async ({ data }) => {
     const actor = await requireCompanyAccess(data.token, "orders", "staging_order");
+    await requireCompanyAccess(data.token, data.brand, "read");
     const phone = data.phone
       .normalize("NFKC")
       .replace(/[٠-٩۰-۹]/g, (d) =>
@@ -117,10 +148,10 @@ export const createStagingOrder = createServerFn({ method: "POST" })
    INSERT INTO orders(id,brand,created_at,customer_name,phone,alternate_phone,
     governorate,city,address,source,payment_method,prepaid,shipping,discount,items,status,
     shipping_company,carrier_received,notes,assigned_to,courier,manual_total,manual_collection)
-   VALUES(${data.creationRequestId}::uuid,${data.brand},now(),${data.customerName},${phone},'',
+   VALUES(${data.creationRequestId}::uuid,${data.brand},now(),${data.customerName},${phone},${data.alternatePhone},
     ${data.governorate},${data.city},${data.address},'central-control-center-staging',
-    'الدفع عند الاستلام',${data.prepaid},${data.shipping},${data.discount},
-    ${JSON.stringify(items)}::jsonb,'new',${data.carrier},0,'','', '',NULL,NULL)
+     ${data.paymentMethod},${data.prepaid},${data.shipping},${data.discount},
+    ${JSON.stringify(items)}::jsonb,'new',${data.carrier},0,${data.notes},${data.assignedTo},${data.courier},NULL,${data.manualCollection ?? null})
    ON CONFLICT(id) DO NOTHING RETURNING id,brand,status,version
   ), audited AS (
    INSERT INTO audit_log(actor,action,entity,entity_id,brand,details)
@@ -155,16 +186,19 @@ export const confirmStagingOrder = createServerFn({ method: "POST" })
   .validator(
     z.object({
       token: z.string().min(16).max(8192),
+      brand: brandSchema,
       id: z.string().uuid(),
       version: z.number().int().min(0),
     }),
   )
   .handler(async ({ data }) => {
     const actor = await requireCompanyAccess(data.token, "orders", "approve");
+    await requireCompanyAccess(data.token, data.brand, "read");
     const db = stage();
     const rows = await db`WITH confirmed AS (
    UPDATE orders SET status='confirmed',updated_at=now(),version=version+1
     WHERE id=${data.id}::uuid AND version=${data.version}
+      AND brand=${data.brand}
       AND status IN ('new','contacted') AND source='central-control-center-staging'
       AND deleted_at IS NULL RETURNING id,status,version,brand
   ), audited AS (

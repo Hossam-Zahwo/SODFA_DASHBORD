@@ -21,7 +21,7 @@ for(const k of ['talaDeliveredAmount','talaDeliveryFees','talaCustomerDue','tala
  if('deletedAt' in obj && obj.deletedAt==null)obj.deletedAt='';
  return obj as T;
 }
-const order=(row:Record<string,unknown>)=>fromDb<Order>(row,orderFields);
+export const mapOrderRow=(row:Record<string,unknown>)=>fromDb<Order>(row,orderFields);
 const customer=(row:Record<string,unknown>)=>fromDb<Customer>(row,customerFields);
 const orderDate=(v:string)=>/^\d{4}-\d{2}-\d{2}$/.test(v)?v+'T12:00:00+02:00':new Date(v).toISOString();
 
@@ -44,7 +44,7 @@ export async function getOrders():Promise<Order[]>{
  return rows.map(row=>{
   const shipment=byOrder.get(row.id);
   const provider=shipment?.provider_data&&typeof shipment.provider_data==='object'?shipment.provider_data as Record<string,unknown>:{};
-  return order({...row,
+  return mapOrderRow({...row,
    tala_tracking_code:shipment?.tracking_code,tala_dispatch_state:shipment?.state,tala_request_data:provider.request_data??null,
    tala_status_code:provider.provider_status_code,tala_status_name:provider.provider_status_name,
    tala_delivered_amount:provider.provider_delivered_amount,tala_delivery_fees:provider.provider_delivery_fees,
@@ -94,7 +94,7 @@ export async function saveOrder(input:Order,creationRequestId?:string):Promise<O
    notes=${input.notes||''},assigned_to=${input.assignedTo||''},courier=COALESCE(${input.courier??null},courier),version=version+1
    WHERE id=${input.id}::uuid AND version=${input.version} AND deleted_at IS NULL RETURNING *`;
   if(!rows.length)throw new Error('CONFLICT');
-  return order(rows[0]);
+  return mapOrderRow(rows[0]);
  }
  const rows=await db`INSERT INTO public.orders
   (id,brand,created_at,customer_name,phone,alternate_phone,governorate,city,address,source,payment_method,
@@ -103,16 +103,16 @@ export async function saveOrder(input:Order,creationRequestId?:string):Promise<O
   ${input.governorate||''},${input.city||''},${input.address||''},${input.source||''},${input.paymentMethod||''},
   ${input.prepaid},${input.shipping},${input.discount},${JSON.stringify(input.items)}::jsonb,${input.status},${input.shippingCompany??''},${input.carrierReceived??0},
   ${input.notes||''},${input.assignedTo||''},${input.courier??''},${input.manualTotal??null},${input.manualCollection??null}) ON CONFLICT(id) DO NOTHING RETURNING *`;
- if(rows.length)return order(rows[0]);
+ if(rows.length)return mapOrderRow(rows[0]);
  const [existing]=await db`SELECT * FROM public.orders WHERE id=${creationRequestId??null}::uuid AND brand=${input.brand} AND deleted_at IS NULL`;
  if(!existing)throw new Error('CONFLICT');
- return order(existing);
+ return mapOrderRow(existing);
 }
 export async function removeOrder(id:string,version:number):Promise<Order>{
  const rows=await sql()`UPDATE public.orders SET deleted_at=now(),updated_at=now(),version=version+1
   WHERE id=${id}::uuid AND version=${version} AND deleted_at IS NULL RETURNING *`;
  if(!rows.length)throw new Error('CONFLICT');
- return order(rows[0]);
+ return mapOrderRow(rows[0]);
 }
 export async function getCustomers():Promise<Customer[]>{
  const rows=await sql()`SELECT * FROM public.customers WHERE deleted_at IS NULL ORDER BY created_at DESC LIMIT 5000`;
