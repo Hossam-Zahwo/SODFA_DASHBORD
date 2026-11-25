@@ -217,7 +217,7 @@ function ControlCenter(){
     {loadError&&<div style={{...panel,border:"1px solid #8f5151",marginBottom:14}}><AlertTriangle size={17} style={{display:"inline",marginLeft:8}}/>تعذر جلب بيانات الربط: {loadError}. بيانات صدفة المحلية قد تظل متاحة.</div>}
     {canSeeSodfaStock&&tab==="products"&&<CompanyInventoryAssistant key={project}/>}
     {project==="homey"&&tab==="store-admin"&&bridge&&<iframe
-      src="/homey-admin/index.html#/admin"
+      src="/homey-admin/index.html?embedded=1#/admin"
       title="لوحة تحكم متجر هومي"
       className="h-[calc(100dvh-11rem)] min-h-[32rem] w-full rounded-xl border border-[#27272a] bg-white"
     />}
