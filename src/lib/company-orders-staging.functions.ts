@@ -32,8 +32,7 @@ const workspaceSchema = z.object({ token: readToken, brand: brandSchema });
 export const getStagingWorkspaceAccess = createServerFn({ method: "POST" })
   .validator(workspaceSchema)
   .handler(async ({ data }) => {
-    await requireCompanyAccess(data.token, data.brand, "read");
-    const { role } = await requireCompanyAccess(data.token, "orders", "read");
+    const { role } = await requireCompanyAccess(data.token, "orders", "read", data.brand);
     return {
       create: role === "operator" || role === "manager" || role === "admin",
       confirm: role === "admin" || role === "manager",
@@ -43,8 +42,7 @@ export const getStagingWorkspaceAccess = createServerFn({ method: "POST" })
 export const listWorkspaceOrders = createServerFn({ method: "POST" })
   .validator(workspaceSchema)
   .handler(async ({ data }) => {
-    await requireCompanyAccess(data.token, "orders", "read");
-    await requireCompanyAccess(data.token, data.brand, "read");
+    await requireCompanyAccess(data.token, "orders", "read", data.brand);
 
     const manager = async () => {
       const url = process.env["CRM_ORDERS_READ_URL"];
@@ -111,8 +109,7 @@ export const searchStagingOrderProducts = createServerFn({ method: "POST" })
     z.object({ token: readToken, brand: brandSchema, query: z.string().trim().min(2).max(200) }),
   )
   .handler(async ({ data }) => {
-    await requireCompanyAccess(data.token, "orders", "read");
-    await requireCompanyAccess(data.token, data.brand, "read");
+    await requireCompanyAccess(data.token, "orders", "read", data.brand);
     const rows = await catalog()`SELECT id::text AS id, title FROM product_references
    WHERE brand_id=${data.brand} AND strpos(lower(title),lower(${data.query}))>0
    ORDER BY (lower(title)=lower(${data.query})) DESC,title,id LIMIT 15`;
@@ -157,8 +154,7 @@ const CreateSchema = z.object({
 export const createStagingOrder = createServerFn({ method: "POST" })
   .validator(CreateSchema)
   .handler(async ({ data }) => {
-    const actor = await requireCompanyAccess(data.token, "orders", "staging_order");
-    await requireCompanyAccess(data.token, data.brand, "read");
+    const actor = await requireCompanyAccess(data.token, "orders", "staging_order", data.brand);
     const phone = data.phone
       .normalize("NFKC")
       .replace(/[٠-٩۰-۹]/g, (d) =>
@@ -177,7 +173,6 @@ export const createStagingOrder = createServerFn({ method: "POST" })
     ];
     const refs = new Map<string, { name: string; sourceProductId: string }>();
     if (ids.length) {
-      await requireCompanyAccess(data.token, data.brand, "read");
       const catalogRows =
         await catalog()`SELECT id::text AS id,title,source_product_id FROM product_references
     WHERE brand_id=${data.brand} AND id::text=ANY(${ids}::text[])`;
@@ -237,8 +232,7 @@ export const confirmStagingOrder = createServerFn({ method: "POST" })
     }),
   )
   .handler(async ({ data }) => {
-    const actor = await requireCompanyAccess(data.token, "orders", "approve");
-    await requireCompanyAccess(data.token, data.brand, "read");
+    const actor = await requireCompanyAccess(data.token, "orders", "approve", data.brand);
     const db = stage();
     const rows = await db`WITH confirmed AS (
    UPDATE orders SET status='confirmed',updated_at=now(),version=version+1
