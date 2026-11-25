@@ -20,7 +20,7 @@ export const Route=createFileRoute("/control-center-orders")({
 });
 const ordersManagerUrl =
  import.meta.env["VITE_ORDERS_MANAGER_URL"] ||
- (import.meta.env.DEV ? "http://127.0.0.1:3001" : undefined);
+ (import.meta.env.DEV ? "http://127.0.0.1:3001/orders-manager" : undefined);
 
 const css={
  card:{background:"#111114",border:"1px solid #27272A",borderRadius:16,padding:20} as const,

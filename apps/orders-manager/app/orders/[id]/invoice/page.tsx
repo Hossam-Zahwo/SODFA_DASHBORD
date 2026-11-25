@@ -1,4 +1,5 @@
 'use client';
+import { ordersManagerPath } from "@/lib/app-path";
 import {useTranslation} from '@/app/language';
 
 import {printDocuments,printKeys} from '@/lib/print-history';
@@ -12,13 +13,13 @@ export default function Invoice({params}:{params:Promise<{id:string}>}){
  const t=useTranslation();
  const fmt=(n:number)=>new Intl.NumberFormat('en-US',{minimumFractionDigits:2,maximumFractionDigits:2}).format(n)+' '+t('ج.م');
  const [order,setOrder]=useState<Order|null>(null),[err,setErr]=useState(''),[loading,setLoading]=useState(true);
- useEffect(()=>{let active=true;params.then(async({id})=>{try{const r=await fetch('/api/orders',{credentials:'same-origin',cache:'no-store'});const j=await r.json();if(!r.ok)throw Error('لازم تسجّل الدخول الأول');const found=(j.data as Order[]).find(x=>x.id===id);if(!found)throw Error('الطلب غير موجود');if(active)setOrder(found)}catch(e){if(active)setErr(e instanceof Error?e.message:'حصل خطأ')}finally{if(active)setLoading(false)}});return()=>{active=false}},[params]);
+ useEffect(()=>{let active=true;params.then(async({id})=>{try{const r=await fetch(ordersManagerPath('/api/orders'),{credentials:'same-origin',cache:'no-store'});const j=await r.json();if(!r.ok)throw Error('لازم تسجّل الدخول الأول');const found=(j.data as Order[]).find(x=>x.id===id);if(!found)throw Error('الطلب غير موجود');if(active)setOrder(found)}catch(e){if(active)setErr(e instanceof Error?e.message:'حصل خطأ')}finally{if(active)setLoading(false)}});return()=>{active=false}},[params]);
  if(loading)return <main className="invoice-state">{t("جاري تحميل الفاتورة...")}</main>;
- if(err||!order)return <main className="invoice-state">{err||t("الفاتورة غير متاحة")} <a href="/">{t("رجوع")}</a></main>;
+ if(err||!order)return <main className="invoice-state">{err||t("الفاتورة غير متاحة")} <a href={ordersManagerPath("/")}>{t("رجوع")}</a></main>;
  const subtotal=order.items.reduce((v,x)=>v+x.price*x.quantity,0);
  const manualAdjustment=Math.round((totalOf(order)-calculatedTotal(order))*100)/100;
  return <main className="invoice-page">
-  <div className="invoice-actions"><a href="/"><ArrowRight size={17}/>{t("الرجوع للطلبات")}</a><button onClick={()=>void printDocuments(printKeys([order])).catch(()=>alert(t('اتفتح مربع الطباعة، لكن حالة الطباعة ما اتحفظتش.')))}><Printer size={18}/>{t("طباعة / حفظ PDF")}</button></div>
+  <div className="invoice-actions"><a href={ordersManagerPath("/")}><ArrowRight size={17}/>{t("الرجوع للطلبات")}</a><button onClick={()=>void printDocuments(printKeys([order])).catch(()=>alert(t('اتفتح مربع الطباعة، لكن حالة الطباعة ما اتحفظتش.')))}><Printer size={18}/>{t("طباعة / حفظ PDF")}</button></div>
   <article className="invoice-paper">
    <header className="invoice-head"><div><div className="invoice-logo">{order.brand==='homey'?<HomeyLogo className="invoice-homey-logo"/>:<><ShoppingBag size={27}/><span>{t("صدفة | SODFA")}</span></>}</div><p>{t("فاتورة طلب شراء")}</p></div><div className="invoice-ref"><strong>#{order.id.slice(0,8).toUpperCase()}</strong><span>{t("تاريخ الطلب:")} {new Date(order.createdAt).toLocaleDateString('en-GB')}</span></div></header>
    <div className="invoice-banner">{t("فاتورة شراء")}</div>

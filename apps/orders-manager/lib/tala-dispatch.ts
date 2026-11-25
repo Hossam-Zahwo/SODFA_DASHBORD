@@ -53,7 +53,7 @@ function buildRequestPayload(order:Order,destination:TalaDestination){
 }
 
 export async function keepTalaRequestForReview(order:Order,destination:TalaDestination){
- const url=process.env.DATABASE_URL;
+ const url=process.env.ORDERS_MANAGER_DATABASE_URL;
  if(!url)throw new Error('Database not configured');
  const sql=neon(url);
  await sql`ALTER TABLE public.tala_order_shipments ADD COLUMN IF NOT EXISTS request_data jsonb NOT NULL DEFAULT '{}'::jsonb`;
@@ -64,7 +64,7 @@ export async function keepTalaRequestForReview(order:Order,destination:TalaDesti
 }
 
 export async function dispatchTalaOrder(order:Order,config:Awaited<ReturnType<typeof prepareTalaDispatch>>,retry=false):Promise<DispatchResult>{
- const url=process.env.DATABASE_URL;
+ const url=process.env.ORDERS_MANAGER_DATABASE_URL;
  if(!url)return {state:'unavailable'};
  const sql=neon(url);
  const {endpoint,token,destination}=config;

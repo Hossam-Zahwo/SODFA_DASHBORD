@@ -1,4 +1,5 @@
 'use client';
+import { ordersManagerPath } from "@/lib/app-path";
 import {useTranslation} from '@/app/language';
 
 import {printDocuments,printKeys} from '@/lib/print-history';
@@ -18,7 +19,7 @@ export default function WaybillPrint({params}:{params:Promise<{id:string}>}){
   let active=true;
   params.then(async({id})=>{
    try{
-    const response=await fetch('/api/waybills/'+encodeURIComponent(id),{credentials:'same-origin',cache:'no-store'});
+    const response=await fetch(ordersManagerPath('/api/waybills/')+encodeURIComponent(id),{credentials:'same-origin',cache:'no-store'});
     const json=await response.json();
     if(!response.ok)throw Error(json.error||'تعذر تحميل البوليصة');
     if(active)setRecord(json.data);
@@ -28,10 +29,10 @@ export default function WaybillPrint({params}:{params:Promise<{id:string}>}){
   return()=>{active=false};
  },[params]);
  if(loading)return <main className="shipping-print-state">{t("جاري تجهيز بوليصة الشحن...")}</main>;
- if(!record||error)return <main className="shipping-print-state">{error||t("البوليصة غير موجودة")} <a href="/">{t("الرجوع للوحة التحكم")}</a></main>;
+ if(!record||error)return <main className="shipping-print-state">{error||t("البوليصة غير موجودة")} <a href={ordersManagerPath("/")}>{t("الرجوع للوحة التحكم")}</a></main>;
  return <main className="shipping-print-view">
    <div className="shipping-print-toolbar">
-    <a href="/">{t("الرجوع لإدارة الطلبات")}</a>
+    <a href={ordersManagerPath("/")}>{t("الرجوع لإدارة الطلبات")}</a>
     <div className="shipping-print-controls">
      <label className="shipping-print-date-control">{t("تاريخ الطباعة")}
       <input type="date" value={printDate} onChange={e=>setPrintDate(e.target.value)} aria-label={t("تاريخ الطباعة على البوليصة")}/>

@@ -1,12 +1,13 @@
 import {createHmac,pbkdf2Sync,timingSafeEqual} from 'node:crypto';
 import {neon} from '@neondatabase/serverless';
+import {ordersManagerBasePath} from './app-path';
 const COOKIE='homey_sodfa_session',DAYS=7;
-const sql=()=>{if(!process.env.DATABASE_URL)throw Error('DATABASE_NOT_CONFIGURED');return neon(process.env.DATABASE_URL)};
+const sql=()=>{if(!process.env.ORDERS_MANAGER_DATABASE_URL)throw Error('DATABASE_NOT_CONFIGURED');return neon(process.env.ORDERS_MANAGER_DATABASE_URL)};
 type Staff={id:string;email:string;displayName:string};
 function secret(){const s=process.env.SESSION_SIGNING_SECRET||process.env.NEON_AUTH_COOKIE_SECRET;if(!s||s.length<32)throw Error('SESSION_SECRET_NOT_CONFIGURED');return s}
 function sign(data:string){return createHmac('sha256',secret()).update(data).digest('base64url')}
-export function setStaffCookie(user:Staff){const payload=Buffer.from(JSON.stringify({sub:user.id,exp:Date.now()+DAYS*86400000})).toString('base64url');const value='v1.'+payload+'.'+sign('v1.'+payload);return COOKIE+'='+value+'; Path=/; HttpOnly; SameSite=Lax; Max-Age='+DAYS*86400+(process.env.NODE_ENV==='production'?'; Secure':'')}
-export function clearStaffCookie(){return COOKIE+'=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0'+(process.env.NODE_ENV==='production'?'; Secure':'')}
+export function setStaffCookie(user:Staff){const payload=Buffer.from(JSON.stringify({sub:user.id,exp:Date.now()+DAYS*86400000})).toString('base64url');const value='v1.'+payload+'.'+sign('v1.'+payload);return COOKIE+'='+value+'; Path='+ordersManagerBasePath+'; HttpOnly; SameSite=Lax; Max-Age='+DAYS*86400+(process.env.NODE_ENV==='production'?'; Secure':'')}
+export function clearStaffCookie(){return COOKIE+'=; Path='+ordersManagerBasePath+'; HttpOnly; SameSite=Lax; Max-Age=0'+(process.env.NODE_ENV==='production'?'; Secure':'')}
 export async function getStaff(req:Request):Promise<Staff|null>{
  const cookie=req.headers.get('cookie')?.split(';').map(x=>x.trim()).find(x=>x.startsWith(COOKIE+'='))?.slice(COOKIE.length+1);
  if(!cookie)return null;

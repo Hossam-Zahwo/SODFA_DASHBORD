@@ -1,3 +1,4 @@
+import { ordersManagerPath } from "@/lib/app-path";
 import type { Metadata, Viewport } from 'next';
 import '@fontsource-variable/inter';
 import '@fontsource/ibm-plex-sans-arabic/arabic-400.css';
@@ -14,13 +15,13 @@ export const metadata: Metadata = {
   description: 'لوحة إدارة وتأكيد الطلبات الداخلية',
   robots: { index: false, follow: false },
   applicationName: 'HOMEY & SODFA',
-  manifest: '/manifest.webmanifest',
+  manifest: ordersManagerPath('/manifest.webmanifest'),
   appleWebApp: {
     capable: true,
     statusBarStyle: 'default',
     title: 'HOMEY & SODFA',
   },
-  icons: { icon: '/icon.svg', apple: '/sodfa-app-180.png' },
+  icons: { icon: ordersManagerPath('/icon.svg'), apple: ordersManagerPath('/sodfa-app-180.png') },
 };
 
 export const viewport: Viewport = {

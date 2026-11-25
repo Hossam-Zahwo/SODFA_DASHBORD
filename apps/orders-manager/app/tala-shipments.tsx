@@ -1,4 +1,5 @@
 'use client';
+import { ordersManagerPath } from "@/lib/app-path";
 
 import {useEffect,useRef,useState} from 'react';
 import {Clock3,RefreshCw,Search,Truck} from 'lucide-react';
@@ -7,7 +8,7 @@ import {talaStatusGroups,type TalaShipmentPage,type TalaShipmentSummary} from '@
 import type {Brand} from '@/lib/types';
 
 type Snapshot = {shipments:TalaShipmentSummary[];updatedAt:Date;partial:boolean};
-const api='/api/shipping-integrations/tala';
+const api=ordersManagerPath('/api/shipping-integrations/tala');
 const refreshMs=3*60*1000;
 
 export function TalaShipments({brand,revision,orderIds,openOrder,trackingOrders,onSettings,dashboard=false}:{

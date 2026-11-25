@@ -1,4 +1,5 @@
 'use client';
+import { ordersManagerPath } from "@/lib/app-path";
 import {useCallback,useEffect,useState} from 'react';
 
 type Status={
@@ -12,7 +13,7 @@ export function HomeyConversionsStatus(){
   const load=useCallback(async()=>{
     setLoading(true);setError('');
     try{
-      const response=await fetch('/api/integrations/homey/conversions/status',{credentials:'same-origin',cache:'no-store'});
+      const response=await fetch(ordersManagerPath('/api/integrations/homey/conversions/status'),{credentials:'same-origin',cache:'no-store'});
       const result=await response.json();
       if(!response.ok)throw new Error(result.error||'تعذر قراءة الربط');
       setData(result);

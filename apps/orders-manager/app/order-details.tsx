@@ -1,4 +1,5 @@
 'use client';
+import { ordersManagerPath } from "@/lib/app-path";
 
 import {Edit3,Package,Printer,Truck,X} from 'lucide-react';
 import {useEffect,useState} from 'react';
@@ -22,7 +23,7 @@ function TalaOrderStatus({code,brand}:{code:string;brand:Order['brand']}){
  const key=brand+':'+code+':'+language;
  useEffect(()=>{
   const controller=new AbortController();
-  fetch('/api/shipping-integrations/tala',{
+  fetch(ordersManagerPath('/api/shipping-integrations/tala'),{
    method:'POST',headers:{'Content-Type':'application/json'},signal:controller.signal,
    body:JSON.stringify({brand,code,language,operation:'tracking'}),
   }).then(async response=>{

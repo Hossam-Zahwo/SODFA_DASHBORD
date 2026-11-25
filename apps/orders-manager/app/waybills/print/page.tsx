@@ -1,4 +1,5 @@
 'use client';
+import { ordersManagerPath } from "@/lib/app-path";
 import {useTranslation} from '@/app/language';
 
 import {printDocuments,printKeys} from '@/lib/print-history';
@@ -22,7 +23,7 @@ export default function BatchWaybillPrint(){
     const ids=new URLSearchParams(window.location.search).get('ids')?.split(',').filter(Boolean)||[];
     const unique=[...new Set(ids)];
     if(!unique.length||unique.length>100||unique.some(x=>!/^[0-9a-f-]{36}$/i.test(x)))throw Error('اختار من 1 إلى 100 بوليصة من لوحة الإدارة');
-    const response=await fetch('/api/waybills',{credentials:'same-origin',cache:'no-store'});
+    const response=await fetch(ordersManagerPath('/api/waybills'),{credentials:'same-origin',cache:'no-store'});
     const body=await response.json();
     if(!response.ok)throw Error(body.error||'تعذر قراءة البوالص');
     const map=new Map<string,Waybill>((body.data as Waybill[]).map(w=>[w.id,w]));
@@ -35,10 +36,10 @@ export default function BatchWaybillPrint(){
   void load();return()=>{active=false};
  },[]);
  if(loading)return <main className="shipping-print-state">{t("جاري تجهيز البوالص للطباعة...")}</main>;
- if(error)return <main className="shipping-print-state">{t(error)} <a href="/">{t("الرجوع للوحة التحكم")}</a></main>;
+ if(error)return <main className="shipping-print-state">{t(error)} <a href={ordersManagerPath("/")}>{t("الرجوع للوحة التحكم")}</a></main>;
  return <main className="shipping-print-view">
    <div className="shipping-print-toolbar">
-    <a href="/">{t("الرجوع لإدارة الطلبات")}</a>
+    <a href={ordersManagerPath("/")}>{t("الرجوع لإدارة الطلبات")}</a>
     <div className="shipping-print-controls">
      <span>{t("عدد البوالص:")} {waybills.length}</span>
      <label className="shipping-print-date-control">{t("تاريخ الطباعة")}

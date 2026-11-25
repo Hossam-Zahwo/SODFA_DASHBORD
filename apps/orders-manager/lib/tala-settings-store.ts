@@ -7,7 +7,7 @@ type Credentials = {username:string;password:string};
 export type TalaSettings = {endpoint:string;documentation:string;support:string;revision:number;input:Credentials|null};
 
 function db(){
- const url=process.env.DATABASE_URL;
+ const url=process.env.ORDERS_MANAGER_DATABASE_URL;
  if(!url)throw new Error('Database unavailable');
  return neon(url);
 }

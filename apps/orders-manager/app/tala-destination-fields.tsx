@@ -1,4 +1,5 @@
 'use client';
+import { ordersManagerPath } from "@/lib/app-path";
 
 import {useEffect,useRef,useState} from 'react';
 import {useLanguage} from './language';
@@ -27,7 +28,7 @@ export function TalaDestinationFields({retryOrder=false,price,onRateChange}:{ret
  const selectedArea=areas.find(item=>String(item.id)===subzone);
 
  async function request(operation:'services'|'coverage',id?:number,signal?:AbortSignal){
-  const response=await fetch('/api/shipping-integrations/tala',{
+  const response=await fetch(ordersManagerPath('/api/shipping-integrations/tala'),{
    method:'POST',headers:{'Content-Type':'application/json'},
    body:JSON.stringify({brand:'homey',operation,language:'ar',id}),signal,
   });
@@ -79,7 +80,7 @@ export function TalaDestinationFields({retryOrder=false,price,onRateChange}:{ret
   if(!service||!selectedZone||!selectedArea||!Number.isFinite(price)||price<0||!Number.isFinite(Number(weight))||Number(weight)<=0)return;
   const controller=new AbortController();
   setFeeLoading(true);setFeeFailed(false);setFee(null);
-  fetch('/api/shipping-integrations/tala',{method:'POST',headers:{'Content-Type':'application/json'},signal:controller.signal,
+  fetch(ordersManagerPath('/api/shipping-integrations/tala'),{method:'POST',headers:{'Content-Type':'application/json'},signal:controller.signal,
    body:JSON.stringify({brand:'homey',operation:'fees',language,fees:{serviceId:Number(service),zoneId:Number(zone),subzoneId:Number(subzone),weight:Number(weight),price}}),cache:'no-store'})
    .then(async response=>{const result=await response.json();if(!response.ok)throw new Error();return result.data as {total:number}})
    .then(result=>{if(controller.signal.aborted||!Number.isFinite(result.total)||result.total<0)throw new Error();setFee(result.total);rateChangeRef.current(result.total)})

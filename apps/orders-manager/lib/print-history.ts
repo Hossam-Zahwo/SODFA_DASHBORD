@@ -1,3 +1,4 @@
+import { ordersManagerPath } from "@/lib/app-path";
 import type {Brand} from './types';
 
 export function customerPrintKey(brand:Brand,phone:string){
@@ -10,7 +11,7 @@ export function printKeys(rows:{id?:string|null;brand:Brand;phone:string}[]){
 }
 
 export async function printDocuments(keys:string[]){
- const recording=fetch('/api/print-history',{
+ const recording=fetch(ordersManagerPath('/api/print-history'),{
   method:'POST',headers:{'Content-Type':'application/json'},
   body:JSON.stringify({keys}),keepalive:JSON.stringify({keys}).length<60000,
  });

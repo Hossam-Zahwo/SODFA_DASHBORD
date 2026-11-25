@@ -2,7 +2,7 @@ import {neon} from '@neondatabase/serverless';
 import type {Order,Customer} from './types';
 
 function sql(){
- const url=process.env.DATABASE_URL;
+ const url=process.env.ORDERS_MANAGER_DATABASE_URL;
  if(!url)throw new Error('Neon database is not configured');
  return neon(url);
 }

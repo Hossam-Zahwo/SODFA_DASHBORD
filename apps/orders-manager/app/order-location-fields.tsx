@@ -1,3 +1,4 @@
+import { ordersManagerPath } from "@/lib/app-path";
 
 import {useTranslation} from '@/app/language';
 import {useEffect,useId,useRef,useState} from 'react';
@@ -51,7 +52,7 @@ export function OrderLocationFields({locations, governorate, city, required, onC
   addRequest.current=controller;
   setAdding(true);setAddError(false);
   try{
-   const response=await fetch('/api/order-locations',{
+   const response=await fetch(ordersManagerPath('/api/order-locations'),{
     method:'POST',headers:{'Content-Type':'application/json'},signal:controller.signal,
     body:JSON.stringify({governorate,city:name}),
    });

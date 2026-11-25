@@ -1,0 +1,17 @@
+{
+  "services": {
+    "dashboard": {
+      "root": ".",
+      "framework": "tanstack-start-lovable",
+      "buildCommand": "VITE_ORDERS_MANAGER_URL=/orders-manager npm run build"
+    },
+    "orders-manager": {
+      "root": "apps/orders-manager",
+      "framework": "nextjs"
+    }
+  },
+  "rewrites": [
+    { "source": "/orders-manager/:path*", "destination": { "service": "orders-manager" } },
+    { "source": "/:path*", "destination": { "service": "dashboard" } }
+  ]
+}

@@ -1,7 +1,7 @@
 import {neon} from '@neondatabase/serverless';
 import type {Waybill,WaybillDraft} from './types';
 
-const sql=()=>{if(!process.env.DATABASE_URL)throw Error('Database not configured');return neon(process.env.DATABASE_URL)};
+const sql=()=>{if(!process.env.ORDERS_MANAGER_DATABASE_URL)throw Error('Database not configured');return neon(process.env.ORDERS_MANAGER_DATABASE_URL)};
 function convert(row:Record<string,unknown>):Waybill{
  const names:Record<string,string>={customer_id:'customerId',order_id:'orderId',created_at:'createdAt',updated_at:'updatedAt',customer_name:'customerName',alternate_phone:'alternatePhone',invoice_amount:'invoiceAmount',shipping_cost:'shippingCost',collection_amount:'collectionAmount',payment_method:'paymentMethod'};
  const o=Object.fromEntries(Object.entries(row).map(([k,v])=>[names[k]||k,v]));

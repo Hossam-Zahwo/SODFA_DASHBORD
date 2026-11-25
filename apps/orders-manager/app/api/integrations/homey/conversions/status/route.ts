@@ -7,9 +7,9 @@ export const dynamic='force-dynamic';
 export async function GET(request:Request){
   const blocked=await requireAccess(request);
   if(blocked)return blocked;
-  if(!process.env.DATABASE_URL)return NextResponse.json({error:'Neon غير متصل'},{status:503});
+  if(!process.env.ORDERS_MANAGER_DATABASE_URL)return NextResponse.json({error:'Neon غير متصل'},{status:503});
   try{
-    const db=neon(process.env.DATABASE_URL);
+    const db=neon(process.env.ORDERS_MANAGER_DATABASE_URL);
     const [records]=await db`
       SELECT count(*)::integer AS total,
        count(*) FILTER(WHERE provider='meta' AND state='sent')::integer AS meta_sent,

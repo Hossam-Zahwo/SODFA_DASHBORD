@@ -1,4 +1,5 @@
 'use client';
+import { ordersManagerPath } from "@/lib/app-path";
 import {useTranslation} from '@/app/language';
 
 
@@ -13,7 +14,7 @@ export function InstallApp() {
  const [showHelp,setShowHelp]=useState(false);
 
  useEffect(()=>{
-  if('serviceWorker' in navigator)void navigator.serviceWorker.register('/service-worker.js').catch(()=>{});
+  if('serviceWorker' in navigator)void navigator.serviceWorker.register(ordersManagerPath('/service-worker.js')).catch(()=>{});
   const iosStandalone=(navigator as Navigator & {standalone?:boolean}).standalone;
   setInstalled(window.matchMedia('(display-mode: standalone)').matches||iosStandalone===true);
   function onPrompt(event:Event){event.preventDefault();setPrompt(event as InstallPrompt)}

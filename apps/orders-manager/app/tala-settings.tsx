@@ -1,4 +1,5 @@
 'use client';
+import { ordersManagerPath } from "@/lib/app-path";
 
 import {useEffect, useState} from 'react';
 import {LockKeyhole,LockKeyholeOpen} from 'lucide-react';
@@ -39,7 +40,7 @@ export function TalaSettings({brand,orderIds,openOrder}: {brand: Brand;orderIds:
  const [zone,setZone]=useState('');
  const [code,setCode]=useState('');
  const [tracking,setTracking]=useState<TalaTracking|null>();
- const api='/api/shipping-integrations/tala';
+ const api=ordersManagerPath('/api/shipping-integrations/tala');
 
  useEffect(()=>{
   const controller=new AbortController();

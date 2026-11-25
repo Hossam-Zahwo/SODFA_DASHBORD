@@ -28,7 +28,7 @@ const normalizedStatus=(code:string,current:string):string=>{
 const money=(value:unknown)=>typeof value==='number'&&Number.isFinite(value)&&value>=0?value:null;
 
 export async function syncTalaOrders(){
- const url=process.env.DATABASE_URL;
+ const url=process.env.ORDERS_MANAGER_DATABASE_URL;
  if(!url)throw new Error('Neon database is not configured');
  const sql=neon(url);
  // Additive columns keep older installations readable; the migration is also checked in.

@@ -54,7 +54,7 @@ async function deliver(provider:Provider,orderId:string,time:number,value:number
   }catch{return {ok:false,http:0,reason:'transport timeout or network error'};}
 }
 export async function POST(request:Request){
-  if(!process.env.DATABASE_URL||!process.env.HOMEY_WEBHOOK_SECRET)return json({error:'Not configured'},503);
+  if(!process.env.ORDERS_MANAGER_DATABASE_URL||!process.env.HOMEY_WEBHOOK_SECRET)return json({error:'Not configured'},503);
   if(!authorized(request.headers.get('x-homey-webhook-secret'),process.env.HOMEY_WEBHOOK_SECRET))return json({error:'Unauthorized'},401);
   if(Number(request.headers.get('content-length')||0)>32768)return json({error:'Payload too large'},413);
   let raw:string;
@@ -71,7 +71,7 @@ export async function POST(request:Request){
   const value=Number(((total-shipping)/100).toFixed(2));
   const eventTime=Math.floor(new Date(String(o.created_at||'')).getTime()/1000);
   if(!Number.isFinite(eventTime)||eventTime<=0||eventTime>Date.now()/1000+300)return json({error:'Invalid event time'},422);
-  const id=String(o.id),db=neon(process.env.DATABASE_URL);
+  const id=String(o.id),db=neon(process.env.ORDERS_MANAGER_DATABASE_URL);
   const states:Record<string,string>={};
   for(const provider of ['meta','tiktok'] as const){
     // A unique (order,platform) record and short lease prevent parallel webhook retries
