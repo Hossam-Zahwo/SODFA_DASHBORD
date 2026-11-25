@@ -11,7 +11,7 @@ type WorkspaceResponses = {
     limited: boolean;
   };
   locations: Record<string, string[]>;
-  create: { id: string; version: number };
+  create: { id: string; version: number; order: WorkspaceOrder };
   confirm: Pick<Order, "id" | "status" | "version">;
 };
 

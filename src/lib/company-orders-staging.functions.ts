@@ -9,7 +9,7 @@ import { z } from "zod";
 function stage() {
   const url = process.env["CRM_ORDERS_STAGING_URL"];
   if (!url) throw new Error("OMS_STAGING_NOT_CONFIGURED");
-  return neon(url);
+  return neon(url, { fetchOptions: { signal: AbortSignal.timeout(12000) } });
 }
 export const getStagingLocations = createServerFn({ method: "POST" })
   .validator(z.object({ token: z.string().min(16).max(8192) }))
@@ -49,7 +49,7 @@ export const listWorkspaceOrders = createServerFn({ method: "POST" })
     const manager = async () => {
       const url = process.env["CRM_ORDERS_READ_URL"];
       if (!url) throw new Error("OMS_READ_NOT_CONFIGURED");
-      const db = neon(url);
+      const db = neon(url, { fetchOptions: { signal: AbortSignal.timeout(8000) } });
       const rows = await db`SELECT id::text, brand, created_at, updated_at, customer_name,
         phone, alternate_phone, governorate, city, address, source, payment_method,
         items, status, shipping_company, shipping, discount, prepaid, manual_total,
@@ -59,7 +59,8 @@ export const listWorkspaceOrders = createServerFn({ method: "POST" })
         ORDER BY created_at DESC, id DESC LIMIT 501`;
       const ids = rows.slice(0, 500).map((row) => String(row["id"]));
       if (!ids.length) return rows;
-      const shipments = await db`SELECT order_id::text AS order_id,
+      const trackingDb = neon(url, { fetchOptions: { signal: AbortSignal.timeout(2500) } });
+      const shipments = await trackingDb`SELECT order_id::text AS order_id,
         tracking_code AS tala_tracking_code, state AS tala_dispatch_state,
         to_jsonb(s)->>'provider_status_code' AS tala_status_code,
         to_jsonb(s)->>'provider_status_name' AS tala_status_name,
@@ -200,24 +201,19 @@ export const createStagingOrder = createServerFn({ method: "POST" })
     ${data.governorate},${data.city},${data.address},'central-control-center-staging',
      ${data.paymentMethod},${data.prepaid},${data.shipping},${data.discount},
     ${JSON.stringify(items)}::jsonb,'new',${data.carrier},0,${data.notes},${data.assignedTo},${data.courier},NULL,${data.manualCollection ?? null})
-   ON CONFLICT(id) DO NOTHING RETURNING id,brand,status,version
+   ON CONFLICT(id) DO NOTHING RETURNING *
   ), audited AS (
    INSERT INTO audit_log(actor,action,entity,entity_id,brand,details)
    SELECT ${actor.id},'create','order',id::text,brand,'control-center staging only, no shipping dispatch' FROM inserted
-  ) SELECT id::text,status,version FROM inserted`;
-    if (rows.length)
-      return {
-        id: String(rows[0]!["id"]),
-        status: String(rows[0]!["status"]),
-        version: Number(rows[0]!["version"]),
-        amount,
-        staging: true,
-      };
-    const existing = await db`SELECT id::text,status,version,items,shipping,discount FROM orders
-   WHERE id=${data.creationRequestId}::uuid AND brand=${data.brand}
-    AND source='central-control-center-staging' AND deleted_at IS NULL`;
-    const order = existing[0];
+  ) SELECT * FROM inserted`;
+    let order = rows[0];
+    if (!order) {
+      [order] = await db`SELECT * FROM orders
+        WHERE id=${data.creationRequestId}::uuid AND brand=${data.brand}
+        AND source='central-control-center-staging' AND deleted_at IS NULL`;
+    }
     if (!order) throw new Error("IDEMPOTENCY_CONFLICT");
+
     return {
       id: String(order["id"]),
       status: String(order["status"]),
@@ -228,6 +224,7 @@ export const createStagingOrder = createServerFn({ method: "POST" })
         Number(order["discount"]),
       ),
       staging: true,
+      order: { ...mapOrderRow(order), workspaceSource: "preview" as const },
     };
   });
 export const confirmStagingOrder = createServerFn({ method: "POST" })

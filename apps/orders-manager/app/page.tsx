@@ -17,7 +17,7 @@ import {InstallApp} from './install-app';
 import {OrderLocationFields} from './order-location-fields';
 import {ProductPicker} from './product-picker';
 import {WaybillPrintSheets} from '@/components/waybill-print-sheets';
-import {useEffect,useState} from 'react';
+import {useEffect,useRef,useState} from 'react';
 import {LayoutDashboard,Package,Users,Settings,LogOut,Plus,Download,Trash2,Pencil,RefreshCcw,ShoppingBag,CheckCircle2,Printer,FileText,FileDown,XCircle,ArrowUpLeft,ShieldCheck,Menu,X,Truck,ChartNoAxesCombined,ChevronDown,Search} from 'lucide-react';
 import type {Brand,Order,Customer,Item,Waybill,Status} from '@/lib/types';
 import {statuses,statusLabels,govs,calculatedTotal,totalOf} from '@/lib/types';
@@ -53,9 +53,24 @@ function exportCsv(rows:Order[]){const headers=['ID','Brand','Order date','Entry
 async function api(path:string,method='GET',body?:unknown){const response=await fetch(ordersManagerPath('/api/')+path,{method,headers:{'Content-Type':'application/json'},credentials:'same-origin',body:body===undefined?undefined:JSON.stringify(body),cache:'no-store'});const json=await response.json();if(!response.ok)throw new Error(json.error||'حدث خطأ');return json}
 export default function Page(){
  const [embedded,setEmbedded]=useState(false);
+ const [sessionAttempt,setSessionAttempt]=useState(0);
  const [sourceFilter,setSourceFilter]=useState<WorkspaceSource|'all'>('all');
  const [availableSources,setAvailableSources]=useState<Record<WorkspaceSource,boolean>|null>(null);
  const [sourceLimited,setSourceLimited]=useState(false);
+ const [compactOrders,setCompactOrders]=useState(false);
+ const [mobileLimit,setMobileLimit]=useState(40);
+ const [refreshing,setRefreshing]=useState(false);
+ const [refreshError,setRefreshError]=useState('');
+ const readInFlight=useRef(false);
+ const writeGeneration=useRef(0);
+ useEffect(()=>{
+  if(!embedded)return;
+  const media=window.matchMedia('(max-width: 760px)');
+  const update=()=>setCompactOrders(media.matches);
+  update();
+  media.addEventListener('change',update);
+  return()=>media.removeEventListener('change',update);
+ },[embedded]);
  const [permissions,setPermissions]=useState({create:false,confirm:false});
  const t=useTranslation();
  const money=(n:number)=>number(n)+' '+t('ج.م');
@@ -112,9 +127,36 @@ export default function Page(){
    if(active){setPermissions(access);setAuth(true)}
    return;
   }
-const response=await fetch(ordersManagerPath('/api/whoami'),{credentials:'same-origin',cache:'no-store'});if(active){setAuth(response.ok);if(!response.ok&&response.status!==401)setErr('تعذر التحقق من تسجيل الدخول')}}catch(error){if(active){setAuth(false);setErr(error instanceof Error?error.message:'تعذر الاتصال بالسيرفر')}}}void checkSession();return()=>{active=false}},[]);
+const response=await fetch(ordersManagerPath('/api/whoami'),{credentials:'same-origin',cache:'no-store'});if(active){setAuth(response.ok);if(!response.ok&&response.status!==401)setErr('تعذر التحقق من تسجيل الدخول')}}catch(error){if(active){setAuth(false);setErr(error instanceof Error?error.message:'تعذر الاتصال بالسيرفر')}}}void checkSession();return()=>{active=false}},[sessionAttempt]);
  useEffect(()=>{if(embedded||!auth||brand!=='homey')return;let active=true;fetch(ordersManagerPath('/api/catalog'),{credentials:'same-origin',cache:'no-store'}).then(r=>r.json()).then(x=>{if(active){setCatalog(Array.isArray(x.data)?x.data:[]);setCatalogNotice(x.warning||'')}}).catch(()=>{if(active)setCatalogNotice('المنتجات غير متاحة دلوقتي؛ تقدر تضيفها يدويًا')});return()=>{active=false}},[auth,brand,embedded]);
- async function reload(){setBusy(true);setErr('');try{if(embedded){const result=await dashboardRequest('orders');setOrders(result.orders);setAvailableSources(result.available);setSourceLimited(result.limited);setLoaded(true);return}const [a,b,c]=await Promise.all([api('orders'),api('customers'),api('waybills')]);setOrders(a.data);setCustomers(b.data);setWaybills(c.data);setLoaded(true)}catch(e){setErr((e as Error).message)}finally{setBusy(false)}}
+ async function reload(){
+  if(embedded){
+   if(readInFlight.current)return;
+   readInFlight.current=true;
+   const generation=writeGeneration.current;
+   setRefreshing(true);setRefreshError('');
+   try{
+    const result=await dashboardRequest('orders');
+    if(generation!==writeGeneration.current)return;
+    setOrders(current=>[
+     ...result.orders,
+     ...current.filter(order=>order.workspaceSource&&!result.available[order.workspaceSource]),
+    ]);
+    setAvailableSources(result.available);setSourceLimited(result.limited);setLoaded(true);
+   }catch(error){setRefreshError((error as Error).message);setLoaded(true)}
+   finally{
+    readInFlight.current=false;setRefreshing(false);
+    if(generation!==writeGeneration.current)void reload();
+   }
+   return;
+  }
+  setBusy(true);setErr('');
+  try{
+   const [a,b,c]=await Promise.all([api('orders'),api('customers'),api('waybills')]);
+   setOrders(a.data);setCustomers(b.data);setWaybills(c.data);setLoaded(true);
+  }catch(error){setErr((error as Error).message)}
+  finally{setBusy(false)}
+ }
  useEffect(()=>{if(auth)void reload()},[auth,embedded]);
  useEffect(()=>{
   if(embedded||!auth||brand!=='homey')return;
@@ -409,6 +451,7 @@ const response=await fetch(ordersManagerPath('/api/whoami'),{credentials:'same-o
     if(embedded){
      if(order.workspaceSource!=='preview'||action!=='confirmed'||!permissions.confirm)throw new Error('العملية غير متاحة في المعاينة.');
      const result=await dashboardRequest('confirm',{id:order.id,version:order.version});
+     writeGeneration.current++;
      setOrders(current=>current.map(o=>o.id===order.id?{...o,status:result.status,version:result.version}:o));
     }else if(action==='delete'){
      await api('orders','DELETE',{id:order.id,version:order.version});
@@ -457,9 +500,13 @@ const response=await fetch(ordersManagerPath('/api/whoami'),{credentials:'same-o
    if(!permissions.create||editing.id)return;
    setBusy(true);setErr('');
    try{
-    await dashboardRequest('create',editing);
+    const {order}=await dashboardRequest('create',editing);
+    writeGeneration.current++;
+    setOrders(current=>[order,...current.filter(existing=>existing.id!==order.id)]);
+    setLoaded(true);
     setEditing(null);
-    await reload();
+    setSourceFilter('preview');setPeriod('all');setSearch('');setSelected([]);
+    setFilter('all');setCarrierFilter('');setCollectionFilter('all');setUnprintedOnly(false);
     setNotice('تم حفظ الطلب التجريبي');
    }catch(error){setErr((error as Error).message)}
    finally{setBusy(false)}
@@ -481,6 +528,8 @@ const response=await fetch(ordersManagerPath('/api/whoami'),{credentials:'same-o
  async function deleteCustomer(c:Customer){if(!confirm(t('حذف العميل من القائمة؟')))return;setBusy(true);try{await api('customers','DELETE',{id:c.id,brand:c.brand});await reload()}catch(e){setErr((e as Error).message)}finally{setBusy(false)}}
  if(embedded&&!auth)return <div className="app" data-embedded style={theme}><main className="main">
   <p role={auth===false?'alert':'status'}>{auth===false?err:'جاري فتح إدارة الطلبات…'}</p>
+  {auth===false&&<button type="button" className="btn secondary"
+   onClick={()=>{setAuth(null);setErr('');setSessionAttempt(attempt=>attempt+1)}}>إعادة المحاولة</button>}
  </main></div>;
  if(auth===null)return <div className="login" style={theme}><section className="panel login-card"><div className="logo-circle"><ShieldCheck size={25}/></div><h2>{t("تأمين لوحة الإدارة")}</h2><p className="muted">{t("جاري التحقق من صلاحية الدخول…")}</p></section></div>;
  if(!auth)return <div className="login login-split" style={theme}>
@@ -495,7 +544,7 @@ const response=await fetch(ordersManagerPath('/api/whoami'),{credentials:'same-o
  return <div className="app" data-embedded={embedded||undefined} data-brand={brand} data-waybill-print={printOrders.length>0?'active':undefined} style={theme}>
  {navigationOpen&&<button type="button" className="mobile-nav-backdrop" aria-label={t("إغلاق قائمة التنقل")} onClick={()=>setNavigationOpen(false)}/>}
  <aside className={'sidebar '+(navigationOpen?'sidebar-open':'')} id="app-main-navigation" aria-label={t("القائمة الرئيسية")}>
- <div className="sidebar-mobile-header"><span>{t("القائمة الرئيسية")}</span><button type="button" aria-label={t("إغلاق القائمة")} onClick={()=>setNavigationOpen(false)}><X size={23}/></button></div><div className={'brand '+(brand==='homey'?'homey-brand':'')} role="group" aria-label={brand==='homey'?t("هومي — لوحة الإدارة"):t("صدفة — لوحة الإدارة")}>{brand==='homey'?<div className="brand-logo-surface"><HomeyLogo className="dashboard-homey-logo"/></div>:<img src={ordersManagerPath("/sodfa-logo.png")} alt={t("صدفة — SODFA")} width={1950} height={808} style={{display:"block",width:"100%",maxWidth:180,height:"auto",borderRadius:8}}/>}</div><nav className="nav" aria-label={t("أقسام مدير الطلبات")}>{nav.filter(([key])=>!embedded||['dashboard','orders','reports'].includes(key)).map(([key,label,icon])=><button key={key} type="button" className={tab===key?'active':''} aria-current={tab===key?'page':undefined} onClick={()=>{if(key==='shipping-integrations'&&tab!==key)setShipmentDraft(null);setTab(key);setUnprintedOnly(false);setSelected([]);setFilter('all');setCollectionFilter('all');setCarrierFilter('');setSearch('');setNavigationOpen(false)}}>{icon} <span className="label">{t(label)}</span></button>)}</nav><div className="sidebar-bottom"><ShieldCheck size={17}/><span>{t("لوحة إدارة خاصة وآمنة")}<small>PRIVATE DASHBOARD</small></span></div></aside><main className="main"><header className="header"><div className="header-heading"><button type="button" className="mobile-nav-trigger" aria-label={t("فتح القائمة الجانبية")} aria-controls="app-main-navigation" aria-expanded={navigationOpen} onClick={()=>setNavigationOpen(true)}><Menu size={22}/><span>{t("القائمة")}</span></button><div className="header-title"><h1>{t(nav.find(([key])=>key===tab)?.[1]??'')}</h1></div></div><div className="toolbar top-actions"><LanguageSwitch/>{!embedded&&<><InstallApp/><div className="brand-switch" role="group" aria-label={t("اختيار المتجر")}><button type="button" className={'brand-switch-option '+(brand==='homey'?'active':'')} aria-pressed={brand==='homey'} onClick={()=>{setBrand('homey');setSearch('');setFilter('all');setCollectionFilter('all');setCarrierFilter('')}}><HomeyLogo className="switch-homey-logo"/></button><button type="button" className={'brand-switch-option '+(brand==='sodfa'?'active':'')} aria-pressed={brand==='sodfa'} onClick={()=>{setBrand('sodfa');setSearch('');setFilter('all');setCollectionFilter('all');setCarrierFilter('')}}><img src={ordersManagerPath("/sodfa-logo.png")} alt={t("صدفة")} className="switch-sodfa-logo" width={1950} height={808}/></button></div></>}<button className="btn secondary" title={t("تحديث")} onClick={reload} disabled={busy}><RefreshCcw size={16}/></button>{!embedded&&<button className="btn secondary" title={t("خروج")} onClick={logout}><LogOut size={16}/></button>}</div></header>{['dashboard','orders','carriers','reports'].includes(tab)&&<div className="periodbar"><strong>{t("الفترة حسب تاريخ الإدخال")}</strong><select className="field" value={period} onChange={e=>setPeriod(e.target.value as typeof period)}><option value="today">{t("النهارده")}</option><option value="week">{t("الأسبوع الحالي")}</option><option value="month">{t("الشهر الحالي")}</option><option value="all">{t("كل الوقت")}</option><option value="custom">{t("تحديد فترة")}</option></select>{period==='custom'&&<><label>{t("من")} <input className="field" type="date" value={fromDate} onChange={e=>setFromDate(e.target.value)}/></label><label>{t("إلى")} <input className="field" type="date" value={toDate} onChange={e=>setToDate(e.target.value)}/></label></>}<span className="muted">{t("إحصائيات")} {brand==='homey'?t("هومي"):t("صدفة")} <span className="period-dot">•</span> {t(periodLabel[period])}</span></div>}{err&&<div className="notice error">{t(err)}</div>}{notice&&<div className="notice">{t(notice)} <button className="btn tiny secondary" onClick={()=>setNotice('')}>{t("إغلاق")}</button></div>}
+ <div className="sidebar-mobile-header"><span>{t("القائمة الرئيسية")}</span><button type="button" aria-label={t("إغلاق القائمة")} onClick={()=>setNavigationOpen(false)}><X size={23}/></button></div><div className={'brand '+(brand==='homey'?'homey-brand':'')} role="group" aria-label={brand==='homey'?t("هومي — لوحة الإدارة"):t("صدفة — لوحة الإدارة")}>{brand==='homey'?<div className="brand-logo-surface"><HomeyLogo className="dashboard-homey-logo"/></div>:<img src={ordersManagerPath("/sodfa-logo.png")} alt={t("صدفة — SODFA")} width={1950} height={808} style={{display:"block",width:"100%",maxWidth:180,height:"auto",borderRadius:8}}/>}</div><nav className="nav" aria-label={t("أقسام مدير الطلبات")}>{nav.filter(([key])=>!embedded||['dashboard','orders','reports'].includes(key)).map(([key,label,icon])=><button key={key} type="button" className={tab===key?'active':''} aria-current={tab===key?'page':undefined} onClick={()=>{if(key==='shipping-integrations'&&tab!==key)setShipmentDraft(null);setTab(key);setUnprintedOnly(false);setSelected([]);setFilter('all');setCollectionFilter('all');setCarrierFilter('');setSearch('');setNavigationOpen(false)}}>{icon} <span className="label">{t(label)}</span></button>)}</nav><div className="sidebar-bottom"><ShieldCheck size={17}/><span>{t("لوحة إدارة خاصة وآمنة")}<small>PRIVATE DASHBOARD</small></span></div></aside><main className="main"><header className="header"><div className="header-heading"><button type="button" className="mobile-nav-trigger" aria-label={t("فتح القائمة الجانبية")} aria-controls="app-main-navigation" aria-expanded={navigationOpen} onClick={()=>setNavigationOpen(true)}><Menu size={22}/><span>{t("القائمة")}</span></button><div className="header-title"><h1>{t(nav.find(([key])=>key===tab)?.[1]??'')}</h1></div></div><div className="toolbar top-actions"><LanguageSwitch/>{!embedded&&<><InstallApp/><div className="brand-switch" role="group" aria-label={t("اختيار المتجر")}><button type="button" className={'brand-switch-option '+(brand==='homey'?'active':'')} aria-pressed={brand==='homey'} onClick={()=>{setBrand('homey');setSearch('');setFilter('all');setCollectionFilter('all');setCarrierFilter('')}}><HomeyLogo className="switch-homey-logo"/></button><button type="button" className={'brand-switch-option '+(brand==='sodfa'?'active':'')} aria-pressed={brand==='sodfa'} onClick={()=>{setBrand('sodfa');setSearch('');setFilter('all');setCollectionFilter('all');setCarrierFilter('')}}><img src={ordersManagerPath("/sodfa-logo.png")} alt={t("صدفة")} className="switch-sodfa-logo" width={1950} height={808}/></button></div></>}<button className="btn secondary" title={t("تحديث")} aria-label={t("تحديث")} onClick={reload} disabled={busy||refreshing} aria-busy={refreshing}><RefreshCcw size={16}/></button>{!embedded&&<button className="btn secondary" title={t("خروج")} onClick={logout}><LogOut size={16}/></button>}</div></header>{['dashboard','orders','carriers','reports'].includes(tab)&&<div className="periodbar"><strong>{t("الفترة حسب تاريخ الإدخال")}</strong><select className="field" value={period} onChange={e=>setPeriod(e.target.value as typeof period)}><option value="today">{t("النهارده")}</option><option value="week">{t("الأسبوع الحالي")}</option><option value="month">{t("الشهر الحالي")}</option><option value="all">{t("كل الوقت")}</option><option value="custom">{t("تحديد فترة")}</option></select>{period==='custom'&&<><label>{t("من")} <input className="field" type="date" value={fromDate} onChange={e=>setFromDate(e.target.value)}/></label><label>{t("إلى")} <input className="field" type="date" value={toDate} onChange={e=>setToDate(e.target.value)}/></label></>}<span className="muted">{t("إحصائيات")} {brand==='homey'?t("هومي"):t("صدفة")} <span className="period-dot">•</span> {t(periodLabel[period])}</span></div>}{err&&<div className="notice error">{t(err)}</div>}{notice&&<div className="notice">{t(notice)} <button className="btn tiny secondary" onClick={()=>setNotice('')}>{t("إغلاق")}</button></div>}
  {tab==='dashboard'&&<>
   {!embedded&&brand==='homey'&&<TalaShipments brand="homey" revision={0} orderIds={talaOrderIds}
    trackingOrders={talaTrackingOrders} openOrder={setDetailOrderId} onSettings={()=>openShippingIntegration(talaExpress)} dashboard/>}
@@ -506,6 +555,9 @@ const response=await fetch(ordersManagerPath('/api/whoami'),{credentials:'same-o
   </section>
   <section className="panel"><div className="sectionhead"><h2>{t("أحدث الأوردرات")}</h2><div className="toolbar"><button className="btn secondary" onClick={()=>{setPeriod('all');showOrders()}}>{t("عرض كل الأوردرات")}</button><button className="btn" disabled={embedded&&!permissions.create} onClick={()=>{setErr('');setDeliveryChosen(embedded);setEditing(newOrder(brand))}}><Plus size={16}/>{t("إضافة أوردر")}</button></div></div>{table(periodOrders.slice(0,8))}</section>
  </>}
+ {embedded&&(refreshError||refreshing)&&<div className="workspace-refresh" role="status">
+  {refreshing?'جاري تحديث الطلبات…':<>{refreshError} <button type="button" className="btn secondary tiny" onClick={reload}>إعادة المحاولة</button></>}
+ </div>}
  {embedded&&availableSources&&(!availableSources.manager||!availableSources.preview||sourceLimited)&&
   <p className="muted" role="status">
    {!availableSources.manager&&'تعذر تحميل طلبات مدير الطلبات. '}
@@ -750,6 +802,30 @@ const response=await fetch(ordersManagerPath('/api/whoami'),{credentials:'same-o
  function numOrder(key:'shipping'|'discount'|'prepaid',label:string){return <label key={key}>{t(label)}<input type="number" step="0.01" min="0" className="field numeric-input" value={editing?.[key]??0} onChange={e=>setEditing(x=>x?{...x,[key]:Number(e.target.value)}:x)}/></label>}
  function selectOrder(key:'governorate'|'source'|'status'|'paymentMethod',label:string,options:readonly string[],labels?:Record<string,string>){return <label key={key}>{t(label)}<select className="field" value={editing?.[key]??''} onChange={e=>setEditing(x=>x?{...x,[key]:e.target.value}:x)}>{options.map(v=><option value={v} key={v}>{t(labels?.[v]||v||'اختر')}</option>)}</select></label>}
  function table(rows:WorkspaceOrder[],selectable=false){
+ if(embedded&&compactOrders){
+  const mobileRows=rows.slice(0,mobileLimit);
+  return <div className="mobile-orders">
+   {mobileRows.map(o=><article className="mobile-order" key={o.id}>
+    <div className="mobile-order-top">
+     <div><button type="button" className="order-name-link" onClick={()=>setDetailOrderId(o.id)}>{o.customerName}</button>
+      <div className="source-note"><bdi>#{o.id.slice(0,8).toUpperCase()}</bdi> · {o.workspaceSource==='manager'?'مدير الطلبات':'المعاينة'}</div></div>
+     {selectable&&<label className="mobile-order-select"><input type="checkbox" aria-label={t("تحديد طلب ")+o.customerName} checked={selected.includes(o.id)} disabled={busy}
+      onChange={e=>setSelected(current=>e.target.checked?[...current,o.id]:current.filter(id=>id!==o.id))}/></label>}
+    </div>
+    <dl><div><dt>الحالة</dt><dd>{t(statusLabels[o.status])}</dd></div>
+     <div><dt>التحصيل</dt><dd>{orderRowFinance(o).cod===null?'غير مسجل':money(orderRowFinance(o).cod!)}</dd></div>
+     <div><dt>التليفون</dt><dd><bdi>{englishDigits(o.phone)}</bdi></dd></div>
+     <div><dt>التاريخ</dt><dd><bdi>{dateEN(o.createdAt)}</bdi></dd></div></dl>
+    <div className="mobile-order-actions">
+     <button type="button" className="btn secondary" onClick={()=>setDetailOrderId(o.id)}>تفاصيل الطلب</button>
+     {o.workspaceSource==='preview'&&permissions.confirm&&(o.status==='new'||o.status==='contacted')&&
+      <button type="button" className="btn" title={t("تأكيد الطلب")} disabled={busy} onClick={()=>updateOrders([o],'confirmed')}>{t("تأكيد الطلب")}</button>}
+    </div>
+   </article>)}
+   {rows.length===0&&<p className="empty">{!loaded?'جاري تحميل الطلبات…':'مفيش طلبات مطابقة.'}</p>}
+   {mobileRows.length<rows.length&&<button type="button" className="btn secondary" onClick={()=>setMobileLimit(limit=>limit+40)}>عرض طلبات أكتر</button>}
+  </div>;
+ }
  const allChecked=rows.length>0&&rows.every(o=>selected.includes(o.id));
  return <div className="tracking-table-scroll" tabIndex={0} role="region" aria-label={t("جدول الأوردرات")}><table className="table tracking-table"><thead><tr>{selectable&&<th><input type="checkbox" aria-label={t("تحديد كل الطلبات الظاهرة")} disabled={!rows.length||busy} checked={allChecked} onChange={()=>setSelected(allChecked?[]:rows.map(o=>o.id))}/></th>}{columns.map(x=><th key={x}>{t(x)}</th>)}</tr></thead><tbody>{rows.map(o=><tr key={o.id}>{selectable&&<td><input type="checkbox" aria-label={t("تحديد طلب ")+o.customerName} disabled={busy} checked={selected.includes(o.id)} onChange={e=>setSelected(e.target.checked?[...selected,o.id]:selected.filter(id=>id!==o.id))}/></td>}<td><strong className="order-ref" dir="ltr">#{o.id.slice(0,8).toUpperCase()}</strong>{embedded&&<small className="source-note">{o.workspaceSource==='manager'?'مدير الطلبات':'المعاينة'}</small>}</td><td><button type="button" className="order-name-link" onClick={()=>setDetailOrderId(o.id)}>{o.customerName}</button>{o.talaStatusName&&<span className={'tala-status-badge tala-status-'+(o.talaStatusCode||'').toLowerCase()} title={t('آخر حالة مزامنة من تالا')}>{o.talaStatusName}</span>}{printBadge(printed.has('order:'+o.id))}</td><td><select className="tracking-select" aria-label={t("شركة الشحن ")+o.customerName} value={o.shippingCompany||''} disabled={busy||embedded} onChange={e=>void updateOrders([o],{shippingCompany:e.target.value})}><option value="">{t("بدون شركة شحن — توصيل بنفسي")}</option>{registeredCompanies.map(name=><option key={name} value={name}>{t(name)}</option>)}{o.shippingCompany&&!registeredCompanies.includes(o.shippingCompany)&&<option value={o.shippingCompany}>{t(o.shippingCompany)}</option>}</select></td>
  <td><select className={'tracking-select tracking-'+o.status} aria-label={t("حالة الشحن ")+o.customerName} value={o.status} disabled={busy||embedded} onChange={e=>void updateOrders([o],e.target.value as Status)}>{statuses.map(status=><option key={status} value={status}>{t(statusLabels[status])}</option>)}</select>{o.status==='shipped'&&<small className="tracking-awaiting-update">{t("في انتظار تحديث شركة الشحن")}</small>}</td>

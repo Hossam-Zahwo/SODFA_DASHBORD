@@ -94,7 +94,7 @@ export function OrdersManagerPanel({ url, brand }: { url: string; brand: Order["
       src={`${url}?embedded=1&brand=${brand}`}
       referrerPolicy="origin"
       title="إدارة طلبات هومي وصدفة"
-      className="h-[calc(100dvh-12rem)] min-h-[32rem] w-full rounded-xl border border-[#27272a]"
+      className="h-[calc(100dvh-12rem)] min-h-[32rem] max-sm:h-[78dvh] w-full rounded-xl border border-[#27272a]"
     />
   );
 }
