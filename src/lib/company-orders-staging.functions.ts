@@ -1,4 +1,4 @@
-import { mapOrderRow } from "../../apps/orders-manager/lib/database";
+import { mapOrderRow } from "../../apps/orders-manager/lib/order-row";
 import { calculateOrderTotal } from "./inventory-planning";
 import { createServerFn } from "@tanstack/react-start";
 import { requireCompanyAccess } from "./company-access.server";
