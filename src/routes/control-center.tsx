@@ -192,7 +192,7 @@ function ControlCenter(){
         {(tab==="dashboard"||tab==="orders"||tab==="products"||tab==="shipping"||tab==="customers"||homeyUrl)&&
           <div className="mb-4 flex flex-wrap gap-2">
             {homeyUrl&&<a href={homeyUrl} target="_blank" rel="noreferrer" className="inline-flex items-center gap-2 rounded-lg bg-purple-300 px-3 py-2 text-sm font-bold text-[#25132e]">
-              <ExternalLink size={16}/>الإدارة الأصلية لهومي
+              <ExternalLink size={16}/>{tab==="store-admin"?"فتح لوحة هومي الأصلية":"الإدارة الأصلية لهومي"}
             </a>}
             {(tab==="dashboard"||tab==="products")&&canSeeSodfaStock&&
               <Link to="/inventory" className="inline-flex items-center gap-2 rounded-lg border border-purple-300/45 px-3 py-2 text-sm text-purple-100"><Warehouse size={16}/>إدارة مخزون صدفة</Link>}

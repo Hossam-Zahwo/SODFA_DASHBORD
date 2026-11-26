@@ -38,7 +38,7 @@ const homeyAdmin = "https://www.homeyegypt.com/admin";
 const homeySections = { categories: "categories", products: "products", orders: "orders", customers: "customers" } as const;
 
 export function homeyAdminUrl(section: CompanySection) {
-  if (section === "dashboard") return homeyAdmin;
+  if (section === "dashboard" || section === "store-admin") return homeyAdmin;
   if (section === "settings") return `${homeyAdmin}/settings`;
   if (section === "categories" || section === "products" || section === "orders" || section === "customers") {
     return `${homeyAdmin}/${homeySections[section]}`;

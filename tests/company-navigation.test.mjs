@@ -25,6 +25,7 @@ test("project shortcuts only offer the relevant sections", () => {
 });
 
 test("uses the original admin and only valid waybill identifiers", () => {
+  assert.equal(homeyAdminUrl("store-admin"), "https://www.homeyegypt.com/admin");
   assert.equal(homeyAdminUrl("products"), "https://www.homeyegypt.com/admin/products");
   assert.equal(homeyAdminUrl("shipping"), null);
   assert.equal(orderWaybillUrl(null), null);
