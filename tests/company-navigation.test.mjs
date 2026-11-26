@@ -32,3 +32,15 @@ test("uses the original admin and only valid waybill identifiers", () => {
   const id = "2580eedc-5400-4bc0-b961-805dae414179";
   assert.equal(orderWaybillUrl(id), "https://homey-sodfa-orders-manager.vercel.app/waybills/" + id);
 });
+
+test("work queues deep-link only to the corresponding section", () => {
+  assert.deepEqual(companyLocation({ project: "homey", section: "orders", queue: "confirm" }), {
+    project: "homey",
+    section: "orders",
+    queue: "confirm",
+  });
+  assert.deepEqual(companyLocation({ project: "orders", section: "shipping", queue: "drafts" }), {
+    project: "orders",
+    section: "shipping",
+  });
+});

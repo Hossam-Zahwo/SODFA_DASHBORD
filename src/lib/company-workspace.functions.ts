@@ -14,6 +14,7 @@ const RequestSchema = z.object({
   brand: z.enum(["homey", "sodfa", "all"]).default("all"),
   project: z.enum(["all","homey","sodfa","sodfa_web","orders"]).default("all"),
   query: z.string().max(120).default(""),
+  queue: z.enum(["confirm","shipping-review","drafts"]).optional(),
 });
 
 type Summary = { brand: string; status: string; count: number };
@@ -46,7 +47,7 @@ export const getCompanyWorkspaceData = createServerFn({ method: "POST" })
       fetchedAt: string;
       canWriteCatalogDrafts: boolean;
       accessRole: "admin"|"viewer"|"operator"|"manager";
-      catalog: { connected: boolean; countsAvailable: boolean; productsAvailable: boolean; error?: string | undefined; counts: Count[]; products: Product[] };
+      catalog: { connected: boolean; countsAvailable: boolean; draftCounts: Count[] | null; productsAvailable: boolean; error?: string | undefined; counts: Count[]; products: Product[] };
       operations: {
         connected: boolean; available: { summary: boolean; orders: boolean; customers: boolean; shipments: boolean }; error?: string | undefined; summary: Summary[];
         orders: OrderRow[]; customers: Count[]; shipments: Shipment[];
@@ -60,7 +61,7 @@ export const getCompanyWorkspaceData = createServerFn({ method: "POST" })
       fetchedAt: new Date().toISOString(),
       accessRole:access.role,
       canWriteCatalogDrafts: access.role!=="viewer" && Boolean(process.env["CRM_DRAFT_WRITE_URL"]),
-      catalog: { connected: false, countsAvailable:false, productsAvailable:false, counts: [], products: [] },
+      catalog: { connected: false, countsAvailable:false, draftCounts:null, productsAvailable:false, counts: [], products: [] },
       operations: { connected: false, available:{summary:false,orders:false,customers:false,shipments:false}, summary: [], orders: [], customers: [], shipments: [] },
       sodfa: { connected:false, inventorySummary:null, salesSummary:null, items:[] },
     };
@@ -71,13 +72,14 @@ export const getCompanyWorkspaceData = createServerFn({ method: "POST" })
     const ordersEnabled=scope==="all"||scope==="homey"||scope==="sodfa"||scope==="orders";
     const sodfaEnabled=scope==="all"||scope==="sodfa";
     const search = data.query.trim().toLowerCase();
+    const queue = data.queue??"";
     const jobs: Promise<void>[] = [];
     const catalogUrl = process.env["CRM_CATALOG_READ_URL"];
     if (catalogEnabled && catalogUrl) jobs.push((async () => {
       try {
         const db = neon(catalogUrl);
         // 454 reference records were imported from the source catalogs.
-        const [countResult, productResult] = await Promise.allSettled([
+        const [countResult, productResult,draftResult] = await Promise.allSettled([
           db`SELECT brand_id AS brand, count(*)::integer AS count FROM product_references WHERE (${brandCondition} = 'all' OR brand_id = ${brandCondition}) GROUP BY brand_id ORDER BY brand_id`,
           db`SELECT p.source_product_id AS id, p.title, p.brand_id AS brand,
              p.source_system_id AS source, native.intended_visibility AS draft_visibility,
@@ -99,7 +101,14 @@ export const getCompanyWorkspaceData = createServerFn({ method: "POST" })
              LEFT JOIN channel_listing_drafts sd ON sd.product_reference_id=p.id AND sd.channel_id='sodfa_web'
              WHERE (${brandCondition} = 'all' OR p.brand_id = ${brandCondition})
                AND (${search} = '' OR lower(p.title) LIKE '%' || ${search} || '%')
+               AND (${queue} <> 'drafts' OR native.intended_visibility IS NOT NULL OR native.proposed_price_egp IS NOT NULL)
              ORDER BY p.title LIMIT 500`,
+          db`SELECT p.brand_id AS brand, count(*)::integer AS count
+             FROM product_references p JOIN channel_listing_drafts draft ON draft.product_reference_id=p.id
+             AND draft.channel_id=(CASE WHEN p.brand_id='homey' THEN 'homey_web' ELSE 'sodfa_web' END)
+             WHERE (${brandCondition}='all' OR p.brand_id=${brandCondition})
+             AND (draft.intended_visibility IS NOT NULL OR draft.proposed_price_egp IS NOT NULL)
+             GROUP BY p.brand_id`,
         ]);
         const products = productResult.status === "fulfilled" ? productResult.value as Product[] : [];
         if (products.length) {
@@ -127,6 +136,7 @@ export const getCompanyWorkspaceData = createServerFn({ method: "POST" })
         response.catalog = {
           connected: countResult.status === "fulfilled" || productResult.status === "fulfilled",
           countsAvailable: countResult.status === "fulfilled",
+          draftCounts: draftResult.status === "fulfilled" ? draftResult.value as Count[] : null,
           productsAvailable: productResult.status === "fulfilled",
           counts: countResult.status === "fulfilled" ? countResult.value as Count[] : [],
           products,
@@ -156,6 +166,7 @@ export const getCompanyWorkspaceData = createServerFn({ method: "POST" })
              source_order_id,version
              FROM orders WHERE deleted_at IS NULL
              AND (${brandCondition} = 'all' OR brand = ${brandCondition})
+             AND (${queue} <> 'confirm' OR status IN ('new','contacted'))
              ORDER BY created_at DESC LIMIT 500`,
           db`SELECT brand, count(*)::integer AS count
              FROM customers WHERE deleted_at IS NULL

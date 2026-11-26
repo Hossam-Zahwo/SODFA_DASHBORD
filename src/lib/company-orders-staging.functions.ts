@@ -1,4 +1,5 @@
 import { mapOrderRow } from "../../apps/orders-manager/lib/order-row";
+import { canReadOrderDetails } from "./company-dashboard";
 import { calculateOrderTotal } from "./inventory-planning";
 import { createServerFn } from "@tanstack/react-start";
 import { requireCompanyAccess } from "./company-access.server";
@@ -33,6 +34,7 @@ export const getStagingWorkspaceAccess = createServerFn({ method: "POST" })
   .validator(workspaceSchema)
   .handler(async ({ data }) => {
     const { role } = await requireCompanyAccess(data.token, "orders", "read", data.brand);
+    if (!canReadOrderDetails(role)) throw new Error("ACCESS_DENIED");
     return {
       create: role === "operator" || role === "manager" || role === "admin",
       confirm: role === "admin" || role === "manager",
@@ -42,7 +44,8 @@ export const getStagingWorkspaceAccess = createServerFn({ method: "POST" })
 export const listWorkspaceOrders = createServerFn({ method: "POST" })
   .validator(workspaceSchema)
   .handler(async ({ data }) => {
-    await requireCompanyAccess(data.token, "orders", "read", data.brand);
+    const { role } = await requireCompanyAccess(data.token, "orders", "read", data.brand);
+    if (!canReadOrderDetails(role)) throw new Error("ACCESS_DENIED");
 
     const manager = async () => {
       const url = process.env["CRM_ORDERS_READ_URL"];

@@ -26,10 +26,18 @@ export function companySections(
 export function companyLocation(search: Record<string, unknown>): {
   project?: CompanyProject;
   section?: CompanySection;
+  queue?: "confirm" | "shipping-review" | "drafts";
 } {
   const project = projects.find((value) => value === search["project"]);
   const section = companySections(project ?? "all").find((value) => value === search["section"]);
-  return { ...(project ? { project } : {}), ...(section ? { section } : {}) };
+  const value = search["queue"];
+  const queue =
+    (section === "orders" && value === "confirm") ||
+    (section === "shipping" && value === "shipping-review") ||
+    (section === "products" && value === "drafts")
+      ? value
+      : undefined;
+  return { ...(project ? { project } : {}), ...(section ? { section } : {}), ...(queue ? { queue } : {}) };
 }
 
 export const ordersManagerUrl = "https://homey-sodfa-orders-manager.vercel.app";

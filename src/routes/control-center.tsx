@@ -1,5 +1,5 @@
 import { calculateOrderTotal } from "@/lib/inventory-planning";
-import { orderStatusLabel, scopedCount } from "@/lib/company-dashboard";
+import { canReadOrderDetails, hasCatalogDraft, needsOrderConfirmation, orderStatusLabel, scopedCount } from "@/lib/company-dashboard";
 import { companyCsv } from "@/lib/company-csv";
 import { CatalogProductPhotos } from "@/components/CatalogProductPhotos";
 import { companyLocation, companySections, homeyAdminUrl, orderWaybillUrl, ordersManagerUrl, type CompanyProject as Project, type CompanySection as Tab } from "@/lib/company-navigation";
@@ -63,20 +63,21 @@ function ControlCenter(){
   const bridge=loaded?.project===project?loaded.data:null;
   const availableSections=companySections(project,bridge?.accessRole==="viewer");
   const tab=location.section&&availableSections.includes(location.section)?location.section:"dashboard";
+  const queue=location.queue;
   const [loading,setLoading]=useState(true);
   const [loadError,setLoadError]=useState("");
   const [selectedOrderId,setSelectedOrderId]=useState("");
   const [draftBusy,setDraftBusy]=useState("");
   const [draftMessage,setDraftMessage]=useState("");
   const fetchSequence=useRef(0);
-  useEffect(()=>{void refresh(project);},[project]);
+  useEffect(()=>{void refresh(project);},[project,queue]);
   async function refresh(scope:Project=project){
     const sequence=++fetchSequence.current;
     setLoading(true);setLoadError("");
     try {
       const {data:{session}}=await supabase.auth.getSession();
       if(!session?.access_token) throw new Error("سجل دخولك بحساب صدفة لإتاحة لوحة المشاريع");
-      const next=await getCompanyWorkspaceData({data:{token:session.access_token,brand:scope==="homey"?"homey":scope==="sodfa"||scope==="sodfa_web"?"sodfa":"all",project:scope,query:""}});
+      const next=await getCompanyWorkspaceData({data:{token:session.access_token,brand:scope==="homey"?"homey":scope==="sodfa"||scope==="sodfa_web"?"sodfa":"all",project:scope,query:"",...(queue?{queue}:{})}});
       if(sequence!==fetchSequence.current)return;
       setLoaded({project:scope,data:next});
     }catch(e){if(sequence===fetchSequence.current){setLoadError(e instanceof Error?e.message:"فشل قراءة بيانات الربط");setLoaded(null)}}
@@ -113,6 +114,12 @@ function ControlCenter(){
   const chosen=projectData.find(p=>p.id===project)!;
   const selectedBrand=project==="homey"?"homey":project==="sodfa"||project==="sodfa_web"?"sodfa":"all";
   const statuses=bridge?.operations.summary.filter(x=>selectedBrand==="all"||x.brand===selectedBrand)??[];
+  const awaitingConfirmation=scopedCount(bridge?.operations.summary,selectedBrand,bridge?.operations.available.summary,
+    row=>needsOrderConfirmation(row.status));
+  const shipmentReview=scopedCount(bridge?.operations.shipments,selectedBrand,bridge?.operations.available.shipments,
+    row=>row.state==="review");
+  const draftCounts=bridge?.catalog.draftCounts??undefined;
+  const savedDrafts=scopedCount(draftCounts,selectedBrand,Boolean(draftCounts));
   const orderTotal=scopedCount(bridge?.operations.summary,selectedBrand,bridge?.operations.available.summary);
   const shipped=scopedCount(bridge?.operations.summary,selectedBrand,bridge?.operations.available.summary,
     row=>row.status==="shipped"||row.status==="delivered");
@@ -123,13 +130,14 @@ function ControlCenter(){
     dateStyle:"medium",timeStyle:"short",timeZone:"Africa/Cairo",
   }).format(new Date(bridge.fetchedAt)):null;
   const metric=(value:number|null)=>value===null?(loading?"جاري التحميل":"غير متاح"):fmt(value);
-  const rowProducts=bridge?.catalog.products.filter(x=>(selectedBrand==="all"||x.brand===selectedBrand)&&x.title.toLowerCase().includes(search.toLowerCase()))??[];
+  const rowProducts=bridge?.catalog.products.filter(x=>(queue!=="drafts"||hasCatalogDraft(x))&&(selectedBrand==="all"||x.brand===selectedBrand)&&x.title.toLowerCase().includes(search.toLowerCase()))??[];
   const orderQuery=search.trim().toLowerCase();
   const homeyStoreProducts=rowProducts.filter(product=>product.source==="homey_store");
   const orderStatuses=[...new Set((bridge?.operations.orders??[]).map(order=>order.status))].sort();
   const rowOrders=bridge?.operations.orders.filter(order=>
     (selectedBrand==="all"||order.brand===selectedBrand) &&
     (!orderStatus||order.status===orderStatus) &&
+    (queue!=="confirm"||needsOrderConfirmation(order.status)) &&
     [order.id,order.source_order_id].some(id=>id?.toLowerCase().includes(orderQuery))
   )??[];
   const selectedOrder=bridge?.operations.orders.find(o=>o.id===selectedOrderId && (selectedBrand==="all"||o.brand===selectedBrand));
@@ -137,7 +145,7 @@ function ControlCenter(){
   const homeyUrl=project==="homey"?homeyAdminUrl(tab):null;
   const homeyOrdersManagerUrl=import.meta.env["VITE_ORDERS_MANAGER_URL"] ||
     (import.meta.env.DEV?"http://127.0.0.1:3001/orders-manager":undefined);
-  const showHomeyOrders=project==="homey"&&tab==="orders"&&homeyOrdersManagerUrl&&bridge&&bridge.accessRole!=="viewer";
+  const showHomeyOrders=project==="homey"&&tab==="orders"&&!queue&&homeyOrdersManagerUrl&&canReadOrderDetails(bridge?.accessRole);
   const sodfaTotalSales=bridge?.sodfa.salesSummary?.sales_egp??null;
   const salesPeriod=bridge?.sodfa.salesSummary;
   const salesRange=salesPeriod?.first_date&&salesPeriod.last_date?`من ${salesPeriod.first_date.slice(0,10)} إلى ${salesPeriod.last_date.slice(0,10)}`:null;
@@ -279,6 +287,27 @@ function ControlCenter(){
         </Link>;
       })}
     </div>}
+    {tab==="dashboard"&&project!=="sodfa_web"&&<section aria-label="شغل النهارده" className="mb-5 rounded-2xl border border-[#27272a] bg-[#111114] p-4 sm:p-5">
+      <h2 className="mb-3 text-xl font-bold">شغل النهارده</h2>
+      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+        {([
+          {section:"orders",queue:"confirm",label:"طلبات محتاجة تأكيد",value:awaitingConfirmation,icon:ClipboardList},
+          {section:"shipping",queue:"shipping-review",label:"شحنات تحتاج مراجعة",value:shipmentReview,icon:Truck},
+          {section:"products",queue:"drafts",label:"مسودات كتالوج محفوظة",value:savedDrafts,icon:Boxes},
+        ] as const).filter(item=>availableSections.includes(item.section)).map(({section,queue,label,value,icon:Icon})=><Link
+          key={queue} to="/control-center" search={{project,section,queue}}
+          onClick={()=>{setSearch("");setOrderStatus("");setSelectedOrderId("");}}
+          className="grid gap-1 rounded-xl border border-white/10 bg-[#201725] p-3 hover:border-purple-300/50">
+          <span className="flex items-center gap-2 font-semibold"><Icon size={17} className="text-purple-300"/>{label}</span>
+          <strong className="text-lg">{metric(value)}</strong>
+        </Link>)}
+      </div>
+    </section>}
+    {queue&&<div className="mb-3 flex flex-wrap items-center justify-between gap-2 rounded-xl border border-purple-300/30 bg-[#211926] px-3 py-2">
+      <span>{queue==="confirm"?"طلبات محتاجة تأكيد":queue==="shipping-review"?"شحنات تحتاج مراجعة":"مسودات الكتالوج المحفوظة"}</span>
+      <Link to="/control-center" search={{project,section:tab}} className="rounded-lg border border-white/20 px-3 py-2 text-sm"
+        onClick={()=>{setSearch("");setOrderStatus("");setSelectedOrderId("");}}>عرض الكل</Link>
+    </div>}
     {tab==="dashboard"&&<>
       <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(190px,1fr))",gap:12,marginBottom:13}}>
         {project!=="orders"&&project!=="sodfa_web"&&<Metric title="فهرس المنتجات" value={metric(activeProductRefs)} icon={Package} sub="فهرس CRM · سجلات المشروع"/>}
@@ -347,7 +376,7 @@ function ControlCenter(){
       {!loading&&((tab==="products"&&!rowProducts.length)||(tab==="orders"&&!rowOrders.length))&&<p style={{color:ui.muted}}>{(tab==="products"?bridge?.catalog.productsAvailable:bridge?.operations.available.orders)?"مفيش نتائج للفلاتر الحالية.":"بيانات القائمة غير متاحة حاليًا."}</p>}
       {(tab==="products"?bridge?.catalog.productsAvailable:bridge?.operations.available.orders)&&<p style={{color:ui.muted,fontSize:11}}>{tab==="products"?"المنتجات المعروضة":"الطلبات المعروضة"} {fmt(tab==="products"?rowProducts.length:rowOrders.length)} من {fmt(tab==="products"?(bridge?.catalog.products.length??0):(bridge?.operations.orders.length??0))} سجل محمّل. الحد الأقصى 500 سجل؛ إجمالي المشروع في النظرة العامة.</p>}
     </div>}
-    {tab==="shipping"&&<div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(290px,1fr))",gap:13}}><div style={panel}><h2>حالات الشحن حسب المشروع</h2>{(bridge?.operations.shipments??[]).filter(s=>selectedBrand==="all"||s.brand===selectedBrand).map(s=><div key={s.brand+s.state} style={{display:"flex",justifyContent:"space-between",padding:"11px 0",borderBottom:"1px solid "+ui.border}}><span>{s.brand==="homey"?"هومي":"صدفة"} · {s.state}</span><b>{fmt(s.count)}</b></div>)}{!bridge?.operations.available.shipments&&<p>ربط الشحن غير متاح حاليًا</p>}</div><div style={panel}><h2>إدارة عمليات الشحن</h2><p style={{fontSize:12,lineHeight:2,color:ui.muted}}>الملخص من حالات تالا المسجلة في مدير الطلبات. افتح مدير الطلبات لإنشاء الشحنات والتحصيل، أو افتح البوليصة المرتبطة من تفاصيل الطلب.</p></div></div>}
+    {tab==="shipping"&&<div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(290px,1fr))",gap:13}}><div style={panel}><h2>حالات الشحن حسب المشروع</h2>{(bridge?.operations.shipments??[]).filter(s=>(selectedBrand==="all"||s.brand===selectedBrand)&&(queue!=="shipping-review"||s.state==="review")).map(s=><div key={s.brand+s.state} style={{display:"flex",justifyContent:"space-between",padding:"11px 0",borderBottom:"1px solid "+ui.border}}><span>{s.brand==="homey"?"هومي":"صدفة"} · {s.state}</span><b>{fmt(s.count)}</b></div>)}{!bridge?.operations.available.shipments&&<p>ربط الشحن غير متاح حاليًا</p>}{queue==="shipping-review"&&shipmentReview===0&&<p>مفيش شحنات تحتاج مراجعة.</p>}</div><div style={panel}><h2>إدارة عمليات الشحن</h2><p style={{fontSize:12,lineHeight:2,color:ui.muted}}>الملخص من حالات تالا المسجلة في مدير الطلبات. افتح مدير الطلبات لإنشاء الشحنات والتحصيل، أو افتح البوليصة المرتبطة من تفاصيل الطلب.</p></div></div>}
     {tab==="customers"&&<div style={panel}><h2>عملاء {chosen.name}</h2><div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(200px,1fr))",gap:12,marginBottom:14}}><Metric title="عدد العملاء المسجلين" value={metric(customers)} icon={Users}/><Metric title="عدد طلبات المشروع" value={metric(orderTotal)} icon={ShoppingCart}/></div><p style={{color:ui.muted,fontSize:12}}>الدمج الآمن لسجلات العملاء والوصول لأرقام الهاتف وإرسال واتساب يتطلب ربط صلاحيات هومي وصدفة قبل عرض بيانات شخصية داخل المركز.</p></div>}
     {tab==="finance"&&bridge?.accessRole!=="viewer"&&<div style={panel}><h2>تقارير {chosen.name}</h2>{canSeeSodfaStock&&<div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(200px,1fr))",gap:12,marginBottom:14}}><Metric title="قيمة تكلفة مخزون الويب المسجل" value={bridge?.sodfa.inventorySummary?(sodfaInventoryValue===null?"محجوب":fmt(sodfaInventoryValue)+" ج.م"):"غير متاح"} icon={Database}/><Metric title="إجمالي قيمة المبيعات بسجل صدفة" value={sodfaTotalSales===null?metric(null):fmt(sodfaTotalSales)+" ج.م"} icon={ChartNoAxesCombined}/></div>}<p style={{color:ui.muted,fontSize:12,lineHeight:2}}>لم يتم دمج المبيعات بالأوردرات ماليًا بعد، حفاظًا على عدم تكرار الإيرادات. صافي الربح والتكلفة والتحصيل النهائي يحتاجون مطابقة سعر البيع التاريخي وتكلفة البضاعة والشحن والمرتجعات.</p></div>}
     {tab==="finance"&&bridge&&bridge.accessRole!=="viewer"&&<OrderMarginCalculator/>}

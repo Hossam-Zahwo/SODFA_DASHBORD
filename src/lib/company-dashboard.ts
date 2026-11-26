@@ -27,3 +27,18 @@ export function scopedCount<T extends Count>(
   const scoped = rows.filter((row) => (brand === "all" || row.brand === brand) && include(row));
   return scoped.reduce((total, row) => total + row.count, 0);
 }
+
+export function canReadOrderDetails(role: string | undefined) {
+  return role === "operator" || role === "manager" || role === "admin";
+}
+
+export function needsOrderConfirmation(status: string) {
+  return status === "new" || status === "contacted";
+}
+
+export function hasCatalogDraft(row: {
+  draft_visibility: boolean | null;
+  draft_price: number | null;
+}) {
+  return row.draft_visibility !== null || row.draft_price !== null;
+}

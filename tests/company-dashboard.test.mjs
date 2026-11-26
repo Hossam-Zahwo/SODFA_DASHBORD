@@ -1,6 +1,12 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { orderStatusLabel, scopedCount } from "../src/lib/company-dashboard.ts";
+import {
+  canReadOrderDetails,
+  hasCatalogDraft,
+  needsOrderConfirmation,
+  orderStatusLabel,
+  scopedCount,
+} from "../src/lib/company-dashboard.ts";
 
 test("separates unavailable data from a verified zero", () => {
   assert.equal(scopedCount([], "sodfa", false), null);
@@ -26,4 +32,21 @@ test("keeps totals scoped to brand and matches current shipping statuses", () =>
   );
   assert.equal(orderStatusLabel("shipped"), "مع شركة الشحن");
   assert.equal(orderStatusLabel("legacy"), "legacy");
+});
+
+test("only operational roles can read order details", () => {
+  assert.equal(canReadOrderDetails("viewer"), false);
+  assert.equal(canReadOrderDetails(undefined), false);
+  assert.equal(canReadOrderDetails("operator"), true);
+  assert.equal(canReadOrderDetails("manager"), true);
+  assert.equal(canReadOrderDetails("admin"), true);
+});
+
+test("today's work includes pending orders and saved hide or zero-price drafts", () => {
+  assert.equal(needsOrderConfirmation("new"), true);
+  assert.equal(needsOrderConfirmation("contacted"), true);
+  assert.equal(needsOrderConfirmation("confirmed"), false);
+  assert.equal(hasCatalogDraft({ draft_visibility: false, draft_price: null }), true);
+  assert.equal(hasCatalogDraft({ draft_visibility: null, draft_price: 0 }), true);
+  assert.equal(hasCatalogDraft({ draft_visibility: null, draft_price: null }), false);
 });
