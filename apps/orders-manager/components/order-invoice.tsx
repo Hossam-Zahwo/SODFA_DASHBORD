@@ -9,10 +9,12 @@ import { HomeyLogo } from "@/components/homey-logo";
 export function OrderInvoice({
   order,
   onBack,
+  backLabel,
   onPrint,
 }: {
   order: Order;
   onBack?: () => void;
+  backLabel?: string;
   onPrint: () => void;
 }) {
   const t = useTranslation();
@@ -30,7 +32,7 @@ export function OrderInvoice({
         {onBack ? (
           <button type="button" className="invoice-back" onClick={onBack}>
             <ArrowRight size={17} />
-            {t("الرجوع للطلبات")}
+            {t(backLabel ?? "الرجوع للطلبات")}
           </button>
         ) : (
           <a href={ordersManagerPath("/")}>

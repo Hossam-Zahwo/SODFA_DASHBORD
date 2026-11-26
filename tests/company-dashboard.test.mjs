@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { runCompanyReview } from "../src/lib/company-review.ts";
 import {
   canReadOrderDetails,
   hasCatalogDraft,
@@ -49,4 +50,26 @@ test("today's work includes pending orders and saved hide or zero-price drafts",
   assert.equal(hasCatalogDraft({ draft_visibility: false, draft_price: null }), true);
   assert.equal(hasCatalogDraft({ draft_visibility: null, draft_price: 0 }), true);
   assert.equal(hasCatalogDraft({ draft_visibility: null, draft_price: null }), false);
+});
+
+test("review orders genuine work ahead of missing sources and distinguishes zero", async () => {
+  const snapshot = {
+    catalog: { productsAvailable: true, draftCounts: [] },
+    operations: {
+      available: { summary: true, orders: true, customers: true, shipments: false },
+      summary: [
+        { brand: "homey", status: "new", count: 2 },
+        { brand: "sodfa", status: "new", count: 10 },
+      ],
+      orders: [{ brand: "homey" }],
+      shipments: [],
+    },
+    sodfa: { connected: false },
+  };
+  const findings = await runCompanyReview(snapshot, "homey");
+  assert.equal(findings[0].queue, "confirm");
+  assert.equal(findings[0].count, 2);
+  assert.equal(findings.find((row) => row.queue === "shipping-review").level, "unavailable");
+  assert.equal(findings.find((row) => row.queue === "drafts").count, 0);
+  assert.equal(findings.find((row) => row.queue === "drafts").level, "clear");
 });

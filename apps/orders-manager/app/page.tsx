@@ -104,6 +104,7 @@ export default function Page(){
  const [carrierFilter,setCarrierFilter]=useState('');
  const [detailOrderId,setDetailOrderId]=useState('');
  const [invoiceOrderId,setInvoiceOrderId]=useState('');
+ const [editorReturnId,setEditorReturnId]=useState('');
  const [shipmentDraft,setShipmentDraft]=useState<{brand:Brand;company:string;ids:string[]} | null>(null);
  const [shippingCompanies,setShippingCompanies]=useState<string[]>([]);
  const [companyName,setCompanyName]=useState('');
@@ -219,8 +220,14 @@ const response=await fetch(ordersManagerPath('/api/whoami'),{credentials:'same-o
  const detailOrder=brandOrders.find(order=>order.id===detailOrderId);
  const invoiceOrder=brandOrders.find(order=>order.id===invoiceOrderId);
  const canEditOrder=(order:WorkspaceOrder)=>!embedded||(permissions.create&&order.workspaceSource==='preview');
- function openOrderEditor(order:WorkspaceOrder){
+ function openOrderEditor(order:WorkspaceOrder, fromDetails=false){
+  setEditorReturnId(fromDetails?order.id:'');
   setDetailOrderId('');setErr('');setEditing({...order});
+ }
+ function closeOrderEditor(){
+  setEditing(null);
+  if(editorReturnId)setDetailOrderId(editorReturnId);
+  setEditorReturnId('');
  }
 
  const talaOrders=brandOrders.filter(order=>order.shippingCompany===talaExpress);
@@ -513,7 +520,7 @@ const response=await fetch(ordersManagerPath('/api/whoami'),{credentials:'same-o
     writeGeneration.current++;
     setOrders(current=>isEditing?current.map(existing=>existing.id===order.id?order:existing):[order,...current.filter(existing=>existing.id!==order.id)]);
     setLoaded(true);
-    setEditing(null);
+    closeOrderEditor();
     if(!isEditing){
      setSourceFilter('preview');setPeriod('all');setSearch('');setSelected([]);
      setFilter('all');setCarrierFilter('');setCollectionFilter('all');setUnprintedOnly(false);
@@ -532,7 +539,7 @@ const response=await fetch(ordersManagerPath('/api/whoami'),{credentials:'same-o
   setBusy(true);setErr('');try{const {tala}=await api('orders','POST',{...editing,retryTala,talaDestination:{
    serviceId:Number(fields.get('talaService')),zoneId:Number(fields.get('talaZone')),subzoneId:Number(fields.get('talaSubzone')),
    weight:Number(fields.get('talaWeight')),piecesCount:Number(fields.get('talaPieces')),typeCode:fields.get('talaType'),openableCode:fields.get('talaOpenable'),
-  }});setEditing(null);setNotice(tala?.state==='sent'?t('تم إرسال الشحنة لتالا. رقم التتبع')+' '+tala.trackingCode
+  }});closeOrderEditor();setNotice(tala?.state==='sent'?t('تم إرسال الشحنة لتالا. رقم التتبع')+' '+tala.trackingCode
    :tala?.state==='review'?'اتحفظ الأوردر. راجع مرجعه في تالا قبل ما تبعته مرة تانية.'
    :tala?.state==='unavailable'?'اتحفظ الأوردر، والإرسال لتالا غير متاح دلوقتي.':'تم حفظ الطلب');await reload()}catch(e){setErr((e as Error).message)}finally{setBusy(false)}}
  async function saveCustomer(e:React.FormEvent){e.preventDefault();if(!editCustomer)return;setBusy(true);setErr('');try{await api('customers','POST',editCustomer);setEditCustomer(null);setNotice('تم حفظ العميل');await reload()}catch(e){setErr((e as Error).message)}finally{setBusy(false)}}
@@ -553,6 +560,7 @@ const response=await fetch(ordersManagerPath('/api/whoami'),{credentials:'same-o
  </section></div>;
  if(embedded&&invoiceOrder)return <OrderInvoice order={invoiceOrder}
   onBack={()=>setInvoiceOrderId('')}
+  backLabel={detailOrderId?'الرجوع لتفاصيل الطلب':undefined}
   onPrint={()=>{window.print();setPrinted(current=>new Set([...current,...printKeys([invoiceOrder])]))}}/>;
  const nav:[Tab,string,React.ReactNode][]=[['dashboard','الرئيسية',<LayoutDashboard size={19} key="a"/>],['orders','الأوردرات',<Package size={19} key="b"/>],['carriers','شركات الشحن',<Truck size={19}/>],['shipping-integrations','ربط شركات الشحن',<Truck size={19}/>],['customers','العملاء',<Users size={19} key="c"/>],['reports','التقارير',<ChartNoAxesCombined size={19}/>],['settings','الإعدادات',<Settings size={19} key="d"/>]];
  return <div className="app" data-embedded={embedded||undefined} data-brand={brand} data-waybill-print={printOrders.length>0?'active':undefined} style={theme}>
@@ -680,15 +688,15 @@ const response=await fetch(ordersManagerPath('/api/whoami'),{credentials:'same-o
  <div className="shipping-preview"><WaybillPrintSheets waybills={printOrders.map(printable)} perPage={4} printDate={printDate} printDates={printDates}/></div>
  </section></div>}
  {detailOrder&&<OrderDetails order={detailOrder} cachedTracking={embedded} close={()=>setDetailOrderId('')}
-  edit={canEditOrder(detailOrder)?()=>openOrderEditor(detailOrder):undefined}
+  edit={canEditOrder(detailOrder)?()=>openOrderEditor(detailOrder,true):undefined}
   invoice={embedded?()=>setInvoiceOrderId(detailOrder.id):undefined}
   print={()=>{setDetailOrderId('');preview([detailOrder])}}
   prepare={embedded?undefined:()=>{setDetailOrderId('');openShippingIntegration(detailOrder.shippingCompany,[detailOrder])}}/>}
- {editing&&<div className="modalshade"  onClick={e=>{if(e.target===e.currentTarget)setEditing(null)}}>
+ {editing&&<div className="modalshade"  onClick={e=>{if(e.target===e.currentTarget)closeOrderEditor()}}>
   <section className="modal order-editor" role="dialog" aria-modal="true" aria-labelledby="order-editor-title">
    <div className="sectionhead">
     <h2 id="order-editor-title">{editing.id?t("تعديل أوردر"):t("إضافة طلب جديد")} <span className="order-brand-chip">{brand==='homey'?<HomeyLogo className="editor-homey-logo"/>:<img src={ordersManagerPath("/sodfa-logo.png")} alt={t("صدفة")} width={85} height={35}/>}</span></h2>
-    <button type="button" className="btn secondary tiny" onClick={()=>setEditing(null)}>{t("إغلاق ×")}</button>
+    <button type="button" className="btn secondary tiny" onClick={closeOrderEditor}>{t("إغلاق ×")}</button>
    </div>
    <form onSubmit={saveOrder}>
     <section className="order-form-section order-carrier-choice">
@@ -789,7 +797,7 @@ const response=await fetch(ordersManagerPath('/api/whoami'),{credentials:'same-o
     </section>
     {err&&<div className="notice error" role="alert">{t(err)}</div>}
     <div className="modalfooter">
-     <button type="button" className="btn secondary" onClick={()=>setEditing(null)}>{t("إلغاء")}</button>
+     <button type="button" className="btn secondary" onClick={closeOrderEditor}>{t("إلغاء")}</button>
      {canRetryTala&&<button type="submit" className="btn" value="retry-tala" disabled={busy}><Truck size={17}/>{t('حفظ وإعادة الإرسال لتالا')}</button>}
      <button type="submit" formNoValidate={canRetryTala} className={canRetryTala?'btn secondary':'btn'} disabled={busy||(!editing.id&&!deliveryChosen)}><ShieldCheck size={17}/>{t("حفظ الطلب")}</button>
     </div>

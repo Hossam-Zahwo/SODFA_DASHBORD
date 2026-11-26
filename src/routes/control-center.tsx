@@ -7,6 +7,7 @@ import { OrderMarginCalculator } from "@/components/OrderMarginCalculator";
 import { useEffect, useRef, useState } from "react";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { CompanyInventoryAssistant } from "@/components/CompanyInventoryAssistant";
+import { CompanyReview } from "@/components/CompanyReview";
 import { HomeyCategories } from "@/components/HomeyCategories";
 import { OrdersManagerPanel } from "@/components/OrdersManagerPanel";
 import { AppShell } from "@/components/AppShell";
@@ -35,6 +36,7 @@ const projectData: {id: Project; name: string; detail: string; icon: typeof Pack
 ];
 const tabData: {id:Tab;name:string;icon:typeof Package}[] = [
   {id:"dashboard",name:"لوحة الأداء",icon:Activity},
+  {id:"review",name:"مراجعة التشغيل",icon:ClipboardList},
   {id:"store-admin",name:"لوحة تحكم هومي",icon:Store},
   {id:"products",name:"المنتجات",icon:Boxes},
   {id:"categories",name:"الأقسام",icon:Tags},
@@ -287,6 +289,7 @@ function ControlCenter(){
         </Link>;
       })}
     </div>}
+    {tab==="review"&&<CompanyReview key={project} project={project}/>}
     {tab==="dashboard"&&project!=="sodfa_web"&&<section aria-label="شغل النهارده" className="mb-5 rounded-2xl border border-[#27272a] bg-[#111114] p-4 sm:p-5">
       <h2 className="mb-3 text-xl font-bold">شغل النهارده</h2>
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">

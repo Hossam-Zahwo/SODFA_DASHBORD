@@ -1,6 +1,7 @@
 export const projects = ["all", "homey", "sodfa_web", "sodfa", "orders"] as const;
 export const sections = [
   "dashboard",
+  "review",
   "store-admin",
   "orders",
   "products",
@@ -18,7 +19,7 @@ export function companySections(
   viewer = false,
 ): readonly CompanySection[] {
   if (project === "sodfa_web") return ["dashboard", "products", "settings"];
-  if (project === "orders") return ["dashboard", "orders", "shipping", "customers", "settings"];
+  if (project === "orders") return ["dashboard", "review", "orders", "shipping", "customers", "settings"];
   if (project === "homey") return sections.filter((section) => section !== "finance");
   return sections.filter((section) => section !== "categories" && section !== "store-admin" && (!viewer || section !== "finance"));
 }

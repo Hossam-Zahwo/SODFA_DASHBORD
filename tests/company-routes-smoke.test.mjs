@@ -19,6 +19,7 @@ const routes = [
   "/scanner",
   "/settings",
   "/control-center",
+  "/control-center?project=homey&section=review",
   "/control-center?project=homey&section=orders",
   "/control-center?project=homey&section=orders&queue=confirm",
   "/control-center?project=homey&section=store-admin",
