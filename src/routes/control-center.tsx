@@ -7,6 +7,7 @@ import { OrderMarginCalculator } from "@/components/OrderMarginCalculator";
 import { useEffect, useRef, useState } from "react";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { CompanyInventoryAssistant } from "@/components/CompanyInventoryAssistant";
+import { CompanySupport } from "@/components/CompanySupport";
 import { CompanyReview } from "@/components/CompanyReview";
 import { HomeyCategories } from "@/components/HomeyCategories";
 import { OrdersManagerPanel } from "@/components/OrdersManagerPanel";
@@ -189,6 +190,7 @@ function ControlCenter(){
       </div>
     </header>
 
+    <CompanySupport key={project} project={project} section={tab}/>
     <div className="grid min-w-0 gap-4 lg:grid-cols-[12rem_minmax(0,1fr)]">
       <nav aria-label="أقسام المشروع" className="flex gap-2 overflow-x-auto pb-2 lg:sticky lg:top-4 lg:flex-col lg:self-start lg:rounded-2xl lg:border lg:border-white/10 lg:bg-[#151117] lg:p-3">
         {allowedTabs.map(({id,name,icon:Icon})=><Link key={id} to="/control-center" search={{project,section:id}}

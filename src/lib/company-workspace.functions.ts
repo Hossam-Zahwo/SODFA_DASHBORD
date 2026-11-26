@@ -38,10 +38,11 @@ type OrderRow = {
 type Shipment = { brand: string; state: string; count: number };
 type Count = { brand: string; count: number };
 
-export const getCompanyWorkspaceData = createServerFn({ method: "POST" })
-  .validator(RequestSchema)
-  .handler(async ({ data }) => {
-    const access=await requireCompanyAccess(data.token,data.project,"read");
+async function readWorkspace(
+  data: Omit<z.output<typeof RequestSchema>, "token">,
+  access: Awaited<ReturnType<typeof requireCompanyAccess>>,
+  fetchOptions?: RequestInit,
+) {
     // All queries are server-side. Order PII is only exposed to operators/managers, never viewers.
     const response: {
       fetchedAt: string;
@@ -77,7 +78,7 @@ export const getCompanyWorkspaceData = createServerFn({ method: "POST" })
     const catalogUrl = process.env["CRM_CATALOG_READ_URL"];
     if (catalogEnabled && catalogUrl) jobs.push((async () => {
       try {
-        const db = neon(catalogUrl);
+        const db = neon(catalogUrl, fetchOptions ? {fetchOptions} : undefined);
         // 454 reference records were imported from the source catalogs.
         const [countResult, productResult,draftResult] = await Promise.allSettled([
           db`SELECT brand_id AS brand, count(*)::integer AS count FROM product_references WHERE (${brandCondition} = 'all' OR brand_id = ${brandCondition}) GROUP BY brand_id ORDER BY brand_id`,
@@ -150,7 +151,7 @@ export const getCompanyWorkspaceData = createServerFn({ method: "POST" })
     const ordersUrl = process.env["CRM_ORDERS_READ_URL"];
     if (ordersEnabled && ordersUrl) jobs.push((async () => {
       try {
-        const db = neon(ordersUrl);
+        const db = neon(ordersUrl, fetchOptions ? {fetchOptions} : undefined);
         // Independent queries: a shipping integration failure must not erase
         // all orders and customer counts from the operations dashboard.
         const [summaryResult, orderResult, customerResult, shipmentResult] = await Promise.allSettled([
@@ -219,7 +220,7 @@ export const getCompanyWorkspaceData = createServerFn({ method: "POST" })
     const sodfaUrl = process.env["CRM_SODFA_READ_URL"];
     if (sodfaEnabled && sodfaUrl) jobs.push((async () => {
       try {
-        const db = neon(sodfaUrl);
+        const db = neon(sodfaUrl, fetchOptions ? {fetchOptions} : undefined);
         const [invResult,salResult,itemResult] = await Promise.allSettled([
           db`SELECT count(*)::integer AS sku_rows, COALESCE(sum(remaining_qty),0)::float8 AS units,
              COALESCE(sum(remaining_qty * purchase_price),0)::float8 AS cost_value,
@@ -257,4 +258,19 @@ export const getCompanyWorkspaceData = createServerFn({ method: "POST" })
       if(response.sodfa.inventorySummary)response.sodfa.inventorySummary.cost_value=null;
     }
     return response;
+}
+
+export const getCompanyWorkspaceData = createServerFn({ method: "POST" })
+  .validator(RequestSchema)
+  .handler(async ({ data }) =>
+    readWorkspace(data, await requireCompanyAccess(data.token, data.project, "read")),
+  );
+
+export async function readSupportWorkspace(
+  project: z.output<typeof RequestSchema>["project"],
+  access: Awaited<ReturnType<typeof requireCompanyAccess>>,
+) {
+  return readWorkspace({ project, brand: "all", query: "" }, access, {
+    signal: AbortSignal.timeout(10000),
   });
+}
