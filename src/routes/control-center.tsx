@@ -125,6 +125,7 @@ function ControlCenter(){
   const metric=(value:number|null)=>value===null?(loading?"جاري التحميل":"غير متاح"):fmt(value);
   const rowProducts=bridge?.catalog.products.filter(x=>(selectedBrand==="all"||x.brand===selectedBrand)&&x.title.toLowerCase().includes(search.toLowerCase()))??[];
   const orderQuery=search.trim().toLowerCase();
+  const homeyStoreProducts=rowProducts.filter(product=>product.source==="homey_store");
   const orderStatuses=[...new Set((bridge?.operations.orders??[]).map(order=>order.status))].sort();
   const rowOrders=bridge?.operations.orders.filter(order=>
     (selectedBrand==="all"||order.brand===selectedBrand) &&
@@ -216,11 +217,57 @@ function ControlCenter(){
     </div>}
     {loadError&&<div style={{...panel,border:"1px solid #8f5151",marginBottom:14}}><AlertTriangle size={17} style={{display:"inline",marginLeft:8}}/>تعذر جلب بيانات الربط: {loadError}. بيانات صدفة المحلية قد تظل متاحة.</div>}
     {canSeeSodfaStock&&tab==="products"&&<CompanyInventoryAssistant key={project}/>}
-    {project==="homey"&&tab==="store-admin"&&bridge&&<iframe
-      src="/homey-admin/index.html?embedded=1#/admin"
-      title="لوحة تحكم متجر هومي"
-      className="h-[calc(100dvh-11rem)] min-h-[32rem] w-full rounded-xl border border-[#27272a] bg-white"
-    />}
+    {project==="homey"&&tab==="store-admin"&&<section aria-label="لوحة تحكم هومي" className="rounded-2xl border border-[#27272a] bg-[#111114] p-4 sm:p-5">
+      <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h2 className="text-xl font-bold">لوحة تحكم هومي</h2>
+          <p className="mt-1 text-sm text-zinc-300">اعرض كتالوج هومي واحفظ اقتراحات العرض والسعر كمسودات.</p>
+        </div>
+        <Link to="/control-center-products" search={{project:"homey",workspace:"homey"}}
+          className="inline-flex min-h-11 items-center gap-2 rounded-lg border border-purple-300/40 px-3 py-2 text-sm font-bold">
+          <Boxes size={16}/>الأسعار ومسودات النشر
+        </Link>
+      </div>
+      <nav aria-label="إدارة متجر هومي" className="mb-4 flex flex-wrap gap-2">
+        {(["categories","orders","customers","settings"] as const).map(section=>{
+          const item=tabData.find(entry=>entry.id===section)!;
+          return <Link key={section} to="/control-center" search={{project:"homey",section}}
+            className="inline-flex min-h-11 items-center gap-2 rounded-lg bg-[#211926] px-3 py-2 text-sm font-semibold hover:bg-[#33203d]">
+            <item.icon size={16} className="text-purple-300"/>{item.name}
+          </Link>;
+        })}
+      </nav>
+      <label className="block text-sm font-semibold">بحث في منتجات هومي
+        <input type="search" value={search} onChange={event=>setSearch(event.target.value)}
+          className="mt-1 w-full rounded-lg border border-white/15 bg-[#161419] px-3 py-2.5 text-base sm:max-w-sm"/>
+      </label>
+      {draftMessage&&<p role="status" className="mt-3 rounded-lg bg-[#2a1530] p-3 text-sm">{draftMessage}</p>}
+      {loading&&<p role="status" className="mt-3 text-sm text-zinc-300">جاري تحميل كتالوج هومي…</p>}
+      {!loading&&bridge?.catalog.productsAvailable&&!homeyStoreProducts.length&&<p className="mt-3 text-sm text-zinc-300">مفيش منتجات مطابقة للبحث.</p>}
+      <ul className="mt-3 grid gap-2 sm:grid-cols-2">
+        {homeyStoreProducts.map(product=><li key={product.id}
+          className="min-w-0 rounded-xl border border-[#27272a] bg-[#161419] p-3">
+          <div className="flex min-w-0 items-center gap-2">
+            <CatalogProductPhotos title={product.title} photos={product.images}/>
+            <div className="min-w-0">
+              <p className="break-words font-semibold">{product.title}</p>
+              <p className="mt-1 text-sm text-zinc-300">
+                {product.homey_draft===null?"بدون اقتراح عرض":product.homey_draft?"مسودة عرض":"مسودة إخفاء"}
+              </p>
+            </div>
+          </div>
+          <div className="mt-3 flex flex-wrap gap-2">
+            {([true,false] as const).map(visible=><button key={String(visible)} type="button"
+              aria-label={(visible?"اقتراح عرض ":"اقتراح إخفاء ")+product.title}
+              disabled={!bridge?.canWriteCatalogDrafts||Boolean(draftBusy)}
+              onClick={()=>void updateDraft(product,visible)}
+              className="min-h-11 rounded-lg border border-purple-300/30 px-3 text-sm disabled:opacity-60">
+              {visible?"اقتراح عرض":"اقتراح إخفاء"}
+            </button>)}
+          </div>
+        </li>)}
+      </ul>
+    </section>}
     {project==="homey"&&tab==="categories"&&bridge&&<HomeyCategories/>}
     {showHomeyOrders&&<OrdersManagerPanel url={homeyOrdersManagerUrl} brand="homey"/>}
     {project==="homey"&&tab==="dashboard"&&<div className="mb-4 grid gap-2 sm:grid-cols-2 xl:grid-cols-4">

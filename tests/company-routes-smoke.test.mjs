@@ -20,6 +20,7 @@ const routes = [
   "/settings",
   "/control-center",
   "/control-center?project=homey&section=orders",
+  "/control-center?project=homey&section=store-admin",
   "/control-center?project=orders&section=shipping",
   "/control-center?project=orders&section=customers",
   "/control-center?project=sodfa_web&section=products",
