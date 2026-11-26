@@ -71,3 +71,16 @@ This branch is on an existing **public GitHub repository**. Do not commit any se
 - New route `/control-center-products`: full central catalog with product name/source, Homey prices and stock, SODFA available values when known, brand filter, two distinct channel draft visibility controls, manual product draft creation with channel selection. Admin-only write operations; idempotency request UUID; no storefront writes.
 - `Orders Manager` production database had 56 non-deleted HOMEY orders, 22 new, 24 delivered, **0 SODFA orders** and **0 source-order linkage IDs**, per query on 2026-11-21. This is a reconciliation gap, not proof SODFA has no orders elsewhere. Existing Orders Manager API uses separate staff auth and can dispatch Tala; do not bypass its validation by directly updating `orders` rows.
 - For a complete production rollout: recover SODFA Web catalog, implement safe service-to-service Orders Manager adapter with its validation/idempotency/carrier handling, and implement per-site product publication adapters with approval/audit trail and rollback tests. These are **not yet implemented**.
+
+## SODFA inventory assistant
+
+In the Company Control Center, open the company overview or SODFA Dashboard and
+search for a product by name. Results come from the existing Supabase inventory
+table, limited to SODFA warehouses visible to the signed-in staff member. An
+unknown quantity is displayed separately from zero. Search can be used without an
+AI configuration.
+
+To enable optional Arabic review suggestions, set the server-side variable
+`AI_GATEWAY_MODEL` to `openai/gpt-4.1-mini`. Vercel uses AI Gateway OIDC, and local
+development can use a securely configured `AI_GATEWAY_API_KEY`. Only result counts
+are sent to the model. The lookup and suggestions have no write actions.

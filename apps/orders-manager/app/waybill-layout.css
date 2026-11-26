@@ -1,0 +1,138 @@
+/* Physical A4 slots stay the same on incomplete sheets and in print preview. */
+.shipping-sheets-4 {
+ --waybill-width: 94mm;
+ --waybill-height: 137.5mm;
+ --waybill-gap: 4mm;
+}
+.shipping-sheets-3 {
+ --waybill-width: 192mm;
+ --waybill-height: 91mm;
+ --waybill-gap: 3mm;
+}
+.shipping-sheets-4 .shipping-sheet {
+ grid-template-columns: repeat(2, var(--waybill-width));
+ grid-template-rows: repeat(2, var(--waybill-height));
+ gap: var(--waybill-gap);
+}
+.shipping-sheets-3 .shipping-sheet {
+ grid-template-columns: var(--waybill-width);
+ grid-template-rows: repeat(3, var(--waybill-height));
+ gap: var(--waybill-gap);
+}
+.shipping-sheet > .shipping-label {
+ box-sizing: border-box;
+ width: var(--waybill-width);
+ height: var(--waybill-height);
+ display: grid;
+ grid-template-rows: 16mm 6mm 5mm 8mm 6mm 6mm 9mm minmax(0, 1fr) 12mm;
+ gap: 1mm;
+ padding: 4mm;
+}
+.shipping-sheets-3 .shipping-sheet > .shipping-label {
+ grid-template-rows: 11mm 5mm 4mm 6mm 5mm 5mm 8mm minmax(0, 1fr) 9mm;
+ gap: .65mm;
+ padding: 4mm 6mm;
+}
+.shipping-sheet .shipping-label-header {
+ min-height: 0;
+ height: 100%;
+ padding: 0 0 1mm;
+ align-items: center;
+}
+.shipping-sheet .shipping-label-homey-logo {
+ max-height: 100% !important;
+ object-fit: contain;
+}
+.shipping-sheet .shipping-label-print-date {
+ padding: 0;
+ align-items: center;
+}
+.shipping-sheet .shipping-label-title,
+.shipping-sheet .shipping-label-detail,
+.shipping-sheet .shipping-label-note,
+.shipping-sheet .shipping-label-total {
+ margin: 0;
+ min-height: 0;
+}
+.shipping-sheet .shipping-label-detail > :is(span,strong) { line-height: 1.25; }
+.shipping-sheet .shipping-label-detail > strong { text-align: end; }
+.shipping-sheet .shipping-label-dual {
+ grid-template-columns: repeat(2,minmax(0,1fr));
+}
+.shipping-sheet .shipping-label-dual .shipping-label-detail > strong,
+.shipping-sheet .shipping-label-address strong { text-align: start; }
+.shipping-label-text {
+ min-height: 0;
+ min-width: 0;
+ display: flex;
+ flex-direction: column;
+ gap: 1mm;
+ overflow: hidden;
+}
+.shipping-label-text .shipping-label-address { flex: 0 1 auto; overflow: hidden; }
+.shipping-label-text .shipping-label-address strong { white-space: pre-wrap; }
+.shipping-label-text .shipping-label-note {
+ flex: 0 1 auto;
+ padding: 1mm 2mm;
+ overflow: hidden;
+}
+.shipping-sheets-3 .shipping-label-text {
+ display: grid;
+ grid-template-columns: minmax(0, 2fr) minmax(0, 1fr);
+ grid-template-areas: "address notes";
+ align-items: start;
+ gap: 3mm;
+}
+.shipping-sheets-3 .shipping-label-address { grid-area: address; }
+.shipping-sheets-3 .shipping-label-note { grid-area: notes; }
+.shipping-sheets-3 .shipping-label-total { padding-block: 0; }
+.shipping-sheet .shipping-label-total { align-self: stretch; }
+.shipping-sheets-3 .shipping-label-address > strong { font-size: 14px; line-height: 1.25; }
+.shipping-sheets-3 .shipping-label-address { gap: 1px; }
+
+@media screen {
+ .shipping-sheets { width: 100%; min-width: 0; display: flex; flex-direction: column; align-items: center; }
+ .shipping-sheet-frame {
+  width: min(100%, 210mm);
+  height: calc(297mm * var(--waybill-preview-scale, 1));
+  overflow: hidden;
+  display: grid;
+  justify-items: start;
+  align-items: start;
+ }
+ .shipping-sheet-frame > .shipping-sheet {
+  transform: scale(var(--waybill-preview-scale, 1));
+  transform-origin: top left;
+ }
+ html[dir="rtl"] .shipping-sheet-frame > .shipping-sheet { transform-origin: top right; }
+}
+@media print {
+ html, body { max-width: none !important; overflow: visible !important; }
+ .app[data-waybill-print="active"],
+ .app[data-waybill-print="active"] .print-preview,
+ .app[data-waybill-print="active"] .print-preview .modal,
+ .app[data-waybill-print="active"] .shipping-preview,
+ .shipping-print-view {
+  box-sizing: border-box;
+  width: 210mm !important;
+  max-width: none !important;
+  height: auto !important;
+  min-height: 0 !important;
+  max-height: none !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  overflow: visible !important;
+  transform: none !important;
+  backdrop-filter: none !important;
+ }
+ .shipping-sheet-frame {
+  width: 210mm;
+  height: 297mm;
+  page-break-inside: avoid;
+  break-inside: avoid;
+  page-break-after: always;
+  break-after: page;
+ }
+ .shipping-sheet-frame:last-child { page-break-after: auto; break-after: auto; }
+ .shipping-sheet-frame > .shipping-sheet { transform: none !important; }
+}

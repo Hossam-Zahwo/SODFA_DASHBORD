@@ -9,12 +9,16 @@
     "build:dev": "vite build --mode development",
     "preview": "vite preview",
     "lint": "eslint .",
-    "format": "prettier --write ."
+    "format": "prettier --write .",
+    "test:crm": "node --experimental-strip-types --test tests/*.test.mjs",
+    "dev:orders": "npm --prefix apps/orders-manager run dev -- --hostname 127.0.0.1 --port 3001",
+    "build:homey-admin": "npm --prefix apps/homey-admin run build -- --outDir ../../public/homey-admin --emptyOutDir"
   },
   "dependencies": {
     "@hookform/resolvers": "^5.2.2",
     "@lovable.dev/mcp-js": "^0.26.2",
     "@neon/neon-js": "0.10.2",
+    "@neondatabase/serverless": "^1.0.0",
     "@radix-ui/react-accordion": "^1.2.12",
     "@radix-ui/react-alert-dialog": "^1.1.15",
     "@radix-ui/react-aspect-ratio": "^1.1.8",
@@ -49,6 +53,7 @@
     "@tanstack/router-plugin": "^1.168.42",
     "@zxing/browser": "^0.2.1",
     "@zxing/library": "^0.23.0",
+    "ai": "7.0.179",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "cmdk": "^1.1.1",
@@ -71,8 +76,7 @@
     "vaul": "^1.1.2",
     "vite-tsconfig-paths": "^6.0.2",
     "xlsx": "^0.18.5",
-    "zod": "^4.4.3",
-    "@neondatabase/serverless": "^1.0.0"
+    "zod": "^4.4.3"
   },
   "devDependencies": {
     "@eslint/js": "^9.32.0",

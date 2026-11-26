@@ -1,7 +1,11 @@
 import { useEffect, useState } from "react";
-import { Link, useRouterState } from "@tanstack/react-router";
+import { Link, useRouter, useRouterState } from "@tanstack/react-router";
 import {
   ArrowLeftRight,
+  ArrowLeft,
+  ArrowRight,
+  PanelLeftClose,
+  PanelLeftOpen,
   FileText,
   BarChart3,
   Building2,
@@ -19,14 +23,6 @@ import {
   UserCircle,
 } from "lucide-react";
 import type { ReactNode } from "react";
-
-import { Button } from "@/components/ui/button";
-import {
-  Sheet,
-  SheetContent,
-  SheetTitle,
-  SheetTrigger,
-} from "@/components/ui/sheet";
 
 import { useI18n, type TKey } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
@@ -141,11 +137,7 @@ const NAV: {
    NAVIGATION LINKS
    ============================================================ */
 
-function NavLinks({
-  onNavigate,
-}: {
-  onNavigate?: () => void;
-}) {
+function NavLinks() {
   const { t } = useI18n();
 
   const pathname = useRouterState({
@@ -156,7 +148,6 @@ function NavLinks({
     <nav className="flex flex-col gap-1.5 px-3">
       <Link
         to="/control-center"
-        onClick={onNavigate}
         className={cn(
           "group flex items-center gap-3 rounded-xl px-4 py-3 text-[15px] font-semibold transition-all",
           pathname.startsWith("/control-center")
@@ -168,6 +159,18 @@ function NavLinks({
         <Building2 className="h-5 w-5 text-[#A94FBC]" />
         <span>مركز التحكم بالمشاريع</span>
       </Link>
+      <Link
+        to="/control-center-social"
+        className={cn(
+          "group flex items-center gap-3 rounded-xl px-4 py-3 text-[15px] font-semibold transition-all",
+          pathname.startsWith("/control-center-social")
+            ? "bg-[#2A1530] text-white"
+            : "text-zinc-300 hover:bg-[#17121A] hover:text-white",
+        )}
+      >
+        <Building2 className="h-5 w-5 text-[#A94FBC]" />
+        <span>فيسبوك وإنستجرام</span>
+      </Link>
       {NAV.map(({ to, key, icon: Icon }) => {
         const active =
           to === "/"
@@ -178,7 +181,6 @@ function NavLinks({
           <Link
             key={to}
             to={to}
-            onClick={onNavigate}
             className={cn(
               `
                 group
@@ -611,25 +613,96 @@ function AccountSection() {
    APP SHELL
    ============================================================ */
 
-export function AppShell({
-  title,
-  children,
-}: {
-  title: string;
-  children: ReactNode;
-}) {
+const historyEnds = new WeakMap<object, number>();
+const sidebarWidths = { narrow: "w-56", normal: "w-72", wide: "w-[22rem]" } as const;
+type SidebarWidth = keyof typeof sidebarWidths;
+
+function WorkspaceNavigation({ direction }: { direction: "rtl" | "ltr" }) {
+  const { history } = useRouter();
+  const [available, setAvailable] = useState({ back: false, forward: false });
+
+  useEffect(() => {
+    function update(index: number, action?: string) {
+      const previousEnd = historyEnds.get(history) ?? index;
+      const end = action === "PUSH" ? index : Math.max(index, previousEnd);
+      historyEnds.set(history, end);
+      setAvailable({ back: history.canGoBack(), forward: index < end });
+    }
+
+    update(history.location.state.__TSR_index);
+    return history.subscribe(({ location, action }) =>
+      update(location.state.__TSR_index, action.type),
+    );
+  }, [history]);
+
+  const BackIcon = direction === "rtl" ? ArrowRight : ArrowLeft;
+  const ForwardIcon = direction === "rtl" ? ArrowLeft : ArrowRight;
+  const button =
+    "inline-flex min-h-10 items-center gap-1.5 rounded-lg border border-white/15 px-2.5 text-xs font-semibold hover:bg-[#211926] disabled:opacity-40";
+  return (
+    <nav
+      className="flex flex-wrap gap-2 border-b border-white/10 px-4 py-2 sm:px-6"
+      aria-label="خطوات التنقل"
+    >
+      <button
+        type="button"
+        className={button}
+        disabled={!available.back}
+        onClick={() => history.back()}
+      >
+        <BackIcon size={16} aria-hidden="true" />
+        رجوع
+      </button>
+      <button
+        type="button"
+        className={button}
+        disabled={!available.forward}
+        onClick={() => history.forward()}
+      >
+        <ForwardIcon size={16} aria-hidden="true" />
+        تقدّم
+      </button>
+      <Link to="/control-center" className={button}>
+        مركز التحكم
+      </Link>
+    </nav>
+  );
+}
+
+export function AppShell({ title, children }: { title: string; children: ReactNode }) {
   const { dir } = useI18n();
 
-  const [open, setOpen] =
-    useState(false);
+  const [open, setOpen] = useState(false);
+  const [desktopOpen, setDesktopOpen] = useState(true);
+  const [width, setWidth] = useState<SidebarWidth>("normal");
+  const [mobileLarge, setMobileLarge] = useState(false);
+
+  useEffect(() => {
+    try {
+      setOpen(window.localStorage.getItem("sodfa-mobile-nav-open") === "true");
+      setDesktopOpen(window.localStorage.getItem("sodfa-desktop-nav-open") !== "false");
+      setMobileLarge(window.localStorage.getItem("sodfa-mobile-nav-expanded") === "true");
+      const savedWidth = window.localStorage.getItem("sodfa-desktop-nav-width");
+      if (savedWidth === "narrow" || savedWidth === "normal" || savedWidth === "wide")
+        setWidth(savedWidth);
+    } catch {
+      /* Navigation remains usable if local storage is unavailable. */
+    }
+  }, []);
+
+  function remember(key: string, value: string | boolean) {
+    try {
+      window.localStorage.setItem("sodfa-" + key, String(value));
+    } catch {
+      /* optional preference */
+    }
+  }
 
   return (
     <>
       {/* Load Fonts */}
 
-      <style>
-        {FONT_STYLES}
-      </style>
+      <style>{FONT_STYLES}</style>
 
       <div
         dir={dir}
@@ -640,10 +713,8 @@ export function AppShell({
           text-white
         "
         style={{
-          backgroundColor:
-            BRAND.background,
-          fontFamily:
-            '"Cairo", sans-serif',
+          backgroundColor: BRAND.background,
+          fontFamily: '"Cairo", sans-serif',
         }}
       >
         {/* ======================================================
@@ -651,22 +722,15 @@ export function AppShell({
             ====================================================== */}
 
         <aside
-          className="
-            sticky
-            top-0
-            hidden
-            h-screen
-            w-72
-            shrink-0
-            flex-col
-            border-e
-            lg:flex
-          "
+          id="sodfa-desktop-navigation"
+          className={cn(
+            "sticky top-0 hidden h-dvh shrink-0 flex-col border-e",
+            sidebarWidths[width],
+            desktopOpen && "lg:flex",
+          )}
           style={{
-            backgroundColor:
-              BRAND.sidebar,
-            borderColor:
-              BRAND.border,
+            backgroundColor: BRAND.sidebar,
+            borderColor: BRAND.border,
           }}
         >
           {/* Brand */}
@@ -676,8 +740,7 @@ export function AppShell({
           <div
             className="h-px"
             style={{
-              backgroundColor:
-                BRAND.border,
+              backgroundColor: BRAND.border,
             }}
           />
 
@@ -709,8 +772,7 @@ export function AppShell({
                 opacity-40
               "
               style={{
-                backgroundColor:
-                  BRAND.purple,
+                backgroundColor: BRAND.purple,
               }}
             />
           </div>
@@ -721,7 +783,6 @@ export function AppShell({
             ====================================================== */}
 
         <div className="flex min-w-0 flex-1 flex-col">
-
           {/* ====================================================
               HEADER
               ==================================================== */}
@@ -741,92 +802,58 @@ export function AppShell({
               sm:px-6
             "
             style={{
-              backgroundColor:
-                "rgba(10,10,12,0.92)",
-              borderColor:
-                BRAND.border,
+              backgroundColor: "rgba(10,10,12,0.92)",
+              borderColor: BRAND.border,
             }}
           >
-
-            {/* Mobile Menu */}
-
-            <Sheet
-              open={open}
-              onOpenChange={setOpen}
+            <button
+              type="button"
+              aria-label={open ? "إخفاء القائمة" : "إظهار القائمة"}
+              aria-controls="sodfa-mobile-navigation"
+              aria-expanded={open}
+              className="grid min-h-10 min-w-10 place-items-center rounded-lg border border-white/15 lg:hidden"
+              onClick={() => {
+                setOpen(!open);
+                remember("mobile-nav-open", !open);
+              }}
             >
-              <SheetTrigger asChild>
-                <Button
-                  variant="outline"
-                  size="icon"
-                  className="
-                    border
-                    bg-[#111114]
-                    text-white
-                    hover:bg-[#1A151C]
-                    lg:hidden
-                  "
-                  style={{
-                    borderColor:
-                      BRAND.border,
+              <Menu size={20} aria-hidden="true" />
+            </button>
+            <button
+              type="button"
+              aria-label={desktopOpen ? "إخفاء القائمة الجانبية" : "إظهار القائمة الجانبية"}
+              aria-controls="sodfa-desktop-navigation"
+              aria-expanded={desktopOpen}
+              className="hidden min-h-10 min-w-10 place-items-center rounded-lg border border-white/15 lg:grid"
+              onClick={() => {
+                setDesktopOpen(!desktopOpen);
+                remember("desktop-nav-open", !desktopOpen);
+              }}
+            >
+              {desktopOpen ? (
+                <PanelLeftClose size={19} aria-hidden="true" />
+              ) : (
+                <PanelLeftOpen size={19} aria-hidden="true" />
+              )}
+            </button>
+            {desktopOpen && (
+              <label className="hidden items-center gap-1 text-xs xl:flex">
+                عرض القائمة
+                <select
+                  value={width}
+                  onChange={(event) => {
+                    const value = event.target.value as SidebarWidth;
+                    setWidth(value);
+                    remember("desktop-nav-width", value);
                   }}
-                  aria-label="Menu"
+                  className="rounded-lg border border-white/15 bg-[#111114] px-2 py-2"
                 >
-                  <Menu className="h-5 w-5" />
-                </Button>
-              </SheetTrigger>
-
-              <SheetContent
-                side={
-                  dir === "rtl"
-                    ? "right"
-                    : "left"
-                }
-                className="
-                  w-72
-                  border
-                  p-0
-                  text-white
-                "
-                style={{
-                  backgroundColor:
-                    BRAND.sidebar,
-                  borderColor:
-                    BRAND.border,
-                }}
-              >
-                <SheetTitle className="sr-only">
-                  SODFA
-                </SheetTitle>
-
-                {/* Mobile Brand */}
-
-                <Brand />
-
-                <div
-                  className="h-px"
-                  style={{
-                    backgroundColor:
-                      BRAND.border,
-                  }}
-                />
-
-                {/* Mobile Navigation */}
-
-                <div className="mt-4">
-                  <NavLinks
-                    onNavigate={() =>
-                      setOpen(false)
-                    }
-                  />
-                </div>
-
-                {/* Mobile Account */}
-
-                <div className="mt-6">
-                  <AccountSection />
-                </div>
-              </SheetContent>
-            </Sheet>
+                  <option value="narrow">ضيّق</option>
+                  <option value="normal">عادي</option>
+                  <option value="wide">واسع</option>
+                </select>
+              </label>
+            )}
 
             {/* Page Title */}
 
@@ -841,8 +868,7 @@ export function AppShell({
                 sm:text-xl
               "
               style={{
-                fontFamily:
-                  '"Cairo", sans-serif',
+                fontFamily: '"Cairo", sans-serif',
               }}
             >
               {title}
@@ -857,6 +883,39 @@ export function AppShell({
             <LanguageToggle />
           </header>
 
+          {open && (
+            <section
+              id="sodfa-mobile-navigation"
+              aria-label="القائمة الجانبية"
+              className="border-b border-white/10 bg-[#08080a] lg:hidden"
+            >
+              <div className="flex items-center justify-between px-4 pt-2">
+                <span className="text-sm font-bold">القائمة</span>
+                <button
+                  type="button"
+                  aria-pressed={mobileLarge}
+                  className="rounded-lg border border-white/15 px-3 py-2 text-xs"
+                  onClick={() => {
+                    setMobileLarge(!mobileLarge);
+                    remember("mobile-nav-expanded", !mobileLarge);
+                  }}
+                >
+                  {mobileLarge ? "تصغير القائمة" : "توسيع القائمة"}
+                </button>
+              </div>
+              <div
+                className={cn(
+                  "overflow-y-auto py-3",
+                  mobileLarge ? "max-h-[48dvh]" : "max-h-[28dvh]",
+                )}
+              >
+                <NavLinks />
+                <AccountSection />
+              </div>
+            </section>
+          )}
+          <WorkspaceNavigation direction={dir} />
+
           {/* ====================================================
               PAGE CONTENT
               ==================================================== */}
@@ -869,8 +928,7 @@ export function AppShell({
               sm:p-6
             "
             style={{
-              backgroundColor:
-                BRAND.background,
+              backgroundColor: BRAND.background,
             }}
           >
             {children}

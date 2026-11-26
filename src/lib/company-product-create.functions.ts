@@ -1,5 +1,6 @@
 import { createServerFn } from "@tanstack/react-start";
 import {requireCompanyAccess} from "./company-access.server";
+import {selectedDraftChannels,requiresCrossBrandApproval} from "./company-draft-selection";
 import { neon } from "@neondatabase/serverless";
 import { z } from "zod";
 
@@ -14,11 +15,11 @@ const Request = z.object({
 export const createCompanyProductDraft = createServerFn({method:"POST"})
  .validator(Request).handler(async({data})=>{
   const actor=await requireCompanyAccess(data.token,data.brand,"draft");
-  if(data.channels.includes(data.brand==="homey"?"sodfa_web":"homey_web")){
+  if(requiresCrossBrandApproval(data.brand,data.channels)){
     await requireCompanyAccess(data.token,data.brand,"approve");
     await requireCompanyAccess(data.token,data.brand==="homey"?"sodfa":"homey","approve");
   }
-  const writerUrl=process.env.CRM_DRAFT_WRITE_URL;
+  const writerUrl=process.env["CRM_DRAFT_WRITE_URL"];
   if(!writerUrl)throw new Error("DRAFT_STORAGE_NOT_CONFIGURED");
   const sql=neon(writerUrl);
   // Idempotency: retrying the same requestId never creates a second catalog row.
@@ -30,9 +31,9 @@ export const createCompanyProductDraft = createServerFn({method:"POST"})
   const existing=created.length?created:await sql`SELECT id,title FROM product_references
       WHERE source_system_id='crm_manual' AND source_product_id=${data.requestId} LIMIT 1`;
   if(!existing.length)throw new Error("DRAFT_CREATION_FAILED");
-  const id=Number(existing[0].id);
-  for(const channel of ["homey_web","sodfa_web"] as const){
-    const checked=data.channels.includes(channel);
+  const id=Number(existing[0]!["id"]);
+  for(const channel of selectedDraftChannels(data.channels)){
+    const checked=true;
     await sql`INSERT INTO channel_listing_drafts
       (product_reference_id,channel_id,intended_visibility,proposed_price_egp,updated_by,brand_cross_listing)
       VALUES (${id},${channel},${checked},${data.proposedPrice},${actor.id},

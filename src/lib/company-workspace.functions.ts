@@ -14,15 +14,18 @@ const RequestSchema = z.object({
   brand: z.enum(["homey", "sodfa", "all"]).default("all"),
   project: z.enum(["all","homey","sodfa","sodfa_web","orders"]).default("all"),
   query: z.string().max(120).default(""),
+  queue: z.enum(["confirm","shipping-review","drafts"]).optional(),
 });
 
 type Summary = { brand: string; status: string; count: number };
-type Product = { id: string; title: string; brand: string; source: string; draft_visibility: boolean | null; draft_price: number | null;
+type CatalogImage = { url: string; fallback: string | null; variantId: string; label: string | null };
+type Product = { images?: CatalogImage[]; id: string; title: string; brand: string; source: string; draft_visibility: boolean | null; draft_price: number | null;
   source_status: string | null; available_units: number | null; min_sale_price_egp: number | null; max_sale_price_egp: number | null;
   homey_draft: boolean | null; sodfa_draft: boolean | null; homey_price: number | null; sodfa_price: number | null;
   source_refreshed_at: string | null;
 };
 type OrderRow = {
+  waybill_id?: string;
   id: string; brand: string; created_at: string; status: string;
   shipping_company: string | null; source: string | null;
   customer_name: string; phone: string; city: string | null; governorate: string | null;
@@ -35,20 +38,22 @@ type OrderRow = {
 type Shipment = { brand: string; state: string; count: number };
 type Count = { brand: string; count: number };
 
-export const getCompanyWorkspaceData = createServerFn({ method: "POST" })
-  .validator(RequestSchema)
-  .handler(async ({ data }) => {
-    const access=await requireCompanyAccess(data.token,data.project,"read");
+async function readWorkspace(
+  data: Omit<z.output<typeof RequestSchema>, "token">,
+  access: Awaited<ReturnType<typeof requireCompanyAccess>>,
+  fetchOptions?: RequestInit,
+) {
     // All queries are server-side. Order PII is only exposed to operators/managers, never viewers.
     const response: {
       fetchedAt: string;
+      canWriteCatalogDrafts: boolean;
       accessRole: "admin"|"viewer"|"operator"|"manager";
-      catalog: { connected: boolean; error?: string; counts: Count[]; products: Product[] };
+      catalog: { connected: boolean; countsAvailable: boolean; draftCounts: Count[] | null; productsAvailable: boolean; error?: string | undefined; counts: Count[]; products: Product[] };
       operations: {
-        connected: boolean; error?: string; summary: Summary[];
+        connected: boolean; available: { summary: boolean; orders: boolean; customers: boolean; shipments: boolean }; error?: string | undefined; summary: Summary[];
         orders: OrderRow[]; customers: Count[]; shipments: Shipment[];
       };
-      sodfa: { connected: boolean; error?: string;
+      sodfa: { connected: boolean; error?: string | undefined;
         inventorySummary: { sku_rows: number; units: number; cost_value: number | null; warehouses: number } | null;
         salesSummary: { count_sales: number; sales_egp: number; first_date: string | null; last_date: string | null } | null;
         items: {product_id: string; product_name: string; warehouse: string; remaining_qty: number; purchase_price: number; sale_price: number}[];
@@ -56,8 +61,9 @@ export const getCompanyWorkspaceData = createServerFn({ method: "POST" })
     } = {
       fetchedAt: new Date().toISOString(),
       accessRole:access.role,
-      catalog: { connected: false, counts: [], products: [] },
-      operations: { connected: false, summary: [], orders: [], customers: [], shipments: [] },
+      canWriteCatalogDrafts: access.role!=="viewer" && Boolean(process.env["CRM_DRAFT_WRITE_URL"]),
+      catalog: { connected: false, countsAvailable:false, draftCounts:null, productsAvailable:false, counts: [], products: [] },
+      operations: { connected: false, available:{summary:false,orders:false,customers:false,shipments:false}, summary: [], orders: [], customers: [], shipments: [] },
       sodfa: { connected:false, inventorySummary:null, salesSummary:null, items:[] },
     };
     // Scope is applied to DB reads, not only the rendered interface.
@@ -67,13 +73,14 @@ export const getCompanyWorkspaceData = createServerFn({ method: "POST" })
     const ordersEnabled=scope==="all"||scope==="homey"||scope==="sodfa"||scope==="orders";
     const sodfaEnabled=scope==="all"||scope==="sodfa";
     const search = data.query.trim().toLowerCase();
+    const queue = data.queue??"";
     const jobs: Promise<void>[] = [];
-    const catalogUrl = process.env.CRM_CATALOG_READ_URL;
+    const catalogUrl = process.env["CRM_CATALOG_READ_URL"];
     if (catalogEnabled && catalogUrl) jobs.push((async () => {
       try {
-        const db = neon(catalogUrl);
+        const db = neon(catalogUrl, fetchOptions ? {fetchOptions} : undefined);
         // 454 reference records were imported from the source catalogs.
-        const [countResult, productResult] = await Promise.allSettled([
+        const [countResult, productResult,draftResult] = await Promise.allSettled([
           db`SELECT brand_id AS brand, count(*)::integer AS count FROM product_references WHERE (${brandCondition} = 'all' OR brand_id = ${brandCondition}) GROUP BY brand_id ORDER BY brand_id`,
           db`SELECT p.source_product_id AS id, p.title, p.brand_id AS brand,
              p.source_system_id AS source, native.intended_visibility AS draft_visibility,
@@ -95,12 +102,45 @@ export const getCompanyWorkspaceData = createServerFn({ method: "POST" })
              LEFT JOIN channel_listing_drafts sd ON sd.product_reference_id=p.id AND sd.channel_id='sodfa_web'
              WHERE (${brandCondition} = 'all' OR p.brand_id = ${brandCondition})
                AND (${search} = '' OR lower(p.title) LIKE '%' || ${search} || '%')
+               AND (${queue} <> 'drafts' OR native.intended_visibility IS NOT NULL OR native.proposed_price_egp IS NOT NULL)
              ORDER BY p.title LIMIT 500`,
+          db`SELECT p.brand_id AS brand, count(*)::integer AS count
+             FROM product_references p JOIN channel_listing_drafts draft ON draft.product_reference_id=p.id
+             AND draft.channel_id=(CASE WHEN p.brand_id='homey' THEN 'homey_web' ELSE 'sodfa_web' END)
+             WHERE (${brandCondition}='all' OR p.brand_id=${brandCondition})
+             AND (draft.intended_visibility IS NOT NULL OR draft.proposed_price_egp IS NOT NULL)
+             GROUP BY p.brand_id`,
         ]);
+        const products = productResult.status === "fulfilled" ? productResult.value as Product[] : [];
+        if (products.length) {
+          try {
+            const imageRows = await db`SELECT p.source_system_id AS source,p.source_product_id AS id,
+                i.image_url AS url,i.fallback_url AS fallback,i.variant_id AS "variantId",i.variant_label AS label
+              FROM catalog_image_references i JOIN product_references p ON p.id=i.product_reference_id
+              WHERE (${brandCondition} = 'all' OR p.brand_id = ${brandCondition})
+                AND p.source_product_id=ANY(${products.map(product=>product.id)}::text[])
+              ORDER BY (i.variant_id<>'') ASC,i.sort_order,i.image_url`;
+            const imagesByProduct = new Map<string,CatalogImage[]>();
+            for (const row of imageRows) {
+              const key = JSON.stringify([row["source"],row["id"]]);
+              const images = imagesByProduct.get(key) ?? [];
+              if (images.length < 24) images.push(row as CatalogImage);
+              imagesByProduct.set(key,images);
+            }
+            for (const product of products) {
+              product.images = imagesByProduct.get(JSON.stringify([product.source,product.id])) ?? [];
+            }
+          } catch {
+            // Keep the product catalog usable if the preview image index is unavailable.
+          }
+        }
         response.catalog = {
           connected: countResult.status === "fulfilled" || productResult.status === "fulfilled",
+          countsAvailable: countResult.status === "fulfilled",
+          draftCounts: draftResult.status === "fulfilled" ? draftResult.value as Count[] : null,
+          productsAvailable: productResult.status === "fulfilled",
           counts: countResult.status === "fulfilled" ? countResult.value as Count[] : [],
-          products: productResult.status === "fulfilled" ? productResult.value as Product[] : [],
+          products,
           error: countResult.status === "rejected" || productResult.status === "rejected"
             ? "جزء من فهرس المنتجات تعذر تحميله؛ اعرض البيانات المتاحة وأعد التحديث" : undefined,
         };
@@ -108,10 +148,10 @@ export const getCompanyWorkspaceData = createServerFn({ method: "POST" })
         response.catalog = {...response.catalog, error: "تعذرت قراءة فهرس المنتجات من قاعدة CRM"};
       }
     })());
-    const ordersUrl = process.env.CRM_ORDERS_READ_URL;
+    const ordersUrl = process.env["CRM_ORDERS_READ_URL"];
     if (ordersEnabled && ordersUrl) jobs.push((async () => {
       try {
-        const db = neon(ordersUrl);
+        const db = neon(ordersUrl, fetchOptions ? {fetchOptions} : undefined);
         // Independent queries: a shipping integration failure must not erase
         // all orders and customer counts from the operations dashboard.
         const [summaryResult, orderResult, customerResult, shipmentResult] = await Promise.allSettled([
@@ -127,6 +167,7 @@ export const getCompanyWorkspaceData = createServerFn({ method: "POST" })
              source_order_id,version
              FROM orders WHERE deleted_at IS NULL
              AND (${brandCondition} = 'all' OR brand = ${brandCondition})
+             AND (${queue} <> 'confirm' OR status IN ('new','contacted'))
              ORDER BY created_at DESC LIMIT 500`,
           db`SELECT brand, count(*)::integer AS count
              FROM customers WHERE deleted_at IS NULL
@@ -140,11 +181,33 @@ export const getCompanyWorkspaceData = createServerFn({ method: "POST" })
              GROUP BY o.brand, COALESCE(s.state,'not_dispatched')
              ORDER BY o.brand, state`,
         ]);
-        const okay = (x:PromiseSettledResult<any>)=>x.status==="fulfilled"?x.value:[];
+        const okay = <T,>(x:PromiseSettledResult<T[]>)=>x.status==="fulfilled"?x.value:[];
+        const orders = okay(orderResult) as OrderRow[];
+        if (access.role !== "viewer" && orders.length) {
+          try {
+            const waybills=await db`SELECT DISTINCT ON (w.order_id) w.order_id::text AS order_id,w.id::text AS id
+              FROM waybills w JOIN orders o ON o.id=w.order_id AND o.brand=w.brand
+              WHERE w.order_id=ANY(${orders.map(order=>order.id)}::uuid[])
+              ORDER BY w.order_id,w.created_at DESC,w.id DESC`;
+            const byOrder=new Map(waybills.map(row=>[String(row["order_id"]),String(row["id"])]));
+            for(const order of orders){
+              const id=byOrder.get(order.id);
+              if(id)order.waybill_id=id;
+            }
+          } catch {
+            // An unavailable waybill view must not block the order list.
+          }
+        }
         response.operations = {
           connected: summaryResult.status==="fulfilled" || orderResult.status==="fulfilled",
+          available: {
+            summary: summaryResult.status === "fulfilled",
+            orders: orderResult.status === "fulfilled",
+            customers: customerResult.status === "fulfilled",
+            shipments: shipmentResult.status === "fulfilled",
+          },
           summary: okay(summaryResult) as Summary[],
-          orders: okay(orderResult) as OrderRow[],
+          orders,
           customers: okay(customerResult) as Count[],
           shipments: okay(shipmentResult) as Shipment[],
           error: [summaryResult,orderResult,customerResult,shipmentResult]
@@ -154,10 +217,10 @@ export const getCompanyWorkspaceData = createServerFn({ method: "POST" })
         response.operations = {...response.operations, error: "تعذرت قراءة بيانات إدارة الطلبات"};
       }
     })());
-    const sodfaUrl = process.env.CRM_SODFA_READ_URL;
+    const sodfaUrl = process.env["CRM_SODFA_READ_URL"];
     if (sodfaEnabled && sodfaUrl) jobs.push((async () => {
       try {
-        const db = neon(sodfaUrl);
+        const db = neon(sodfaUrl, fetchOptions ? {fetchOptions} : undefined);
         const [invResult,salResult,itemResult] = await Promise.allSettled([
           db`SELECT count(*)::integer AS sku_rows, COALESCE(sum(remaining_qty),0)::float8 AS units,
              COALESCE(sum(remaining_qty * purchase_price),0)::float8 AS cost_value,
@@ -195,4 +258,19 @@ export const getCompanyWorkspaceData = createServerFn({ method: "POST" })
       if(response.sodfa.inventorySummary)response.sodfa.inventorySummary.cost_value=null;
     }
     return response;
+}
+
+export const getCompanyWorkspaceData = createServerFn({ method: "POST" })
+  .validator(RequestSchema)
+  .handler(async ({ data }) =>
+    readWorkspace(data, await requireCompanyAccess(data.token, data.project, "read")),
+  );
+
+export async function readSupportWorkspace(
+  project: z.output<typeof RequestSchema>["project"],
+  access: Awaited<ReturnType<typeof requireCompanyAccess>>,
+) {
+  return readWorkspace({ project, brand: "all", query: "" }, access, {
+    signal: AbortSignal.timeout(10000),
   });
+}
